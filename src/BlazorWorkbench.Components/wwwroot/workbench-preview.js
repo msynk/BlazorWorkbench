@@ -14,6 +14,7 @@
 
   const state = {
     state: 'loading',
+    sessionId: null,
     scenarioId: (location.pathname.match(/\/_workbench\/preview\/([^/?#]+)/) || [])[1] || '',
     attached: false,
     pending: 0,
@@ -62,6 +63,7 @@
       scenarioId: d.scenarioId || state.scenarioId,
       message: redact(d.message || ''),
       details: d.details ? redact(d.details) : undefined,
+      sessionId: d.sessionId || state.sessionId || undefined,
     };
     state.diagnostics.push(entry);
     if (state.diagnostics.length > MAX_DIAGNOSTICS) state.diagnostics.shift();
@@ -442,6 +444,37 @@
         return;
       }
       case 'Checkpoint': return;
+      case 'DragTo': return retry(() => {
+        const source = single(t);
+        const target = single(step.destination);
+        const data = new DataTransfer();
+        const fire = (el, type) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data }));
+        fire(source, 'dragstart');
+        fire(target, 'dragenter');
+        fire(target, 'dragover');
+        fire(target, 'drop');
+        fire(source, 'dragend');
+      });
+      case 'Upload': return retry(() => {
+        const input = single(t);
+        const bytes = Uint8Array.from(atob(step.fileContent || ''), (c) => c.charCodeAt(0));
+        const data = new DataTransfer();
+        data.items.add(new File([bytes], step.value, { type: step.contentType || 'application/octet-stream' }));
+        input.files = data.files;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      case 'ScrollIntoView': return retry(() => single(t).scrollIntoView({ block: 'center' }));
+      case 'ExpectEnabled': case 'ExpectDisabled': return retry(() => {
+        const el = single(t);
+        const disabled = el.disabled === true || el.getAttribute('aria-disabled') === 'true';
+        if (disabled !== (step.action === 'ExpectDisabled')) throw new Error(`${describeLocator(t)} is ${disabled ? 'disabled' : 'enabled'}`);
+      });
+      case 'ExpectChecked': case 'ExpectUnchecked': return retry(() => {
+        const el = single(t);
+        const checked = el.checked === true || el.getAttribute('aria-checked') === 'true';
+        if (checked !== (step.action === 'ExpectChecked')) throw new Error(`${describeLocator(t)} is ${checked ? 'checked' : 'not checked'}`);
+      });
       default: throw new Error(`Unsupported step ${step.action}`);
     }
   }
@@ -449,6 +482,7 @@
   function describeStep(step) {
     const parts = [step.action];
     if (step.target) parts.push(describeLocator(step.target));
+    if (step.destination) parts.push('→ ' + describeLocator(step.destination));
     if (step.value != null) parts.push(JSON.stringify(step.value));
     if (step.expected != null) parts.push('=> ' + JSON.stringify(step.expected));
     if (step.count != null) parts.push('x' + step.count);
@@ -555,6 +589,8 @@
     attach(dotnet, info) {
       state.dotnet = dotnet;
       state.scenarioId = info.scenarioId;
+      state.sessionId = info.sessionId || null;
+      state.diagnostics.forEach((d) => { if (!d.sessionId) d.sessionId = state.sessionId; });
       state.readySelector = info.readySelector || null;
       state.pending = info.pending || 0;
       applyTheme(info);
@@ -597,7 +633,9 @@
     get diagnostics() { return state.diagnostics.slice(); },
     get callbacks() { return state.callbacks.slice(); },
     get gates() { return state.gates.slice(); },
+    get sessionId() { return state.sessionId; },
     metrics,
+    serverMetrics: () => state.dotnet ? state.dotnet.invokeMethodAsync('GetMetrics').then(JSON.parse) : Promise.resolve(null),
     waitForIdle,
     callbackCount: (name) => state.callbackCounts[name] || 0,
     releaseGate: (name) => state.dotnet ? state.dotnet.invokeMethodAsync('ReleaseGate', name) : Promise.resolve(false),

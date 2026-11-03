@@ -49,6 +49,12 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _session.Disposed);
         var token = linked.Token;
 
+        using var trace = WorkbenchTelemetry.ActivitySource.StartActivity($"workbench.http {method}", ActivityKind.Client);
+        trace?.SetTag("http.request.method", method);
+        trace?.SetTag("url.full", url);
+        trace?.SetTag("workbench.scenario.id", _session.ScenarioId);
+        trace?.SetTag("workbench.session.id", _session.SessionId);
+
         var activity = _session.Activity.Begin();
         try
         {
@@ -166,6 +172,14 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
 
     private void Record(string method, string url, int? status, Stopwatch stopwatch, string outcome, string? rule, DiagnosticSeverity severity, string? message = null)
     {
+        WorkbenchTelemetry.HttpRequests.Add(1, new KeyValuePair<string, object?>("workbench.outcome", outcome));
+        if (Activity.Current is { } current && current.Source == WorkbenchTelemetry.ActivitySource)
+        {
+            if (status is { } code) current.SetTag("http.response.status_code", code);
+            current.SetTag("workbench.outcome", outcome);
+            if (rule is not null) current.SetTag("workbench.rule", rule);
+        }
+
         var exchange = new HttpExchange(DateTimeOffset.UtcNow, method, url, status, Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1), outcome, rule);
         lock (_lock)
         {

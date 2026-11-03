@@ -31,13 +31,22 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     {
         Catalogs = catalogs;
         Redactor = new Redactor(catalogs.Options.Redaction);
-        Diagnostics = new DiagnosticLog(catalogs.Options.MaxDiagnostics, Redactor, collectors);
+        Diagnostics = new DiagnosticLog(catalogs.Options.MaxDiagnostics, Redactor, collectors, SessionId);
+        Diagnostics.Added += e => WorkbenchTelemetry.Diagnostics.Add(1,
+            new KeyValuePair<string, object?>("workbench.source", e.Source.ToString()),
+            new KeyValuePair<string, object?>("workbench.severity", e.Severity.ToString()));
         Http = new WorkbenchHttpMessageHandler(this);
         Auth = new WorkbenchAuthenticationStateProvider(this);
         Time = new SessionTimeProvider(this);
     }
 
     public WorkbenchCatalogAccessor Catalogs { get; }
+
+    /// <summary>Correlates diagnostics, traces and reports of one preview session.</summary>
+    public string SessionId { get; } = Guid.NewGuid().ToString("N")[..12];
+
+    /// <summary>Server processing time of circuit activities (Interactive Server only).</summary>
+    public ServerActivityMetrics ServerMetrics { get; } = new();
     public bool IsActive => Scenario is not null;
     public ScenarioDefinition? Scenario { get; private set; }
     public ComponentEntry? Component { get; private set; }
@@ -65,6 +74,9 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     /// <summary>Activates <paramref name="scenario"/>. Must run before components that use overridden services are created.</summary>
     public void Activate(ScenarioDefinition scenario, ActivationOptions? options = null, IServiceProvider? services = null)
     {
+        using var trace = WorkbenchTelemetry.ActivitySource.StartActivity("workbench.scenario.activate");
+        trace?.SetTag("workbench.scenario.id", scenario.Id);
+        trace?.SetTag("workbench.session.id", SessionId);
         lock (_lock)
         {
             if (IsActive)
@@ -84,6 +96,17 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
 
             var cultureName = Activation.Culture ?? env.Culture;
             Culture = cultureName is { Length: > 0 } ? CultureInfo.GetCultureInfo(cultureName) : null;
+
+            // WebAssembly runs one preview per document on a single thread: the session and culture are process-wide.
+            if (OperatingSystem.IsBrowser())
+            {
+                ScenarioSessionContext.Browser = this;
+                if (Culture is not null)
+                {
+                    CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture = Culture;
+                    CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = Culture;
+                }
+            }
 
             Context = new ScenarioContext(scenario, Time, Gates, Activity) { Services = services };
 
@@ -337,9 +360,12 @@ public static class ScenarioSessionContext
 
     public static ScenarioSession? Current
     {
-        get => s_current.Value;
+        get => s_current.Value ?? Browser;
         set => s_current.Value = value;
     }
+
+    /// <summary>The single active session of a WebAssembly preview document.</summary>
+    public static ScenarioSession? Browser { get; internal set; }
 }
 
 /// <summary>Singleton <see cref="TimeProvider"/> that uses the scenario clock of the current activity, otherwise the host's provider.</summary>

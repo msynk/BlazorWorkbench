@@ -13,6 +13,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BlazorWorkbench.Testing.Bunit;
 
+/// <summary>Cost of the initial render of a scenario (synchronous part, measured on the test thread).</summary>
+public sealed record ScenarioRenderMeasurement(IRenderedComponent<ScenarioHost> Component, long AllocatedBytes, TimeSpan Elapsed);
+
 /// <summary>Thrown by scenario assertions.</summary>
 public sealed class ScenarioAssertionException(string message) : Exception(message);
 
@@ -147,6 +150,30 @@ public static class WorkbenchBunit
             throw new ScenarioAssertionException($"{session.ScenarioId}: {errors.Count} error(s). First: [{errors[0].Source}] {errors[0].Message}\n{errors[0].Details}");
         if (cut.FindAll("[data-workbench-error], .wb-preview-error").Count > 0)
             throw new ScenarioAssertionException($"{session.ScenarioId}: the scenario rendered an error panel: {cut.Find(".wb-preview-error").TextContent.Trim()}");
+    }
+
+    /// <summary>
+    /// Renders a scenario and measures the allocations and time of the synchronous initial render (activation, parameter
+    /// building and the first render pass). Work that completes asynchronously afterwards is not included.
+    /// </summary>
+    public static ScenarioRenderMeasurement MeasureScenario(this BunitContext context, string scenarioId, params Assembly[] assemblies)
+    {
+        Catalog(assemblies); // exclude catalog building from the measurement
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var cut = context.RenderScenario(scenarioId, assemblies);
+        watch.Stop();
+        return new ScenarioRenderMeasurement(cut, GC.GetAllocatedBytesForCurrentThread() - before, watch.Elapsed);
+    }
+
+    /// <summary>Number of times the scenario's component (not the Workbench host) has rendered.</summary>
+    public static int ComponentRenderCount(this IRenderedComponent<ScenarioHost> cut)
+    {
+        var find = typeof(RenderedComponentExtensions).GetMethods()
+            .Single(m => m.Name == nameof(RenderedComponentExtensions.FindComponent) && m.IsGenericMethodDefinition)
+            .MakeGenericMethod(cut.Instance.Scenario.ComponentType);
+        var rendered = find.Invoke(null, [cut])!;
+        return (int)rendered.GetType().GetProperty("RenderCount")!.GetValue(rendered)!;
     }
 
     /// <summary>Number of times an automatically instrumented <c>EventCallback</c> parameter was invoked.</summary>

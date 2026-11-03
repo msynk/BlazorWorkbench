@@ -56,8 +56,10 @@ public static class WorkbenchHostingExtensions
         var services = builder.Services;
         services.AddSingleton(options);
         services.AddSingleton<WorkbenchOptions>(options);
-        services.AddRazorComponents().AddInteractiveServerComponents(o => o.DetailedErrors = builder.Environment.IsDevelopment());
-        services.AddBlazorWorkbenchRuntime(options, catalog, overridable);
+        var razor = services.AddRazorComponents().AddInteractiveServerComponents(o => o.DetailedErrors = builder.Environment.IsDevelopment());
+        if (options.Interactivity == WorkbenchInteractivity.WebAssembly)
+            razor.AddInteractiveWebAssemblyComponents();
+        services.AddBlazorWorkbenchRuntime(options, catalog, overridable, validateDependencies: options.Interactivity == WorkbenchInteractivity.Server);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, WorkbenchCircuitHandler>());
         services.TryAddSingleton<IVisualResultsProvider, FileVisualResultsProvider>();
 
@@ -93,6 +95,8 @@ public static class WorkbenchHostingExtensions
         var razor = app.MapRazorComponents<WorkbenchApp>()
             .AddInteractiveServerRenderMode()
             .AddAdditionalAssemblies(typeof(WorkbenchShell).Assembly);
+        if (options.Interactivity == WorkbenchInteractivity.WebAssembly)
+            razor.AddInteractiveWebAssemblyRenderMode();
 
         var api = app.MapGroup("/_workbench");
         MapApi(api, options);
@@ -111,13 +115,14 @@ public static class WorkbenchHostingExtensions
         group.MapGet("/api/health", (WorkbenchCatalogAccessor c) => Results.Json(new
         {
             status = "ok",
+            hostingModel = options.Interactivity.ToString(),
             components = c.Catalog.Components.Count,
             scenarios = c.Catalog.Scenarios.Count,
             version = Version,
         }, WorkbenchJson.Options));
 
         group.MapGet("/api/catalog", (WorkbenchCatalogAccessor c) =>
-            Results.Json(CatalogMapper.ToDto(c.Catalog, path => RelativeSource(path, options), Version), WorkbenchJson.Options));
+            Results.Json(CatalogMapper.ToDto(c.Catalog, path => RelativeSource(path, options), Version, options.Interactivity.ToString()), WorkbenchJson.Options));
 
         group.MapGet("/api/validate", (WorkbenchCatalogAccessor c) =>
             Results.Json(CatalogMapper.ToValidationReport(c.Catalog), WorkbenchJson.Options));
@@ -134,6 +139,19 @@ public static class WorkbenchHostingExtensions
                 issues = c.Catalog.IssuesFor(scenario),
             }, WorkbenchJson.Options);
         });
+
+        // XML documentation for WebAssembly clients, limited to the configured assemblies.
+        group.MapGet("/api/xmldoc/{assembly}", (string assembly) =>
+        {
+            var known = options.Assemblies.Concat(options.ScenarioAssemblies).Select(a => a.GetName().Name).ToHashSet(StringComparer.Ordinal);
+            if (!known.Contains(assembly))
+                return Results.NotFound();
+            var path = Path.Combine(AppContext.BaseDirectory, assembly + ".xml");
+            return File.Exists(path) ? Results.File(path, "application/xml") : Results.NotFound();
+        });
+
+        group.MapGet("/api/visual/{id}", async (string id, IVisualResultsProvider provider, CancellationToken ct) =>
+            Results.Json(await provider.GetAsync(id, ct), WorkbenchJson.Options));
 
         group.MapGet("/axe.min.js", () =>
         {
@@ -177,7 +195,7 @@ public static class WorkbenchHostingExtensions
 internal sealed class WorkbenchCircuitHandler(ScenarioSession session) : CircuitHandler
 {
     public override Func<CircuitInboundActivityContext, Task> CreateInboundActivityHandler(Func<CircuitInboundActivityContext, Task> next) =>
-        context =>
+        async context =>
         {
             ScenarioSessionContext.Current = session;
             if (session.Culture is { } culture)
@@ -186,7 +204,20 @@ internal sealed class WorkbenchCircuitHandler(ScenarioSession session) : Circuit
                 CultureInfo.CurrentUICulture = culture;
             }
 
-            return next(context);
+            var start = System.Diagnostics.Stopwatch.GetTimestamp();
+            try
+            {
+                await next(context);
+            }
+            finally
+            {
+                var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+                if (session.IsActive)
+                {
+                    session.ServerMetrics.Record(elapsed);
+                    WorkbenchTelemetry.ActivityDuration.Record(elapsed);
+                }
+            }
         };
 }
 
@@ -228,12 +259,19 @@ internal sealed class FileVisualResultsProvider(WorkbenchHostOptions options) : 
                     v.DiffRatio, check.Message, report!.FinishedAt));
             }
 
-            if (results.Count == 0 && options.BaselineDirectory is { } baselines && Directory.Exists(Path.Combine(baselines, scenarioId)))
+            if (results.Count == 0 && options.BaselineDirectory is { } baselines && Directory.Exists(baselines))
             {
-                foreach (var file in Directory.EnumerateFiles(Path.Combine(baselines, scenarioId), "*.png").Order(StringComparer.Ordinal))
+                // Without run results, show the approved baselines of every platform and hosting model.
+                foreach (var platform in Directory.EnumerateDirectories(baselines).Order(StringComparer.Ordinal))
                 {
-                    results.Add(new VisualComparisonView(Path.GetFileNameWithoutExtension(file), "Baseline",
-                        Url("baselines", $"{scenarioId}/{Path.GetFileName(file)}"), null, null, null, "Approved baseline (no test run results).", null));
+                    var folder = Path.Combine(platform, scenarioId);
+                    if (!Directory.Exists(folder))
+                        continue;
+                    foreach (var file in Directory.EnumerateFiles(folder, "*.png").Order(StringComparer.Ordinal))
+                    {
+                        results.Add(new VisualComparisonView($"{Path.GetFileName(platform)} · {Path.GetFileNameWithoutExtension(file)}", "Baseline",
+                            Url("baselines", $"{Path.GetFileName(platform)}/{scenarioId}/{Path.GetFileName(file)}"), null, null, null, "Approved baseline (no test run results).", null));
+                    }
                 }
             }
         }

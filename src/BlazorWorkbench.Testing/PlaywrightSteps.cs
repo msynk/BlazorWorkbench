@@ -75,12 +75,29 @@ public static class PlaywrightSteps
             case StepAction.Checkpoint:
                 if (checkpoint is not null) await checkpoint(step.Value!);
                 break;
+            case StepAction.DragTo:
+                await Target().DragToAsync(Resolve(page, step.Destination!), new LocatorDragToOptions { Timeout = ms });
+                break;
+            case StepAction.Upload:
+                await Target().SetInputFilesAsync(new FilePayload
+                {
+                    Name = step.Value!,
+                    MimeType = step.ContentType ?? "application/octet-stream",
+                    Buffer = Convert.FromBase64String(step.FileContent ?? ""),
+                }, new LocatorSetInputFilesOptions { Timeout = ms });
+                break;
+            case StepAction.ScrollIntoView: await Target().ScrollIntoViewIfNeededAsync(new LocatorScrollIntoViewIfNeededOptions { Timeout = ms }); break;
+            case StepAction.ExpectEnabled: await Assertions.Expect(Target()).ToBeEnabledAsync(new LocatorAssertionsToBeEnabledOptions { Timeout = ms }); break;
+            case StepAction.ExpectDisabled: await Assertions.Expect(Target()).ToBeDisabledAsync(new LocatorAssertionsToBeDisabledOptions { Timeout = ms }); break;
+            case StepAction.ExpectChecked: await Assertions.Expect(Target()).ToBeCheckedAsync(new LocatorAssertionsToBeCheckedOptions { Timeout = ms }); break;
+            case StepAction.ExpectUnchecked: await Assertions.Expect(Target()).ToBeCheckedAsync(new LocatorAssertionsToBeCheckedOptions { Checked = false, Timeout = ms }); break;
             default:
                 throw new NotSupportedException($"Step {step.Action} is not supported.");
         }
 
         if (step.Action is StepAction.Click or StepAction.DoubleClick or StepAction.Fill or StepAction.Type or StepAction.Press or
-            StepAction.Check or StepAction.Uncheck or StepAction.Select or StepAction.ReleaseGate or StepAction.FailGate or StepAction.Hover or StepAction.Focus or StepAction.Blur)
+            StepAction.Check or StepAction.Uncheck or StepAction.Select or StepAction.ReleaseGate or StepAction.FailGate or StepAction.Hover or StepAction.Focus or StepAction.Blur or
+            StepAction.DragTo or StepAction.Upload or StepAction.ScrollIntoView)
             await WaitForIdleAsync(page, timeout);
     }
 

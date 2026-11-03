@@ -68,6 +68,9 @@ public sealed class VisualConfig
 
     /// <summary>Ratio (0..1) of differing pixels tolerated before the comparison fails.</summary>
     public double MaxDiffPixelRatio { get; init; }
+
+    /// <summary>Ignore pixels that differ only because of anti-aliasing.</summary>
+    public bool IgnoreAntiAliasing { get; init; } = true;
 }
 
 public sealed class AccessibilityConfig

@@ -26,6 +26,9 @@ public sealed class TestRunOptions
     public double VisualThreshold { get; set; } = 0.1;
     public double MaxDiffPixelRatio { get; set; }
 
+    /// <summary>Ignore pixels that differ only because of anti-aliasing (default true; they are drawn yellow in diffs).</summary>
+    public bool IgnoreAntiAliasing { get; set; } = true;
+
     /// <summary>Lowest axe-core impact that fails: minor, moderate, serious, critical.</summary>
     public string AccessibilityFailOn { get; set; } = "serious";
 

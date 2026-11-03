@@ -1,0 +1,49 @@
+@namespace SampleComponents.Forms
+
+@* Lets the user pick an image; shows its name and size. Uses InputFile. *@
+<div class="field">
+    <label for="avatar-file">@Label</label>
+    <InputFile id="avatar-file" accept="@Accept" OnChange="OnFileSelected" />
+    @if (_error is not null)
+    {
+        <div class="field-help validation-message" role="alert">@_error</div>
+    }
+    else if (_selected is not null)
+    {
+        <div class="field-help" role="status" data-testid="selected-file">@_selected.Name (@FormatSize(_selected.Size))</div>
+    }
+</div>
+
+@code {
+    private IBrowserFile? _selected;
+    private string? _error;
+
+    /// <summary>Visible label of the file input.</summary>
+    [Parameter] public string Label { get; set; } = "Profile picture";
+
+    /// <summary>Accepted MIME types or extensions.</summary>
+    [Parameter] public string Accept { get; set; } = "image/*";
+
+    /// <summary>Largest accepted file in bytes.</summary>
+    [Parameter] public long MaxBytes { get; set; } = 1024 * 1024;
+
+    /// <summary>Raised with the selected file when it is accepted.</summary>
+    [Parameter] public EventCallback<IBrowserFile> OnSelected { get; set; }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _selected = null;
+        if (e.File.Size > MaxBytes)
+        {
+            _error = $"The file is larger than {FormatSize(MaxBytes)}.";
+            return;
+        }
+
+        _selected = e.File;
+        await OnSelected.InvokeAsync(e.File);
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#} KB" : $"{bytes / (1024.0 * 1024):0.#} MB";
+}

@@ -451,6 +451,15 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     public int GetCallbackCount(string name) => Session.Callbacks.Count(name);
 
     [JSInvokable]
+    public string GetMetrics() => JsonSerializer.Serialize(new
+    {
+        sessionId = Session.SessionId,
+        server = Session.ServerMetrics.Snapshot(),
+        http = Session.Http.Exchanges.Count,
+        diagnostics = Session.Diagnostics.Snapshot().Count,
+    }, WorkbenchJson.Options);
+
+    [JSInvokable]
     public string GetSessionInfo() => JsonSerializer.Serialize(new
     {
         scenarioId = Scenario.Id,
@@ -483,6 +492,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
             await JS.InvokeVoidAsync("BlazorWorkbenchPreview.attach", _self, new
             {
                 scenarioId = Scenario.Id,
+                sessionId = Session.SessionId,
                 readySelector = Scenario.ReadySelector,
                 theme = theme?.Name,
                 colorScheme = theme?.ColorScheme.ToString().ToLowerInvariant(),
@@ -556,7 +566,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     }
 
     private static DiagnosticDto ToDto(DiagnosticEvent e) =>
-        new(e.Timestamp.ToString("O", CultureInfo.InvariantCulture), e.Source, e.Severity, e.ScenarioId, e.Message, e.Details);
+        new(e.Timestamp.ToString("O", CultureInfo.InvariantCulture), e.Source, e.Severity, e.ScenarioId, e.Message, e.Details, e.SessionId);
 
     private string Summarize(object? value)
     {

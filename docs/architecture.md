@@ -17,6 +17,9 @@ Blazor Workbench is a modular monolith: six packages with one-way dependencies a
    │ .Hosting   │ │ .Testing.Bunit  │ │ .Cli (workbench tool)     │  commands, exit codes, MCP server
    │ ASP.NET    │ │ bUnit adapters  │ └───────────────────────────┘
    └────────────┘ └─────────────────┘
+   ┌──────────────────────┐  ┌───────────────────────────┐
+   │ .WebAssembly (client)│  │ .Templates (dotnet new)   │
+   └──────────────────────┘  └───────────────────────────┘
 ```
 
 The CLI never loads user assemblies. It talks to a running host over HTTP and drives the preview pages with Playwright. The host is the single source of truth for the catalog. This keeps the CLI independent of the user's dependency graph, and each hosting model only has to implement the preview contract.
@@ -56,6 +59,7 @@ The CLI never loads user assemblies. It talks to a running host over HTTP and dr
 | Own PNG codec and perceptual diff | Avoids native or commercially licensed imaging dependencies. | [0005](adr/0005-image-comparison.md) |
 | Serializable interaction DSL, Playwright authoritative | One definition serves the UI, the CLI and MCP; mature automation. | [0006](adr/0006-interaction-dsl.md) |
 | Platform-specific baselines | Text rendering differs between operating systems. | [0007](adr/0007-platform-baselines.md) |
+| WebAssembly hosting, baselines per hosting model | Components that need the browser runtime; the models render differently. | [0008](adr/0008-webassembly-hosting.md) |
 
 ## Isolation model
 

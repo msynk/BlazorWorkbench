@@ -23,6 +23,9 @@ public sealed partial class XmlDocumentation
     /// <summary>Returns the documentation of <paramref name="assembly"/>, or null when no XML file is available.</summary>
     public static XmlDocumentation? For(Assembly assembly) => s_cache.GetOrAdd(assembly, Load);
 
+    /// <summary>Supplies documentation for an assembly whose XML file cannot be read from disk (for example in WebAssembly).</summary>
+    public static void Register(Assembly assembly, string xml) => s_cache[assembly] = Parse(xml);
+
     /// <summary>Parses documentation XML (exposed for tests and custom documentation providers).</summary>
     public static XmlDocumentation Parse(string xml)
     {
@@ -150,7 +153,8 @@ public static class SourceLocator
                     var location = new SourceLocation(path, point.StartLine);
                     if (path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
                         return location with { Line = 1 };
-                    if (!path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) && !path.Contains("obj", StringComparison.OrdinalIgnoreCase))
+                    var normalized = path.Replace('\\', '/');
+                    if (!path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) && !normalized.Contains("/obj/", StringComparison.OrdinalIgnoreCase))
                         fallback ??= location;
                 }
             }

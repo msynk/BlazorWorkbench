@@ -1,0 +1,12 @@
+{
+  "project": "Company.Workbench.csproj",
+  "baselines": "baselines",
+  "output": "artifacts/workbench",
+  "browser": "chromium",
+  "viewports": ["laptop"],
+  "themes": ["light"],
+  "workers": 2,
+  "timeoutSeconds": 30,
+  "visual": { "threshold": 0.1, "maxDiffPixelRatio": 0 },
+  "accessibility": { "failOn": "serious" }
+}

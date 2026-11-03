@@ -120,3 +120,23 @@ public sealed class ToolbarScenarios : ScenarioSet<Toolbar>
             .Visual(v => v.Viewports("mobile", "laptop")));
     }
 }
+
+public sealed class SortableListScenarios : ScenarioSet<SortableList>
+{
+    private static readonly IReadOnlyList<string> Tasks = ["Write spec", "Build prototype", "Ship it"];
+
+    protected override void Configure(ScenarioSetBuilder<SortableList> set)
+    {
+        set.Title("Layout/Sortable list").Tags("drag-and-drop", "keyboard");
+        set.Add("Default", s => s
+            .Parameter(l => l.Items, Tasks)
+            .Interaction("drag to reorder", i => i
+                .DragTo(By.Text("Ship it"), By.Text("Write spec"))
+                .ExpectText(By.Css(".sortable-item:first-child"), "Ship it")
+                .ExpectCallback("OnReordered", times: 1))
+            .Interaction("keyboard reorder", i => i
+                .Focus(By.Text("Write spec"))
+                .Press("Alt+ArrowDown")
+                .ExpectText(By.Css(".sortable-item:first-child"), "Build prototype")));
+    }
+}

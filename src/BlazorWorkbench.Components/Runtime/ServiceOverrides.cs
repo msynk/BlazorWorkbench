@@ -71,14 +71,20 @@ public static class ServiceOverrides
 /// <summary>Registration helpers shared by the preview host and bUnit integration.</summary>
 public static class WorkbenchRuntimeServiceCollectionExtensions
 {
-    /// <summary>
-    /// Registers the Workbench runtime (catalog, sessions, simulations). <paramref name="catalog"/> is the catalog built at
-    /// startup; pass null to build it lazily.
-    /// </summary>
-    public static IServiceCollection AddBlazorWorkbenchRuntime(this IServiceCollection services, WorkbenchOptions options, WorkbenchCatalog? catalog = null, IReadOnlySet<Type>? overridableTypes = null)
+    /// <summary>Registers the Workbench runtime (catalog, sessions, simulations).</summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="options">Discovery and preview options.</param>
+    /// <param name="catalog">The catalog built at startup; null builds it lazily.</param>
+    /// <param name="overridableTypes">Service types rewritten by <see cref="ServiceOverrides.Apply"/>.</param>
+    /// <param name="validateDependencies">
+    /// Report component dependencies missing from this container (WB1005). Turn it off where components are rendered by
+    /// another container, such as a host serving a WebAssembly client.
+    /// </param>
+    public static IServiceCollection AddBlazorWorkbenchRuntime(this IServiceCollection services, WorkbenchOptions options, WorkbenchCatalog? catalog = null,
+        IReadOnlySet<Type>? overridableTypes = null, bool validateDependencies = true)
     {
         services.TryAddSingleton(options);
-        services.TryAddSingleton(sp => new WorkbenchCatalogAccessor(options, catalog, sp.GetService<IServiceProviderIsService>())
+        services.TryAddSingleton(sp => new WorkbenchCatalogAccessor(options, catalog, validateDependencies ? sp.GetService<IServiceProviderIsService>() : null)
         {
             OverridableTypes = overridableTypes ?? new HashSet<Type>(),
         });

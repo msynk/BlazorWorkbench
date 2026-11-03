@@ -30,6 +30,9 @@ public sealed class CatalogDto
 
     public string Title { get; init; } = "";
     public string? WorkbenchVersion { get; init; }
+
+    /// <summary>How previews run: <c>Server</c> or <c>WebAssembly</c>. Visual baselines are kept per hosting model.</summary>
+    public string HostingModel { get; init; } = "Server";
     public IReadOnlyList<ComponentDto> Components { get; init; } = [];
     public IReadOnlyList<CatalogIssue> Issues { get; init; } = [];
     public IReadOnlyList<ViewportPreset> Viewports { get; init; } = [];
@@ -96,6 +99,9 @@ public sealed class ScenarioDto
     public string? SkipReason { get; init; }
     public IReadOnlyList<string> Services { get; init; } = [];
     public string? Snippet { get; init; }
+
+    /// <summary>Source file declaring the scenario, relative to the source root (used for change impact).</summary>
+    public string? SourcePath { get; init; }
 }
 
 public sealed class EnvironmentDto
@@ -135,10 +141,11 @@ public sealed class ValidationReportDto
 /// <summary>Maps catalog objects to contracts.</summary>
 public static class CatalogMapper
 {
-    public static CatalogDto ToDto(WorkbenchCatalog catalog, Func<string, string?>? sourcePathMapper = null, string? version = null) => new()
+    public static CatalogDto ToDto(WorkbenchCatalog catalog, Func<string, string?>? sourcePathMapper = null, string? version = null, string hostingModel = "Server") => new()
     {
         Title = catalog.Options.Title,
         WorkbenchVersion = version,
+        HostingModel = hostingModel,
         Components = catalog.Components.Select(c => ToDto(c, sourcePathMapper)).ToArray(),
         Issues = catalog.Issues,
         Viewports = catalog.Options.Viewports.ToArray(),
@@ -167,10 +174,10 @@ public static class CatalogMapper
         Parameters = component.Metadata.Parameters,
         Dependencies = component.Metadata.Injections.Select(i => i.ServiceTypeName).Distinct().ToArray(),
         Fixtures = component.Fixtures.Select(f => new FixtureDto(f.Name, Naming.FormatTypeName(f.ValueType), f.Description)).ToArray(),
-        Scenarios = component.Scenarios.Select(s => ToDto(s, component.Metadata)).ToArray(),
+        Scenarios = component.Scenarios.Select(s => ToDto(s, component.Metadata, sourcePathMapper)).ToArray(),
     };
 
-    public static ScenarioDto ToDto(ScenarioDefinition s, ComponentMetadata metadata)
+    public static ScenarioDto ToDto(ScenarioDefinition s, ComponentMetadata metadata, Func<string, string?>? sourcePathMapper = null)
     {
         var args = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         var descriptions = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -224,6 +231,9 @@ public static class CatalogMapper
             SkipReason = s.SkipReason,
             Services = s.ServiceTypes.Select(t => Naming.FormatTypeName(t)).ToArray(),
             Snippet = Documentation.RazorSnippetGenerator.Generate(s, metadata),
+            SourcePath = s.DeclaringType is { } declaring && sourcePathMapper is not null && SourceLocator.Find(declaring) is { } location
+                ? sourcePathMapper(location.Path)
+                : null,
         };
     }
 
@@ -238,4 +248,4 @@ public static class CatalogMapper
 }
 
 /// <summary>A diagnostic as exchanged with the browser and test runner.</summary>
-public sealed record DiagnosticDto(string Timestamp, DiagnosticSource Source, DiagnosticSeverity Severity, string ScenarioId, string Message, string? Details);
+public sealed record DiagnosticDto(string Timestamp, DiagnosticSource Source, DiagnosticSeverity Severity, string ScenarioId, string Message, string? Details, string? SessionId = null);

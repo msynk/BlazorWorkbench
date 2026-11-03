@@ -1,7 +1,7 @@
 namespace BlazorWorkbench.Testing.Imaging;
 
 /// <summary>Result of comparing two screenshots.</summary>
-public sealed record ImageComparison(bool SizeMismatch, long DiffPixels, long TotalPixels, PngImage Diff)
+public sealed record ImageComparison(bool SizeMismatch, long DiffPixels, long TotalPixels, PngImage Diff, long AntiAliasedPixels = 0)
 {
     public double DiffRatio => TotalPixels == 0 ? 0 : (double)DiffPixels / TotalPixels;
 }
@@ -9,19 +9,21 @@ public sealed record ImageComparison(bool SizeMismatch, long DiffPixels, long To
 /// <summary>
 /// Perceptual pixel comparison. Colors are compared in YIQ space (as in pixelmatch), weighted toward luminance, after
 /// blending with white. <c>threshold</c> (0..1) is the tolerated color distance per pixel; 0.1 ignores imperceptible
-/// rendering noise while detecting real changes.
+/// rendering noise while detecting real changes. Pixels that differ only because of anti-aliasing (detected with the
+/// intensity-slope method of Vyšniauskas, 2009) are ignored by default and drawn in yellow in the diff image.
 /// </summary>
 public static class ImageComparer
 {
     private const double MaxYiqDelta = 35215;
 
-    public static ImageComparison Compare(PngImage baseline, PngImage actual, double threshold = 0.1)
+    public static ImageComparison Compare(PngImage baseline, PngImage actual, double threshold = 0.1, bool ignoreAntiAliasing = true)
     {
         var width = Math.Max(baseline.Width, actual.Width);
         var height = Math.Max(baseline.Height, actual.Height);
+        var sameSize = baseline.Width == actual.Width && baseline.Height == actual.Height;
         var diff = new PngImage(width, height);
         var maxDelta = MaxYiqDelta * threshold * threshold;
-        long different = 0;
+        long different = 0, antiAliased = 0;
 
         for (var y = 0; y < height; y++)
         {
@@ -42,8 +44,17 @@ public static class ImageComparer
                 var delta = ColorDelta(baseline.Pixels, bo, actual.Pixels, ao);
                 if (delta > maxDelta)
                 {
-                    different++;
-                    SetPixel(diff, o, 255, 0, 0);
+                    if (ignoreAntiAliasing && sameSize &&
+                        (IsAntiAliased(baseline, x, y, actual) || IsAntiAliased(actual, x, y, baseline)))
+                    {
+                        antiAliased++;
+                        SetPixel(diff, o, 255, 200, 0);
+                    }
+                    else
+                    {
+                        different++;
+                        SetPixel(diff, o, 255, 0, 0);
+                    }
                 }
                 else
                 {
@@ -54,8 +65,80 @@ public static class ImageComparer
             }
         }
 
-        var sizeMismatch = baseline.Width != actual.Width || baseline.Height != actual.Height;
-        return new ImageComparison(sizeMismatch, different, (long)width * height, diff);
+        return new ImageComparison(!sameSize, different, (long)width * height, diff, antiAliased);
+    }
+
+    /// <summary>
+    /// True when the pixel looks like an anti-aliased edge: its neighbors include both a darker and a brighter pixel,
+    /// and one of those extremes sits in a flat region (several identical siblings) in both images.
+    /// </summary>
+    internal static bool IsAntiAliased(PngImage image, int x1, int y1, PngImage other)
+    {
+        int width = image.Width, height = image.Height;
+        int x0 = Math.Max(x1 - 1, 0), y0 = Math.Max(y1 - 1, 0), x2 = Math.Min(x1 + 1, width - 1), y2 = Math.Min(y1 + 1, height - 1);
+        var pos = (y1 * width + x1) * 4;
+        var zeroes = x1 == x0 || x1 == x2 || y1 == y0 || y1 == y2 ? 1 : 0;
+        double min = 0, max = 0;
+        int minX = 0, minY = 0, maxX = 0, maxY = 0;
+
+        for (var x = x0; x <= x2; x++)
+        {
+            for (var y = y0; y <= y2; y++)
+            {
+                if (x == x1 && y == y1)
+                    continue;
+
+                var delta = BrightnessDelta(image.Pixels, pos, image.Pixels, (y * width + x) * 4);
+                if (delta == 0)
+                {
+                    if (++zeroes > 2)
+                        return false;
+                }
+                else if (delta < min)
+                {
+                    min = delta;
+                    minX = x;
+                    minY = y;
+                }
+                else if (delta > max)
+                {
+                    max = delta;
+                    maxX = x;
+                    maxY = y;
+                }
+            }
+        }
+
+        if (min == 0 || max == 0)
+            return false;
+
+        return (HasManySiblings(image, minX, minY) && HasManySiblings(other, minX, minY)) ||
+               (HasManySiblings(image, maxX, maxY) && HasManySiblings(other, maxX, maxY));
+    }
+
+    private static bool HasManySiblings(PngImage image, int x1, int y1)
+    {
+        int width = image.Width, height = image.Height;
+        int x0 = Math.Max(x1 - 1, 0), y0 = Math.Max(y1 - 1, 0), x2 = Math.Min(x1 + 1, width - 1), y2 = Math.Min(y1 + 1, height - 1);
+        var pos = (y1 * width + x1) * 4;
+        var zeroes = x1 == x0 || x1 == x2 || y1 == y0 || y1 == y2 ? 1 : 0;
+        var p = image.Pixels;
+
+        for (var x = x0; x <= x2; x++)
+        {
+            for (var y = y0; y <= y2; y++)
+            {
+                if (x == x1 && y == y1)
+                    continue;
+                var o = (y * width + x) * 4;
+                if (p[pos] == p[o] && p[pos + 1] == p[o + 1] && p[pos + 2] == p[o + 2] && p[pos + 3] == p[o + 3])
+                    zeroes++;
+                if (zeroes > 2)
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private static void SetPixel(PngImage image, int o, byte r, byte g, byte b)
@@ -69,6 +152,10 @@ public static class ImageComparer
     private static double Luma(byte[] p, int o) => Blend(p[o], p[o + 3]) * 0.299 + Blend(p[o + 1], p[o + 3]) * 0.587 + Blend(p[o + 2], p[o + 3]) * 0.114;
 
     private static double Blend(byte c, byte a) => 255 + (c - 255) * (a / 255.0);
+
+    private static double BrightnessDelta(byte[] a, int ao, byte[] b, int bo) =>
+        Y(Blend(a[ao], a[ao + 3]), Blend(a[ao + 1], a[ao + 3]), Blend(a[ao + 2], a[ao + 3])) -
+        Y(Blend(b[bo], b[bo + 3]), Blend(b[bo + 1], b[bo + 3]), Blend(b[bo + 2], b[bo + 3]));
 
     private static double ColorDelta(byte[] a, int ao, byte[] b, int bo)
     {

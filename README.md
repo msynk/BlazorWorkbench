@@ -23,7 +23,14 @@ What sets it apart from Storybook-style galleries:
 
 ## Quick start
 
-Workbench needs the .NET 10 SDK.
+Workbench needs the .NET 10 SDK. The fastest start is the template:
+
+```bash
+dotnet new install BlazorWorkbench.Templates
+dotnet new blazorworkbench -n MyComponents.Workbench
+```
+
+You can also set up a host by hand:
 
 1. Create a host project that references your component library and the Workbench package:
 
@@ -80,7 +87,9 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 | --- | --- |
 | `BlazorWorkbench.Core` | Scenario authoring API, discovery, validation, contracts, redaction. No UI or browser dependency. |
 | `BlazorWorkbench.Components` | Workbench UI and preview runtime (session, fake HTTP, auth, clock, diagnostics). |
-| `BlazorWorkbench.Hosting` | `AddBlazorWorkbench` / `MapBlazorWorkbench` for ASP.NET Core, catalog API and secure defaults. |
+| `BlazorWorkbench.Hosting` | `AddBlazorWorkbench` / `MapBlazorWorkbench` for ASP.NET Core (Interactive Server or WebAssembly), catalog API and secure defaults. |
+| `BlazorWorkbench.WebAssembly` | Client package for Interactive WebAssembly hosts (`AddBlazorWorkbenchAsync`). |
+| `BlazorWorkbench.Templates` | `dotnet new blazorworkbench` project template. |
 | `BlazorWorkbench.Testing` | Playwright runner, image comparison, baselines, JSON/JUnit/HTML reports, static catalog publisher. |
 | `BlazorWorkbench.Testing.Bunit` | Render scenarios in bUnit tests and smoke-test every scenario without a browser. |
 | `BlazorWorkbench.Cli` | The `workbench` .NET tool: `list`, `validate`, `test`, `a11y`, `approve`, `publish`, `dev`, `init`, `mcp`. |
@@ -88,7 +97,7 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 ## Documentation
 
 - [Getting started](docs/getting-started.md) · [Scenario authoring](docs/scenarios.md) · [Environment simulation](docs/environment.md) · [Parameter editors](docs/parameter-editors.md)
-- [Testing and Playwright](docs/testing.md) · [bUnit integration](docs/bunit.md) · [Accessibility](docs/accessibility.md) · [Visual regression](docs/visual-regression.md)
+- [WebAssembly hosting](docs/webassembly.md) · [Testing and Playwright](docs/testing.md) · [bUnit integration](docs/bunit.md) · [Accessibility](docs/accessibility.md) · [Visual regression](docs/visual-regression.md)
 - [CLI reference](docs/cli.md) · [CI setup](docs/ci.md) · [Publishing catalogs](docs/publishing.md) · [MCP for coding agents](docs/mcp.md)
 - [Architecture](docs/architecture.md) · [Extensibility](docs/extensibility.md) · [Security and privacy](docs/security.md) · [Compatibility](docs/compatibility.md)
 - [Troubleshooting](docs/troubleshooting.md) · [Diagnostic codes](docs/diagnostics-codes.md) · [Assessment and roadmap](docs/assessment.md) · [ADRs](docs/adr/)
@@ -96,8 +105,10 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 ## Repository layout
 
 ```
-src/        Core, Components, Hosting, Testing, Testing.Bunit, Cli
-samples/    SampleComponents (component library) and SampleWorkbench (host, scenarios, baselines)
+src/        Core, Components, Hosting, WebAssembly, Testing, Testing.Bunit, Cli, Templates
+samples/    SampleComponents (library), SampleWorkbench (Server host, scenarios, baselines),
+            SampleWorkbench.Wasm + .Client (WebAssembly host reusing the same scenarios)
+eng/        visual-linux.sh: the Linux visual suite in the CI container
 tests/      Unit (Core, Components/bUnit, Testing, Cli) and end-to-end browser tests (E2E)
 docs/       Guides, reference and architecture decision records
 ```
@@ -113,7 +124,7 @@ dotnet run --project src/BlazorWorkbench.Cli -- test --a11y --visual            
 
 ## Status and limitations
 
-This is version 0.1.0. The supported hosting model for previews is **Interactive Server** on .NET 10. WebAssembly-only hosts and .NET MAUI Blazor Hybrid are not supported for previews yet; see [compatibility](docs/compatibility.md). Automated accessibility checks find only part of the WCAG issues, so manual review is still needed. Visual baselines are specific to each platform. All limitations are listed in [docs/compatibility.md](docs/compatibility.md#known-limitations).
+This is version 0.1.0 for .NET 10. Previews run with **Interactive Server** or **Interactive WebAssembly**. .NET MAUI Blazor Hybrid is not supported for previews; see [compatibility](docs/compatibility.md). Automated accessibility checks find only part of the WCAG issues, so manual review is still needed. Visual baselines are specific to each platform and hosting model. All limitations are listed in [docs/compatibility.md](docs/compatibility.md#known-limitations).
 
 ## License
 

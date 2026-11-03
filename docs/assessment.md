@@ -54,7 +54,8 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | Model | Assessment |
 | --- | --- |
 | Blazor Web App, Interactive Server | Primary: one circuit per preview gives natural session isolation, and server-side diagnostics are simple. **Implemented.** |
-| Interactive WebAssembly / Auto | The UI library has no server dependencies, but a WebAssembly preview host, catalog transport and fake HTTP over fetch would be needed. **Not implemented.** |
+| Interactive WebAssembly | Implemented: `BlazorWorkbench.WebAssembly` plus `Interactivity = WebAssembly`. All sample scenarios pass on both models; baselines are stored per hosting model ([ADR 0008](adr/0008-webassembly-hosting.md)). |
+| Interactive Auto | Not offered as a Workbench mode: previews must be deterministic, and Auto switches models between loads. Use Server or WebAssembly explicitly. |
 | .NET MAUI Blazor Hybrid | Previews of platform features need device fakes; components are previewed in a web host. **Not supported.** |
 
 ## Phase status
@@ -62,33 +63,46 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | Phase | Status | Evidence |
 | --- | --- | --- |
 | 0 Assessment | Done | This document, [ADRs](adr/) |
-| 1 Vertical slice | Done | Sample host; discovery, scenarios, preview, inspector |
+| 1 Vertical slice | Done | Sample hosts; discovery, scenarios, preview, inspector, template |
 | 2 Scenario and environment engine | Done | Fixtures, setup, overrides, cascading values, gates, clock, auth, culture, isolation tests |
-| 3 Developer experience and diagnostics | Done | Search and keyboard, viewport/theme/culture/direction, diagnostics capture, hot reload, error recovery |
-| 4 Automated testing and CLI | Done | Playwright runner, bUnit package, CLI, JSON/JUnit/HTML, exit codes, CI workflow |
-| 5 Visual regression and accessibility | Done | Per-platform baselines, explicit approval, diff views, axe in UI and CLI, keyboard and focus steps |
-| 6 Documentation and publishing | Done | Docs pages, static catalog, coverage reports, privacy checks |
-| 7 Advanced diagnostics and performance | Partial | Budgets, ready time, DOM update metrics, traces. No render counts in browsers and no large-catalog benchmark suite. |
-| 8 Extensibility and AI | Done | Providers, editors, collectors, MCP with approval gating and audit log |
-| 9 Production readiness | Partial | Packages and tool built and validated through a clean install. Release automation (signing, publishing) is not set up. |
+| 3 Developer experience and diagnostics | Done | Search and keyboard, viewport/theme/culture/direction, diagnostics capture, hot reload, error recovery, lazy explorer for large catalogs |
+| 4 Automated testing and CLI | Done | Playwright runner, bUnit package, CLI, JSON/JUnit/HTML, exit codes, change impact, CI on Windows and Linux |
+| 5 Visual regression and accessibility | Done | Baselines per platform and hosting model, explicit approval, anti-aliasing-aware diff, axe in UI and CLI, keyboard, focus, drag and upload steps |
+| 6 Documentation and publishing | Done | Docs, static catalog, coverage reports, privacy checks |
+| 7 Advanced diagnostics and performance | Done | Budgets, ready time, DOM updates, server activity metrics, bUnit render counts and allocations, OpenTelemetry activities and metrics, `diagnostics.jsonl` with session correlation, 1,000-component benchmark |
+| 8 Extensibility and AI | Done | Providers, editors, collectors, telemetry, MCP with approval gating and audit log |
+| 9 Production readiness | Done (release pending) | Deterministic packages with Source Link and symbols, SBOM, optional signing, release workflow, template, clean-install validation. Publishing needs a tag and the `NUGET_API_KEY` secret. |
 
-## Measured baseline (sample, Windows 11, Chromium 156)
+## Measured baseline (Windows 11, Chromium 156, .NET 10.0.403)
 
 | Measurement | Value |
 | --- | --- |
-| Catalog build at startup (15 components, 60 scenarios) | < 1 s, part of host start-up |
-| Full `workbench test --a11y --visual` (60 scenarios, 4 workers) | about 13–16 s after the host has started |
-| Median preview ready time (`readyMs`) | about 150–400 ms, including circuit start |
-| Unit and E2E tests | Core 91 · Components 94 · Testing 21 · CLI 10 · E2E 28, all passing |
+| Sample catalog (17 components, 63 scenarios) | built at startup in well under 1 s |
+| Synthetic catalog, 1,000 components × 10 parameters | build ≈ 0.75 s, filter ≈ 1 ms, catalog JSON ≈ 3 MB serialized in ≈ 0.25 s |
+| Explorer with 1,000 components (bUnit) | 25 collapsed groups; children render only when opened |
+| `workbench test --a11y --visual`, Interactive Server (63 scenarios, 4 workers) | ≈ 18 s after host start |
+| Same, Interactive WebAssembly | ≈ 65 s (each preview boots the runtime) |
+| Automated tests | Core 96 · Components 101 · Testing 33 · CLI 10 · E2E 31 (incl. WebAssembly), all passing |
+| CI (GitHub Actions, first push) | Build/test on Ubuntu and Windows, Windows visual job and pack: all green |
 
-These numbers come from one developer workstation. Results on other hardware differ; the report records the environment of each run.
+These numbers come from one workstation, and results on other hardware differ. Each report records the environment of its run.
 
-## Backlog (prioritized remaining gaps)
+## Findings from running the suite
 
-1. WebAssembly preview host (catalog over HTTP, fake HTTP through `HttpMessageHandler` in the browser).
-2. Large-catalog benchmarks: discovery of 1,000+ components and explorer virtualization.
-3. Affected-scenario selection from changed files (git diff to components to scenarios).
-4. Visual diff anti-aliasing detection, which lets the default threshold be lower.
-5. Release automation: package signing, NuGet publishing, SBOM.
-6. A `dotnet new` template for Workbench hosts.
-7. More interaction steps: drag and drop, file upload, clipboard.
+Workbench found real defects in the sample library, which shows it works as intended:
+
+- `Counter` and `SortableList` discarded user state when the parent re-rendered (render check and interaction tests).
+- `ProductList` had an accessible name that did not contain the visible text (axe `label-content-name-mismatch`, WCAG 2.5.3).
+- Server and WebAssembly render three scenarios differently (exception message resources, ICU data). This led to baselines per hosting model.
+- Readiness race: a fake response was counted as done before the component had consumed it. Fixed by tracking the response body.
+- Packaging: hosts without `.razor` files lacked `blazor.web.js` ([ADR 0004](adr/0004-blazor-framework-assets.md)), and the WebAssembly server package had vulnerable 10.0.x versions (pinned to 10.0.14).
+
+## Remaining gaps
+
+| Gap | Why it remains | Next step |
+| --- | --- | --- |
+| Linux visual baselines | This machine has no network inside Docker or WSL, so the CI container image cannot be built here. | The `visual-linux` CI job runs in bootstrap mode until baselines exist. Approve the first run's artifact (`workbench approve -o <artifact>`) and commit. |
+| Package publishing | Needs a version tag and the `NUGET_API_KEY` secret (and optionally a signing certificate). | Push tag `v0.1.0` after review. The release workflow has not run yet. |
+| .NET MAUI Blazor Hybrid previews | Needs device and platform fakes and a native host; out of scope for a web-based workbench. | Preview shared Razor libraries in a web host. |
+| Clipboard and drag between frames | Browser permission models differ across engines. | Add to the DSL when Playwright support is uniform. |
+| Screen reader verification | No automation can replace it. | Manual checklist in [accessibility](accessibility.md). |

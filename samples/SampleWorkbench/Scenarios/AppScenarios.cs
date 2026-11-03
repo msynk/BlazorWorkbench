@@ -77,3 +77,24 @@ public sealed class DialogScenarios : ScenarioSet<Dialog>
         set.Add("Closed", s => s.Parameter(d => d.Open, false).Visual(v => v.Skip("Renders nothing.")));
     }
 }
+
+public sealed class AvatarUploadScenarios : ScenarioSet<AvatarUpload>
+{
+    private static readonly byte[] Pixel = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    protected override void Configure(ScenarioSetBuilder<AvatarUpload> set)
+    {
+        set.Title("Forms/Avatar upload").Tags("forms", "files");
+        set.Add("Default", s => s
+            .Interaction("selecting a file shows its name", i => i
+                .Upload(By.Label("Profile picture"), "me.png", Pixel, "image/png")
+                .ExpectText(By.TestId("selected-file"), "me.png")
+                .ExpectCallback("OnSelected", times: 1)));
+        set.Add("Too large", s => s
+            .Parameter(a => a.MaxBytes, 10)
+            .Interaction("rejects large files", i => i
+                .Upload(By.Label("Profile picture"), "big.png", Pixel, "image/png")
+                .ExpectVisible(By.Role("alert"))
+                .ExpectCallback("OnSelected", times: 0)));
+    }
+}

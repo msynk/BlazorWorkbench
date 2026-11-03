@@ -27,7 +27,8 @@ public class ShellTests(WorkbenchFixture fixture)
     {
         var page = await OpenAsync("");
         await Expect(page.Locator(".wb-overview h1")).ToHaveTextAsync("Sample Components");
-        await Expect(page.Locator(".wb-explorer-footer")).ToContainTextAsync("15 components");
+        var catalog = await fixture.Host.GetCatalogAsync();
+        await Expect(page.Locator(".wb-explorer-footer")).ToContainTextAsync($"{catalog.Components.Count} components · {catalog.Scenarios.Count()} scenarios");
         await Expect(page.Locator(".wb-node-component", new() { HasText = "Button" })).ToBeVisibleAsync();
         Directory.CreateDirectory(Screens);
         await page.ScreenshotAsync(new() { Path = Path.Combine(Screens, "overview.png") });

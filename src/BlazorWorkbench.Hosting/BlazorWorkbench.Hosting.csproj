@@ -9,6 +9,8 @@
   <ItemGroup>
     <!-- Provides the unmodified axe-core script (MPL-2.0) served to previews for in-browser accessibility scans. -->
     <PackageReference Include="Deque.AxeCore.Commons" />
+    <!-- Only the API is needed here; its build assets add the WebAssembly debug proxy, which hosts get by referencing the package directly. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" ExcludeAssets="build;buildTransitive;contentFiles" />
     <!-- Workbench hosts usually contain no .razor files, so the SDK would not add blazor.web.js. This package's
          buildTransitive targets add the framework scripts to consuming web projects (see docs/adr/0004). -->
     <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" VersionOverride="10.0.0" />

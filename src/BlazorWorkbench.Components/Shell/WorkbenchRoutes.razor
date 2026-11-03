@@ -1,0 +1,7 @@
+@* Router for the Workbench pages. Lives in the RCL so both Interactive Server and WebAssembly hosts can render it.
+   FocusOnNavigate is intentionally omitted: moving focus would interfere with focus behavior under test in previews. *@
+<Router AppAssembly="typeof(WorkbenchShell).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" />
+    </Found>
+</Router>

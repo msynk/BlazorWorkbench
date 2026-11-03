@@ -68,8 +68,11 @@ public sealed class RunEnvironment
 {
     public string? Os { get; init; }
 
-    /// <summary>Baseline platform folder (windows, linux or macos).</summary>
+    /// <summary>Baseline platform folder: the OS (windows, linux, macos), plus <c>-webassembly</c> for WebAssembly hosts.</summary>
     public string? Platform { get; init; }
+
+    /// <summary>Hosting model of the previews (Server or WebAssembly).</summary>
+    public string? HostingModel { get; init; }
     public string? Runtime { get; init; }
     public string? Browser { get; init; }
     public string? BrowserVersion { get; init; }
@@ -175,6 +178,10 @@ public sealed class VisualComparison
 
     public double DiffRatio { get; set; }
     public long DiffPixels { get; set; }
+
+    /// <summary>Pixels that differ only by anti-aliasing (ignored unless anti-aliasing is included).</summary>
+    public long AntiAliasedPixels { get; set; }
+
     public int Width { get; set; }
     public int Height { get; set; }
     public bool SizeMismatch { get; set; }

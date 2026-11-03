@@ -43,6 +43,8 @@ Validates every scenario without rendering it ([codes](diagnostics-codes.md)). E
 | `--only-failed` | Run only scenarios that failed in the previous `report.json`. |
 | `--fail-on <impact>` | Lowest accessibility impact that fails: `minor`, `moderate`, `serious`, `critical`. |
 | `--allow-missing-baselines` | Report missing baselines without failing. |
+| `--include-anti-aliasing` | Count anti-aliasing-only pixel differences as changes. |
+| `--changed-since <ref>` | Run only scenarios affected by files changed since a git ref (conservative; see [testing](testing.md#change-impact---changed-since)). |
 | `--browser <name>` | `chromium` (default), `firefox` or `webkit`. |
 | `--headed` | Show the browser window. |
 | `--no-trace` | Do not record Playwright traces for failures. |
@@ -90,7 +92,7 @@ Starts the MCP server on stdio; see [MCP](mcp.md).
   "timeoutSeconds": 30,
   "retries": 0,
   "filter": null,
-  "visual": { "threshold": 0.1, "maxDiffPixelRatio": 0 },
+  "visual": { "threshold": 0.1, "maxDiffPixelRatio": 0, "ignoreAntiAliasing": true },
   "accessibility": { "failOn": "serious", "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] }
 }
 ```

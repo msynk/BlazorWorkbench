@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.WebAssembly</RootNamespace>
+    <Description>Blazor Workbench client for Interactive WebAssembly hosts: runs the Workbench UI and previews in the browser.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Components\BlazorWorkbench.Components.csproj" />
+  </ItemGroup>
+</Project>

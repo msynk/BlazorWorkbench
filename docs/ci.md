@@ -56,7 +56,7 @@ Baselines are stored per platform (`baselines/linux`, `baselines/windows`, …).
 3. Run `workbench approve -o <downloaded report dir>`. Screenshots go to the platform folder that captured them, even when you approve on another OS.
 4. Commit the new baselines.
 
-Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. The report records the browser version and OS of every run.
+Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. For Linux, the repository runs the visual suite in a container image (`eng/visual-linux.sh`), so you can reproduce and approve Linux baselines locally with Docker; see [visual regression](visual-regression.md#linux-baselines). The report records the browser version and OS of every run.
 
 ## Distinguishing failures
 
@@ -69,6 +69,7 @@ Pin the browser through the `Microsoft.Playwright` version and the runner image 
 
 ## Incremental runs
 
+- `--changed-since origin/main` runs only the scenarios that the changed files can affect, and falls back to all scenarios when a change cannot be attributed (for example shared code). Check out with full history (`fetch-depth: 0`).
 - `--only-failed` reruns the failures recorded in the previous `report.json`. Use it to retry locally or to confirm a fix.
 - Filters (`-f "inputs-*"` or `-f "tag:smoke"`) split large catalogs across jobs. Each job writes its own output directory with `-o`.
-- Workbench does not compute *affected* scenarios from source changes. Running all scenarios is the safe default.
+- Run the whole suite on the main branch. Use change-based selection for pull requests.

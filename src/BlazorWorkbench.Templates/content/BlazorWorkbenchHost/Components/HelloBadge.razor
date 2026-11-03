@@ -1,0 +1,11 @@
+@namespace Company.Workbench.Components
+
+@* An example component. Replace it with components from your own library. *@
+<span class="hello-badge" style="display:inline-block;padding:.2rem .6rem;border-radius:999px;border:1px solid currentColor">
+    Hello, @Name!
+</span>
+
+@code {
+    /// <summary>Who to greet.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+}

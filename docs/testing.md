@@ -14,6 +14,7 @@ Workbench does not add a new test framework. It reuses [Playwright](https://play
 
 ```bash
 workbench test                                   # render + interactions for every scenario
+workbench test --changed-since origin/main       # only scenarios affected by changed files
 workbench test -f "inputs-*,tag:forms"           # filter by id/title glob or tag
 workbench test --a11y --visual -j 4 --retries 1  # parallel workers; retries mark flaky passes
 workbench test --only-failed                     # rerun failures from the last report
@@ -34,6 +35,7 @@ The output directory (default `artifacts/workbench`) contains:
 | `screenshots/` | Current screenshots and difference images. |
 | `traces/` | Playwright traces of failing interaction tests (open with `npx playwright show-trace`). They contain DOM snapshots; see [security](security.md). |
 | `failures/` | A screenshot at the point of each interaction failure. |
+| `diagnostics.jsonl` | Every diagnostic of every page load, one JSON object per line with scenario id, check, session id, timestamp, source, severity and message. Use it to correlate with logs or traces. |
 | `host.log` | Host output (written on infrastructure errors or with `--verbose`). |
 
 ### Exit codes
@@ -96,11 +98,49 @@ await page.WaitForFunctionAsync("() => window.__workbench?.ready");
 
 This surface is part of the public contract and follows the versioning policy in [compatibility](compatibility.md).
 
+## Change impact (`--changed-since`)
+
+`--changed-since <git ref>` collects the files changed since the ref, plus staged, unstaged and untracked files, and maps them to scenarios:
+
+| Changed file | Selected scenarios |
+| --- | --- |
+| A component (`Button.razor`, `.razor.cs`, `.razor.css`, `.razor.js`) | Every scenario of that component (from PDB source paths). |
+| A scenario set or provider file | The scenarios it declares. |
+| A baseline image (`baselines/{platform}/{scenario}/…`) | That scenario. |
+| Markdown, `docs/`, `.github/`, `LICENSE`, baseline manifests | None. |
+| Anything else (shared code, global CSS, project files) | **All scenarios.** The selection is conservative. |
+
+The run prints why it selected what it did. With no affecting changes it exits 0 without starting a browser. The selection needs PDBs (Debug builds have them) and `git` on `PATH`.
+
 ## Performance measurements
 
 - `readyMs` is the time from navigation start until readiness, as measured by the browser (`performance.now()`). It includes the Blazor circuit start-up.
 - `domUpdates` is the number of DOM mutation batches observed until readiness. It is a proxy for render activity, **not** a count of component renders: Workbench cannot count the renders of a component it does not own. In bUnit, use `cut.RenderCount` for exact numbers.
+- `serverActivities`, `serverMs` and `serverMaxMs` (Interactive Server only) are the number and total and maximum duration of inbound circuit activities: events, JS interop calls and render acknowledgements, as measured on the server by a circuit handler. They show server-side processing cost, separate from network and browser time.
+- bUnit: `this.MeasureScenario(id, assemblies)` returns the allocated bytes and time of the synchronous initial render, and `cut.ComponentRenderCount()` returns how often the scenario's component rendered.
 - Instrumentation overhead (MutationObserver, diagnostic hooks) is included in both values. Compare budgets only between runs on the same machine type and browser version, which the report records.
+
+## Tracing with OpenTelemetry
+
+Workbench emits `System.Diagnostics` activities and metrics under the name `BlazorWorkbench` (`WorkbenchTelemetry.Name`):
+
+| Signal | Name | Tags |
+| --- | --- | --- |
+| Activity | `workbench.scenario.activate` | `workbench.scenario.id`, `workbench.session.id` |
+| Activity | `workbench.http {METHOD}` (client) | `http.request.method`, `url.full` (redacted), `http.response.status_code`, `workbench.rule`, `workbench.outcome` |
+| Counter | `workbench.http.requests` | `workbench.outcome` |
+| Counter | `workbench.diagnostics` | `workbench.source`, `workbench.severity` |
+| Histogram (ms) | `workbench.circuit.activity.duration` | – |
+
+Export them from the host like any other source:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(WorkbenchTelemetry.Name).AddOtlpExporter())
+    .WithMetrics(m => m.AddMeter(WorkbenchTelemetry.Name).AddOtlpExporter());
+```
+
+Diagnostics carry the same session id as the activities (`sessionId` in the UI, reports and `diagnostics.jsonl`).
 
 ## Flakiness
 

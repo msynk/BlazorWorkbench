@@ -183,7 +183,8 @@ public static class ScenarioValidator
         var needsTarget = step.Action is StepAction.Click or StepAction.DoubleClick or StepAction.Hover or StepAction.Focus or StepAction.Blur
             or StepAction.Fill or StepAction.Type or StepAction.Check or StepAction.Uncheck or StepAction.Select or StepAction.WaitFor
             or StepAction.ExpectVisible or StepAction.ExpectHidden or StepAction.ExpectText or StepAction.ExpectValue
-            or StepAction.ExpectAttribute or StepAction.ExpectFocused or StepAction.ExpectCount;
+            or StepAction.ExpectAttribute or StepAction.ExpectFocused or StepAction.ExpectCount or StepAction.DragTo or StepAction.Upload
+            or StepAction.ScrollIntoView or StepAction.ExpectEnabled or StepAction.ExpectDisabled or StepAction.ExpectChecked or StepAction.ExpectUnchecked;
         if (needsTarget && (step.Target is null || string.IsNullOrWhiteSpace(step.Target.Value)))
             return ("WB1012", "a target locator is required.");
 
@@ -194,6 +195,12 @@ public static class ScenarioValidator
 
         if (step.Action is StepAction.ExpectText or StepAction.ExpectValue or StepAction.ExpectAttribute && step.Expected is null)
             return ("WB1012", "an expected value is required.");
+
+        if (step.Action == StepAction.DragTo && (step.Destination is null || string.IsNullOrWhiteSpace(step.Destination.Value)))
+            return ("WB1012", "a destination locator is required.");
+
+        if (step.Action == StepAction.Upload && (string.IsNullOrWhiteSpace(step.Value) || step.FileContent is null))
+            return ("WB1012", "a file name and content are required.");
 
         if (step.Action == StepAction.ExpectCallback && step.Value is not null && !callbacks.Contains(step.Value))
             return ("WB1011", $"'{step.Value}' is not an EventCallback parameter.");

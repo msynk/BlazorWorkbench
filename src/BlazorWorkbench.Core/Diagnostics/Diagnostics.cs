@@ -39,7 +39,8 @@ public sealed record DiagnosticEvent(
     string ScenarioId,
     string Message,
     string? Details = null,
-    IReadOnlyDictionary<string, string>? Data = null);
+    IReadOnlyDictionary<string, string>? Data = null,
+    string? SessionId = null);
 
 /// <summary>Extension point that observes diagnostics (for example to forward them to a log or test report).</summary>
 public interface IDiagnosticCollector
@@ -56,11 +57,14 @@ public sealed class DiagnosticLog
     private readonly Redactor _redactor;
     private readonly IReadOnlyList<IDiagnosticCollector> _collectors;
 
-    public DiagnosticLog(int capacity, Redactor redactor, IEnumerable<IDiagnosticCollector>? collectors = null)
+    private readonly string? _sessionId;
+
+    public DiagnosticLog(int capacity, Redactor redactor, IEnumerable<IDiagnosticCollector>? collectors = null, string? sessionId = null)
     {
         _capacity = Math.Max(10, capacity);
         _redactor = redactor;
         _collectors = collectors?.ToArray() ?? [];
+        _sessionId = sessionId;
     }
 
     public event Action<DiagnosticEvent>? Added;
@@ -77,7 +81,8 @@ public sealed class DiagnosticLog
             scenarioId,
             Truncate(_redactor.RedactText(message), 2_000),
             details is null ? null : Truncate(_redactor.RedactText(details), 8_000),
-            data?.ToDictionary(kv => kv.Key, kv => _redactor.RedactValue(kv.Key, kv.Value)));
+            data?.ToDictionary(kv => kv.Key, kv => _redactor.RedactValue(kv.Key, kv.Value)),
+            _sessionId);
 
         lock (_lock)
         {

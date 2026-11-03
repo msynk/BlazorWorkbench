@@ -68,7 +68,7 @@ public static class Commands
         return report.Errors > 0 || (warningsAsErrors && report.Warnings > 0) ? ExitCodes.Failures : ExitCodes.Success;
     }
 
-    public static async Task<int> TestAsync(CliContext context, TestRunOptions options, bool onlyFailed, CancellationToken ct)
+    public static async Task<int> TestAsync(CliContext context, TestRunOptions options, bool onlyFailed, string? changedSince, CancellationToken ct)
     {
         if (onlyFailed)
         {
@@ -88,6 +88,22 @@ public static class Commands
 
         var watch = Stopwatch.StartNew();
         await using var host = await context.ConnectAsync(ct);
+
+        if (changedSince is not null)
+        {
+            var changed = ChangeImpact.GitChangedFiles(context.Config.RootDirectory, changedSince);
+            var selection = ChangeImpact.Select(await host.GetCatalogAsync(ct), changed, context.Config.RootDirectory, options.BaselineDirectory);
+            Console.Error.WriteLine(selection.Reason);
+            if (!selection.RunAll)
+            {
+                if (selection.ScenarioIds!.Count == 0)
+                    return ExitCodes.Success;
+                options.OnlyScenarios = options.OnlyScenarios is { } previous
+                    ? previous.Intersect(selection.ScenarioIds, StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    : selection.ScenarioIds;
+            }
+        }
+
         var runner = new WorkbenchTestRunner(host, options, new ConsoleObserver());
         var report = await runner.RunAsync(ct);
         if (context.Verbose || report.Summary.Errors > 0)

@@ -25,7 +25,7 @@
     <HeadOutlet @rendermode="RenderMode" />
 </head>
 <body>
-    <Routes @rendermode="RenderMode" />
+    <BlazorWorkbench.Components.Shell.WorkbenchRoutes @rendermode="RenderMode" />
     <div id="blazor-error-ui" data-nosnippet hidden>
         An unhandled error has occurred. <a href="" class="reload">Reload</a>
     </div>
@@ -41,7 +41,10 @@
 </html>
 
 @code {
-    private static readonly IComponentRenderMode RenderMode = new InteractiveServerRenderMode(prerender: false);
+    private static readonly IComponentRenderMode ServerMode = new InteractiveServerRenderMode(prerender: false);
+    private static readonly IComponentRenderMode WebAssemblyMode = new InteractiveWebAssemblyRenderMode(prerender: false);
+
+    private IComponentRenderMode RenderMode => Options.Interactivity == WorkbenchInteractivity.WebAssembly ? WebAssemblyMode : ServerMode;
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 

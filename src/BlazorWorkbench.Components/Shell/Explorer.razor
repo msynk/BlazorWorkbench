@@ -42,6 +42,8 @@
 
 @code {
     private Node _tree = new("", "");
+    private readonly Dictionary<string, bool> _expanded = new(StringComparer.Ordinal);
+    private bool _large;
     private List<(ComponentEntry Component, ScenarioDefinition Scenario)>? _matches;
     private string _query = "";
     private int _errors;
@@ -67,6 +69,7 @@
         {
             _built = Catalog;
             _tree = BuildTree(Catalog);
+            _large = Catalog.Components.Count > 150;
             _errors = Catalog.Issues.Count(i => i.Severity == IssueSeverity.Error);
             if (_query.Length > 0)
                 _matches = Search(_query);
@@ -112,11 +115,11 @@
             {
                 if (child.Component is { } component)
                 {
-                    var open = component.Scenarios.Any(s => s.Id == SelectedScenarioId) || component.Id == SelectedComponentId;
+                    var open = IsExpanded(child.Path, component.Scenarios.Any(s => s.Id == SelectedScenarioId) || component.Id == SelectedComponentId);
                     var issues = Catalog.IssuesFor(component).Count(i => i.Severity == IssueSeverity.Error);
                     <li>
                         <details open="@open">
-                            <summary class="wb-node-component">
+                            <summary class="wb-node-component" @onclick="() => Flip(child.Path, open)" @onclick:preventDefault>
                                 <span class="wb-icon" aria-hidden="true">◇</span>@child.Name
                                 @if (component.HasOnlyGeneratedScenarios)
                                 {
@@ -131,6 +134,8 @@
                                     <span class="wb-badge" title="@component.DeprecationMessage">deprecated</span>
                                 }
                             </summary>
+                            @if (open)
+                            {
                             <ul class="wb-tree">
                                 <li><a href="@($"docs/{component.Id}")" class="wb-node-docs @(component.Id == SelectedComponentId ? "active" : "")">Docs</a></li>
                                 @foreach (var scenario in component.Scenarios)
@@ -141,15 +146,21 @@
                                     </li>
                                 }
                             </ul>
+                            }
                         </details>
                     </li>
                 }
                 else
                 {
+                    // Large catalogs start collapsed; closed groups render no children, which keeps thousands of entries cheap.
+                    var groupOpen = IsExpanded(child.Path, (!_large && depth == 0) || IsOpen(child) || node.Children.Count == 1);
                     <li>
-                        <details open="@(depth == 0 || IsOpen(child) || node.Children.Count == 1)">
-                            <summary class="wb-node-group">@child.Name</summary>
-                            @RenderGroup(child, depth + 1)
+                        <details open="@groupOpen">
+                            <summary class="wb-node-group" @onclick="() => Flip(child.Path, groupOpen)" @onclick:preventDefault>@child.Name <span class="wb-muted wb-small">@child.Count</span></summary>
+                            @if (groupOpen)
+                            {
+                                @RenderGroup(child, depth + 1)
+                            }
                         </details>
                     </li>
                 }
@@ -177,8 +188,14 @@
         return root;
     }
 
+    private bool IsExpanded(string path, bool defaultOpen) => _expanded.TryGetValue(path, out var value) ? value : defaultOpen;
+
+    private void Flip(string path, bool current) => _expanded[path] = !current;
+
     private sealed class Node(string name, string path)
     {
+        public int Count => Component is not null ? 1 : Children.Values.Sum(c => c.Count);
+
         public string Name { get; } = name;
         public string Path { get; } = path;
         public ComponentEntry? Component { get; init; }

@@ -20,6 +20,8 @@ git add samples/MyWorkbench/baselines  # 4. commit them with the change that cau
 ```
 baselines/
   manifest.json
+  windows-webassembly/
+    ...
   windows/
     inputs-button--primary/
       laptop-light.png
@@ -28,7 +30,7 @@ baselines/
     ...
 ```
 
-Text rendering differs between operating systems (fonts, hinting, antialiasing), so each platform has its own baselines. A run compares only against the baselines of the platform it runs on. Approving a report from another platform, for example a Linux CI artifact approved on Windows, writes to that platform's folder.
+Text rendering differs between operating systems (fonts, hinting, antialiasing), so each platform has its own baselines. Rendering can also differ between hosting models (WebAssembly ships reduced ICU data and can shorten exception messages), so WebAssembly hosts use `{os}-webassembly` folders. A run compares only against the baselines of the platform it runs on. Approving a report from another platform, for example a Linux CI artifact approved on Windows, writes to that platform's folder.
 
 ## Variants
 
@@ -52,10 +54,23 @@ Padded and centered scenarios capture the preview root element. Fullscreen scena
 Pixels are compared in YIQ color space after blending with white, a pixelmatch-style perceptual metric:
 
 - `threshold` (0–1, default 0.1) is the per-pixel color distance tolerated as noise.
+- Pixels that differ only because of **anti-aliasing** are detected with an intensity-slope test (Vyšniauskas, 2009) and ignored. They are drawn yellow in the difference image and counted as `antiAliasedPixels` in the report. Count them as changes with `--include-anti-aliasing` or `visual.ignoreAntiAliasing: false`.
 - `maxDiffPixelRatio` (0–1, default 0) is the share of differing pixels tolerated before the check fails.
 - A size change always fails and is reported with both sizes.
 
 Configure them globally in `workbench.json` (`visual.threshold`, `visual.maxDiffPixelRatio`) or per scenario. The difference image shows changed pixels in red over a faded copy of the baseline, and the HTML report and the **Visual** panel show the baseline and the current image side by side, as an overlay, or as a difference.
+
+## Linux baselines
+
+CI checks Linux screenshots inside the `mcr.microsoft.com/dotnet/sdk:10.0-noble` container, so they are reproducible on any machine with Docker (and network access):
+
+```bash
+docker run --rm -v "$PWD:/src" mcr.microsoft.com/dotnet/sdk:10.0-noble bash /src/eng/visual-linux.sh
+workbench approve -o artifacts/visual-linux-server
+workbench approve -o artifacts/visual-linux-webassembly
+```
+
+Until a platform folder exists (for example `baselines/linux`), the script reports screenshots as missing without failing. The CI artifact `visual-linux` then holds them for review. Download it, approve with `workbench approve -o <artifact dir>`, and commit. From then on the job is strict.
 
 ## Missing assets and incomplete rendering
 

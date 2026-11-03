@@ -12,6 +12,16 @@ This guide adds Blazor Workbench to an existing Razor component library. At the 
 
 The host is a small ASP.NET Core project that exists only for development. It is not deployed with your product.
 
+The quickest way to create one is the template. It includes an example component, scenarios and `workbench.json`:
+
+```bash
+dotnet new install BlazorWorkbench.Templates
+dotnet new blazorworkbench -n MyComponents.Workbench
+dotnet add MyComponents.Workbench reference ../MyComponents/MyComponents.csproj
+```
+
+You can also create the host by hand:
+
 ```bash
 dotnet new web -n MyComponents.Workbench
 cd MyComponents.Workbench
@@ -136,6 +146,7 @@ See [bUnit integration](bunit.md).
 ## Next steps
 
 - [Environment simulation](environment.md): fake HTTP, gates, users, clock and culture.
+- [WebAssembly hosting](webassembly.md), if your components depend on the WebAssembly runtime.
 - [Visual regression](visual-regression.md) and [accessibility](accessibility.md).
 - [Publish a static catalog](publishing.md) for your team.
 - [Connect a coding agent over MCP](mcp.md).

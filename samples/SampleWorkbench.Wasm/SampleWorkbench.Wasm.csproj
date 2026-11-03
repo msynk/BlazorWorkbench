@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Description>Blazor Workbench host running the sample scenarios with Interactive WebAssembly.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Direct reference brings the WebAssembly debug proxy used by UseWebAssemblyDebugging. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Hosting\BlazorWorkbench.Hosting.csproj" />
+    <ProjectReference Include="..\SampleWorkbench.Wasm.Client\SampleWorkbench.Wasm.Client.csproj" />
+  </ItemGroup>
+</Project>

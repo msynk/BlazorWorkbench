@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <ItemGroup>
+    <Compile Include="..\BlazorWorkbench.Core.Tests\SyntheticLibrary.cs" Link="SyntheticLibrary.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.Testing.Bunit\BlazorWorkbench.Testing.Bunit.csproj" />
     <ProjectReference Include="..\..\samples\SampleWorkbench\SampleWorkbench.csproj" />
   </ItemGroup>

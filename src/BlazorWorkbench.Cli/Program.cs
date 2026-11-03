@@ -153,11 +153,13 @@ namespace BlazorWorkbench.Cli
             var noTrace = new Option<bool>("--no-trace") { Description = "Do not record Playwright traces for failing interactions." };
             var allowMissing = new Option<bool>("--allow-missing-baselines") { Description = "Report missing baselines without failing." };
             var timeout = new Option<int?>("--timeout") { Description = "Seconds to wait for each scenario to become ready." };
+            var includeAntiAliasing = new Option<bool>("--include-anti-aliasing") { Description = "Count anti-aliasing-only pixel differences as changes." };
+            var changedSince = new Option<string?>("--changed-since") { Description = "Run only scenarios affected by files changed since this git ref (falls back to all when unsure)." };
 
             var command = new Command(name, description)
             {
                 filter, accessibility, visual, noInteractions, viewport, theme, workers, retries, output, baselines, browser, headed,
-                onlyFailed, failOn, noTrace, allowMissing, timeout,
+                onlyFailed, failOn, noTrace, allowMissing, timeout, includeAntiAliasing, changedSince,
             };
 
             command.SetAction((r, ct) =>
@@ -184,9 +186,10 @@ namespace BlazorWorkbench.Cli
                     FailOnMissingBaseline = !r.GetValue(allowMissing),
                     VisualThreshold = config.Visual.Threshold,
                     MaxDiffPixelRatio = config.Visual.MaxDiffPixelRatio,
+                    IgnoreAntiAliasing = config.Visual.IgnoreAntiAliasing && !r.GetValue(includeAntiAliasing),
                     ReadyTimeout = TimeSpan.FromSeconds(r.GetValue(timeout) ?? config.TimeoutSeconds),
                 };
-                return Commands.TestAsync(context, options, r.GetValue(onlyFailed), ct);
+                return Commands.TestAsync(context, options, r.GetValue(onlyFailed), r.GetValue(changedSince), ct);
             });
             return command;
         }

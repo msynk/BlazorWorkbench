@@ -10,6 +10,6 @@ Blazor Workbench is licensed under the MIT License (see [LICENSE](LICENSE)). It 
 | [bUnit](https://github.com/bUnit-dev/bUnit) 2.x | MIT | Used only by `BlazorWorkbench.Testing.Bunit`. |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | MIT | CLI parsing. |
 | [ModelContextProtocol](https://github.com/modelcontextprotocol/csharp-sdk) 2.3.0 | Apache-2.0 | MCP server in the CLI. |
-| Microsoft.AspNetCore.*, Microsoft.Extensions.* (including `Microsoft.Extensions.TimeProvider.Testing` and `Microsoft.AspNetCore.App.Internal.Assets`) | MIT | .NET runtime libraries. |
+| Microsoft.AspNetCore.*, Microsoft.Extensions.* (including `Microsoft.Extensions.TimeProvider.Testing`, `Microsoft.AspNetCore.App.Internal.Assets` and the `Microsoft.AspNetCore.Components.WebAssembly*` packages) | MIT | .NET runtime libraries. |
 
-The image comparison metric follows the YIQ color-difference approach published by Kotsarenko and Ramos ("Measuring perceived color difference using YIQ NTSC transmission color space in mobile applications", 2010), as used by pixelmatch. Workbench contains no pixelmatch code.
+Anti-aliasing detection follows V. Vyšniauskas, "Anti-aliased Pixel and Intensity Slope Detector" (2009), as also used by pixelmatch. The image comparison metric follows the YIQ color-difference approach published by Kotsarenko and Ramos ("Measuring perceived color difference using YIQ NTSC transmission color space in mobile applications", 2010), as used by pixelmatch. Workbench contains no pixelmatch code.

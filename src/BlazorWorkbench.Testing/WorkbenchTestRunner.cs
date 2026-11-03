@@ -30,13 +30,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 {
     private static readonly string[] ImpactOrder = ["minor", "moderate", "serious", "critical"];
     private readonly string _output = Path.GetFullPath(options.OutputDirectory);
+    private readonly ConcurrentQueue<string> _diagnosticLines = new();
     private BaselineStore? _baselines;
 
     public async Task<TestRunReport> RunAsync(CancellationToken cancellationToken = default)
     {
         var catalog = await host.GetCatalogAsync(cancellationToken).ConfigureAwait(false);
         var selected = Select(catalog);
-        _baselines = options.BaselineDirectory is { } dir ? new BaselineStore(dir) : null;
+        _baselines = options.BaselineDirectory is { } dir ? new BaselineStore(dir, BaselineStore.PlatformFor(catalog.HostingModel)) : null;
         if (options.Visual && _baselines is null)
             throw new WorkbenchInfrastructureException("Visual checks need a baseline directory (set 'baselines' in workbench.json or --baselines).");
 
@@ -69,7 +70,8 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             Environment = new RunEnvironment
             {
                 Os = BaselineStore.CurrentOs,
-                Platform = BaselineStore.CurrentPlatform,
+                Platform = BaselineStore.PlatformFor(catalog.HostingModel),
+                HostingModel = catalog.HostingModel,
                 Runtime = RuntimeInformation.FrameworkDescription,
                 Browser = options.Browser,
                 BrowserVersion = browser.Version,
@@ -127,6 +129,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         report.FinishedAt = DateTimeOffset.UtcNow;
         report.Summarize();
         ReportWriter.WriteAll(report, _output);
+        await File.WriteAllLinesAsync(Path.Combine(_output, "diagnostics.jsonl"), _diagnosticLines.Order(StringComparer.Ordinal), cancellationToken).ConfigureAwait(false);
         return report;
     }
 
@@ -220,7 +223,11 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 result.DomUpdates = load.DomUpdates;
                 var diagnostics = load.Diagnostics.Where(d => d.Source != DiagnosticSource.Resource).Concat(resources).ToList();
                 result.Diagnostics.AddRange(diagnostics.Where(d => d.Severity >= DiagnosticSeverity.Warning).Take(100));
-                result.Checks.Add(RenderCheck(load, diagnostics));
+                Export(scenario.Id, "render", diagnostics);
+                var render = RenderCheck(load, diagnostics);
+                if (load.State == "ready")
+                    await AddServerMetricsAsync(page, render).ConfigureAwait(false);
+                result.Checks.Add(render);
 
                 if (BudgetCheck(scenario, load) is { } budget)
                     result.Checks.Add(budget);
@@ -509,9 +516,10 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         var threshold = scenario.Visual.Threshold ?? options.VisualThreshold;
         var maxRatio = scenario.Visual.MaxDiffPixelRatio ?? options.MaxDiffPixelRatio;
-        var comparison = ImageComparer.Compare(baseline, actual, threshold);
+        var comparison = ImageComparer.Compare(baseline, actual, threshold, options.IgnoreAntiAliasing);
         visual.DiffRatio = Math.Round(comparison.DiffRatio, 6);
         visual.DiffPixels = comparison.DiffPixels;
+        visual.AntiAliasedPixels = comparison.AntiAliasedPixels;
         visual.SizeMismatch = comparison.SizeMismatch;
 
         var passed = !comparison.SizeMismatch && comparison.DiffRatio <= maxRatio;
@@ -578,6 +586,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         check.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
         check.Status = failed ? CheckStatus.Failed : CheckStatus.Passed;
+        try
+        {
+            Export(scenario.Id, $"interaction:{test.Name}", await LoadState.DiagnosticsAsync(page).ConfigureAwait(false));
+        }
+        catch (PlaywrightException)
+        {
+        }
+
         if (!failed && scenario.Budget.InteractionWithinMs is { } limit && check.DurationMs > limit)
         {
             check.Status = CheckStatus.Failed;
@@ -611,6 +627,31 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         }
 
         return check;
+    }
+
+    private void Export(string scenarioId, string check, IEnumerable<DiagnosticDto> diagnostics)
+    {
+        foreach (var d in diagnostics)
+            _diagnosticLines.Enqueue(JsonSerializer.Serialize(new { scenarioId, check, d.Timestamp, d.SessionId, d.Source, d.Severity, d.Message, d.Details }, WorkbenchJson.Options));
+    }
+
+    private static async Task AddServerMetricsAsync(IPage page, CheckResult check)
+    {
+        try
+        {
+            var metrics = await page.EvaluateAsync<JsonElement>("() => window.__workbench.serverMetrics ? window.__workbench.serverMetrics() : null").ConfigureAwait(false);
+            if (metrics.ValueKind == JsonValueKind.Object && metrics.TryGetProperty("server", out var server))
+            {
+                check.Metrics ??= [];
+                check.Metrics["serverActivities"] = server.GetProperty("activities").GetDouble();
+                check.Metrics["serverMs"] = server.GetProperty("totalMs").GetDouble();
+                check.Metrics["serverMaxMs"] = server.GetProperty("maxMs").GetDouble();
+            }
+        }
+        catch (PlaywrightException)
+        {
+            // Metrics are best effort; they never fail a check.
+        }
     }
 
     private static string EnsureDirectory(string file)

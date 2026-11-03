@@ -76,6 +76,6 @@ Scenario factories, fixtures, fake services and providers are your own code and 
 | bunit | MIT | bUnit integration package only. |
 | System.CommandLine | MIT | CLI. |
 | ModelContextProtocol | Apache-2.0 | MCP server. |
-| Microsoft.Extensions.* / ASP.NET Core | MIT | Runtime. |
+| Microsoft.Extensions.* / ASP.NET Core | MIT | Runtime. `Microsoft.AspNetCore.Components.WebAssembly.Server` is pinned to 10.0.14 because earlier 10.0.x servicing releases have high-severity advisories (GHSA-g27p-qf6j-c96c, GHSA-qjpx-jqm5-h2c4). |
 
-Check them for known vulnerabilities with `dotnet list package --vulnerable --include-transitive`. The result at release time is recorded in [CHANGELOG.md](../CHANGELOG.md).
+Restore fails on known vulnerabilities, because NuGet audit warnings are treated as errors. CI and the release workflow also run `dotnet list package --vulnerable --include-transitive`. Releases attach an SPDX SBOM and symbol packages; packages are built deterministically with Source Link.

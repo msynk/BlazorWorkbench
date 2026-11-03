@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>TARGET_FRAMEWORK</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BlazorWorkbench.Hosting" Version="WORKBENCH_VERSION" />
+  </ItemGroup>
+  <!-- Reference your component library here, for example:
+  <ItemGroup>
+    <ProjectReference Include="..\MyComponents\MyComponents.csproj" />
+  </ItemGroup>
+  -->
+</Project>

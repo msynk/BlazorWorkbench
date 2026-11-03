@@ -13,6 +13,9 @@
 | Report exporters | `TestRunReport` (JSON contract), `ReportWriter` | Write your own exporter from `report.json`. |
 | Documentation | `set.Documentation(markdown)`, XML docs, `CatalogPublisher`, `CatalogDto` | The published catalog is generated from `CatalogDto`, so a custom generator can use the same contract. |
 | AI and agents | `workbench mcp` | See [MCP](mcp.md). |
+| Telemetry | `WorkbenchTelemetry` (`ActivitySource` and `Meter` named `BlazorWorkbench`) | Standard OpenTelemetry sources; see [testing](testing.md#tracing-with-opentelemetry). |
+| Hosting models | `WorkbenchHostOptions.Interactivity`, `BlazorWorkbench.WebAssembly` | See [WebAssembly](webassembly.md). |
+| Project template | `dotnet new blazorworkbench` | Package `BlazorWorkbench.Templates`. |
 
 ## Example: forwarding diagnostics to logging
 

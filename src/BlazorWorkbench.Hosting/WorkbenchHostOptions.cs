@@ -1,5 +1,15 @@
 namespace BlazorWorkbench.Hosting;
 
+/// <summary>How the Workbench UI and previews run in the browser.</summary>
+public enum WorkbenchInteractivity
+{
+    /// <summary>Interactive Server: one circuit per preview (default).</summary>
+    Server,
+
+    /// <summary>Interactive WebAssembly: the UI and previews run in the browser from a client project that calls <c>AddBlazorWorkbenchAsync</c>.</summary>
+    WebAssembly,
+}
+
 /// <summary>Options of the ASP.NET Core preview host. Secure by default: development environment and loopback clients only.</summary>
 public sealed class WorkbenchHostOptions : WorkbenchOptions
 {
@@ -8,6 +18,9 @@ public sealed class WorkbenchHostOptions : WorkbenchOptions
     /// every Workbench endpoint) unless <see cref="AllowAnonymousRemoteAccess"/> is explicitly enabled.
     /// </summary>
     public bool AllowRemoteAccess { get; set; }
+
+    /// <summary>Render mode of the UI and previews. WebAssembly needs a client project; see docs/webassembly.md.</summary>
+    public WorkbenchInteractivity Interactivity { get; set; } = WorkbenchInteractivity.Server;
 
     /// <summary>Authorization policy required for every Workbench endpoint when remote access is enabled.</summary>
     public string? RemoteAccessPolicy { get; set; }

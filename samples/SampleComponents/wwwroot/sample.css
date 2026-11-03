@@ -88,6 +88,10 @@ body { background: var(--c-bg); color: var(--c-text); }
 .toolbar-items a.active { background: var(--c-primary); color: var(--c-primary-text); }
 .toolbar-end { margin-inline-start: auto; color: var(--c-muted); font-size: 13px; }
 
+.sortable { list-style: none; padding: 0; margin: 0; max-width: 320px; display: grid; gap: .35rem; }
+.sortable-item { border: 1px solid var(--c-border); border-radius: var(--radius); padding: .4rem .6rem; background: var(--c-bg); cursor: grab; }
+.sortable-item.dragging { opacity: .5; }
+
 .flaky { border: 1px dashed var(--c-border); padding: .75rem; border-radius: var(--radius); max-width: 360px; }
 
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

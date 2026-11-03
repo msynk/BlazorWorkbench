@@ -5,7 +5,7 @@
 | Area | Supported | Notes |
 | --- | --- | --- |
 | Target framework | .NET 10 (`net10.0`) | The SDK pins to 10.0.x through `global.json` (`rollForward: latestMajor`, so later stable SDKs work). |
-| Preview hosting | **Blazor Web App, Interactive Server** | Provided by `BlazorWorkbench.Hosting`. Prerendering is disabled for Workbench pages. |
+| Preview hosting | **Blazor Web App, Interactive Server** (default) and **Interactive WebAssembly** | `BlazorWorkbench.Hosting`, plus `BlazorWorkbench.WebAssembly` for WebAssembly clients ([guide](webassembly.md)). Prerendering is disabled for Workbench pages. |
 | Components under test | Any Razor component library usable from Interactive Server | Includes generic, templated and `EditContext`-dependent components, components with constructor injection, and `AuthorizeView`. |
 | Browsers for automation | Chromium (default), Firefox, WebKit through Playwright | Visual baselines are captured with Chromium in CI and are specific to browser and platform. |
 | Workbench UI browsers | Current Chromium, Firefox and Safari | |
@@ -15,14 +15,13 @@
 
 | Scenario | Status | Workaround |
 | --- | --- | --- |
-| WebAssembly-only hosting of previews | Not implemented. `BlazorWorkbench.Components` does not depend on server APIs, but there is no WebAssembly host. | Preview the components in an Interactive Server host. Code that requires `IJSInProcessRuntime` or WebAssembly-only APIs cannot be previewed. |
+| Standalone WebAssembly apps without an ASP.NET Core host | Not supported. The CLI, catalog API, axe-core script and baselines are served by the host. | Use the two-project WebAssembly host ([guide](webassembly.md)). |
 | .NET MAUI Blazor Hybrid | Not supported. | Preview the shared Razor library in a web host. Platform features need fakes. |
 | Static SSR-only components and `@page` routes | Pages are excluded by default (`IncludeRoutableComponents` enables them). Previews are always interactive. | Extract presentational components. |
 | Per-scenario `TimeProvider` override through `Services` | Rejected (`WB1022`). | Use `.Clock(...)`. |
 | Overriding services consumed by host singletons | Rejected by the container at startup. | Override the consumer. |
 | Media-query dark mode inside the UI iframe | Browsers cannot emulate it per iframe. | Theme attributes in the UI; real `prefers-color-scheme` emulation in CLI runs. |
-| Component render counts in browsers | Not observable without changing components. | `domUpdates` as a proxy; `cut.RenderCount` in bUnit. |
-| Affected-scenario detection | Not implemented. | Filters, tags, `--only-failed`. |
+| Component render counts in browsers | Not observable without changing components. | `domUpdates` and server activity metrics; `cut.ComponentRenderCount()` in bUnit. |
 
 ## Known limitations
 
@@ -33,6 +32,8 @@
 - **Culture** is applied per circuit activity. Code that runs outside circuit activities (for example a `System.Threading.Timer` created without `InvokeAsync`) does not get the scenario culture.
 - **Scenario services** become scoped in the host container (see [environment](environment.md#services)).
 - **Package size**: the CLI tool contains the Playwright driver (about 40 MB).
+- **WebAssembly clients** must not be trimmed, and each preview boots the runtime (slower readiness).
+- **Change impact** (`--changed-since`) maps files through PDB source paths. Shared code and global assets select every scenario.
 
 ## Versioning policy
 

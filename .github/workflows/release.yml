@@ -1,0 +1,96 @@
+name: Release
+
+# Publishes all Workbench packages when a version tag (for example v0.2.0) is pushed.
+# Required secret: NUGET_API_KEY. Optional secrets for package signing: SIGNING_CERTIFICATE (base64 PFX) and
+# SIGNING_CERTIFICATE_PASSWORD.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (dry run; nothing is published)
+        required: true
+        default: 0.0.0-dryrun
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  HAS_SIGNING_CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE != '' }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then v="${GITHUB_REF_NAME#v}"; else v="${{ inputs.version }}"; fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test
+        run: |
+          dotnet build BlazorWorkbench.slnx -c Debug
+          dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers --with-deps
+          dotnet test BlazorWorkbench.slnx --no-build
+
+      - name: Vulnerability audit
+        shell: bash
+        run: |
+          dotnet list BlazorWorkbench.slnx package --vulnerable --include-transitive | tee vulnerabilities.txt
+          ! grep -q "has the following vulnerable packages" vulnerabilities.txt
+
+      - name: Pack
+        run: dotnet pack BlazorWorkbench.slnx -c Release -o artifacts/packages -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Generate SBOM (SPDX)
+        shell: bash
+        run: |
+          curl -sSL -o sbom-tool https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64
+          chmod +x sbom-tool
+          ./sbom-tool generate -b artifacts/packages -bc . -pn BlazorWorkbench -pv "${{ steps.version.outputs.value }}" \
+            -ps msynk -nsb https://github.com/msynk/BlazorWorkbench -V Warning
+
+      - name: Sign packages
+        if: env.HAS_SIGNING_CERTIFICATE == 'true'
+        env:
+          SIGNING_CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          echo "$SIGNING_CERTIFICATE" | base64 -d > cert.pfx
+          dotnet nuget sign "artifacts/packages/*.nupkg" --certificate-path cert.pfx --certificate-password "$SIGNING_CERTIFICATE_PASSWORD" \
+            --timestamper http://timestamp.digicert.com
+          rm cert.pfx
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.value }}
+          path: artifacts/packages
+
+      - name: Publish to NuGet
+        if: github.event_name == 'push'
+        run: dotnet nuget push "artifacts/packages/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: GitHub release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+            artifacts/packages/_manifest/spdx_2.2/*.json

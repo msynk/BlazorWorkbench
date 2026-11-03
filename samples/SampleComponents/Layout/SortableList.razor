@@ -1,0 +1,65 @@
+@namespace SampleComponents.Layout
+
+@* A list that can be reordered with HTML drag and drop or with Alt+Arrow keys. *@
+<ol class="sortable" aria-label="@Label">
+    @for (var i = 0; i < _items.Count; i++)
+    {
+        var index = i;
+        <li class="sortable-item @(index == _dragging ? "dragging" : "")" draggable="true" tabindex="0"
+            @ondragstart="() => _dragging = index"
+            @ondragover:preventDefault
+            @ondrop="() => Drop(index)"
+            @ondragend="() => _dragging = null"
+            @onkeydown="e => OnKey(e, index)">
+            <span aria-hidden="true">⠿</span> @_items[index]
+        </li>
+    }
+</ol>
+
+@code {
+    private List<string> _items = [];
+    private IReadOnlyList<string>? _applied;
+    private int? _dragging;
+
+    /// <summary>Accessible name of the list.</summary>
+    [Parameter] public string Label { get; set; } = "Priorities";
+
+    /// <summary>Initial items.</summary>
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+
+    /// <summary>Raised with the new order after every move.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<string>> OnReordered { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Re-seed only when the parent passes a different list, so a parent re-render keeps the user's order.
+        if (!ReferenceEquals(_applied, Items))
+        {
+            _applied = Items;
+            _items = [.. Items];
+        }
+    }
+
+    private Task Drop(int target)
+    {
+        if (_dragging is not { } source || source == target)
+            return Task.CompletedTask;
+        return Move(source, target);
+    }
+
+    private Task OnKey(KeyboardEventArgs e, int index) => (e.AltKey, e.Key) switch
+    {
+        (true, "ArrowUp") when index > 0 => Move(index, index - 1),
+        (true, "ArrowDown") when index < _items.Count - 1 => Move(index, index + 1),
+        _ => Task.CompletedTask,
+    };
+
+    private async Task Move(int from, int to)
+    {
+        var item = _items[from];
+        _items.RemoveAt(from);
+        _items.Insert(to, item);
+        _dragging = null;
+        await OnReordered.InvokeAsync(_items.ToArray());
+    }
+}

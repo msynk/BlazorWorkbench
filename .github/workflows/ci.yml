@@ -22,6 +22,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # --changed-since needs history
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -42,8 +44,11 @@ jobs:
       - name: Validate sample scenarios
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- validate --no-build --warnings-as-errors
 
-      - name: Workbench tests (render, interactions, accessibility)
+      - name: Workbench tests, Interactive Server (render, interactions, accessibility)
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -o artifacts/workbench
+
+      - name: Workbench tests, Interactive WebAssembly
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/workbench-wasm
 
       - name: Dependency vulnerability check
         shell: bash
@@ -58,17 +63,15 @@ jobs:
           name: reports-${{ matrix.os }}
           path: |
             artifacts/workbench
+            artifacts/workbench-wasm
             artifacts/test-results
             artifacts/e2e
           retention-days: 14
 
-  visual:
-    # Visual baselines are platform specific (docs/adr/0007-platform-baselines.md). The committed baselines were captured on
-    # Windows. Until baselines for this runner image are approved from the uploaded report, this job reports missing or
-    # changed screenshots without blocking the pipeline.
+  visual-windows:
+    # Baselines in samples/SampleWorkbench/baselines/windows* are captured on Windows with the pinned Playwright Chromium.
     name: Visual regression (windows)
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -76,18 +79,66 @@ jobs:
           global-json-file: global.json
       - run: dotnet build BlazorWorkbench.slnx -c Debug
       - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
-      - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -o artifacts/visual
+      - name: Server
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -o artifacts/visual-windows-server
+      - name: WebAssembly
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/visual-windows-webassembly
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visual-report
-          path: artifacts/visual
+          name: visual-windows
+          path: artifacts/visual-windows-*
           retention-days: 14
+
+  visual-linux:
+    # Runs in a pinned container image so Linux baselines can be reproduced locally (eng/visual-linux.sh).
+    name: Visual regression (linux container)
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/dotnet/sdk:10.0-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: Visual suite (Server and WebAssembly)
+        run: SRC="$GITHUB_WORKSPACE" bash eng/visual-linux.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-linux
+          path: artifacts/visual-linux-*
+          retention-days: 14
+
+  template:
+    name: Template smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Pack
+        run: dotnet pack BlazorWorkbench.slnx -c Release -o artifacts/packages
+      - name: Create, build and test a host from the template
+        shell: bash
+        run: |
+          mkdir -p /tmp/template && cd /tmp/template
+          cat > nuget.config <<EOF
+          <configuration><packageSources><clear />
+            <add key="workbench-packages" value="$GITHUB_WORKSPACE/artifacts/packages" />
+            <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+          </packageSources></configuration>
+          EOF
+          cp "$GITHUB_WORKSPACE/global.json" .
+          dotnet new install "$GITHUB_WORKSPACE/artifacts/packages/BlazorWorkbench.Templates.0.1.0.nupkg"
+          dotnet new blazorworkbench -n Acme.Workbench
+          cd Acme.Workbench
+          dotnet build
+          dotnet tool install --tool-path ../tools BlazorWorkbench.Cli --version 0.1.0 --add-source "$GITHUB_WORKSPACE/artifacts/packages"
+          ../tools/workbench install-browsers --with-deps
+          ../tools/workbench test --no-build --a11y
 
   pack:
     name: Pack
     runs-on: ubuntu-latest
-    needs: build-and-test
+    needs: [build-and-test]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

@@ -65,6 +65,13 @@ public enum StepAction
     ExpectCallback,
     ExpectNoErrors,
     Checkpoint,
+    DragTo,
+    Upload,
+    ScrollIntoView,
+    ExpectEnabled,
+    ExpectDisabled,
+    ExpectChecked,
+    ExpectUnchecked,
 }
 
 /// <summary>
@@ -85,10 +92,20 @@ public sealed record InteractionStep
     /// <summary>Expected count (elements or callback invocations).</summary>
     public int? Count { get; init; }
 
+    /// <summary>Drop target of <see cref="StepAction.DragTo"/>.</summary>
+    public Locator? Destination { get; init; }
+
+    /// <summary>Base64 file content of <see cref="StepAction.Upload"/> (<see cref="Value"/> is the file name).</summary>
+    public string? FileContent { get; init; }
+
+    /// <summary>MIME type of <see cref="StepAction.Upload"/>.</summary>
+    public string? ContentType { get; init; }
+
     public override string ToString()
     {
         var parts = new List<string> { Action.ToString() };
         if (Target is not null) parts.Add(Target.ToString());
+        if (Destination is not null) parts.Add("→ " + Destination);
         if (Value is not null) parts.Add($"\"{Value}\"");
         if (Expected is not null) parts.Add($"=> \"{Expected}\"");
         if (Count is not null) parts.Add($"x{Count}");
@@ -158,6 +175,30 @@ public sealed class InteractionBuilder
 
     /// <summary>Captures a named visual checkpoint (compared against its own baseline in visual runs).</summary>
     public InteractionBuilder Checkpoint(string name) => Add(StepAction.Checkpoint, null, name);
+
+    /// <summary>Drags <paramref name="source"/> onto <paramref name="destination"/> (HTML5 drag and drop).</summary>
+    public InteractionBuilder DragTo(Locator source, Locator destination)
+    {
+        _steps.Add(new InteractionStep { Action = StepAction.DragTo, Target = source, Destination = destination });
+        return this;
+    }
+
+    /// <summary>Selects a file in a file input (works with <c>InputFile</c>). The content is embedded in the step.</summary>
+    public InteractionBuilder Upload(Locator input, string fileName, byte[] content, string contentType = "application/octet-stream")
+    {
+        _steps.Add(new InteractionStep { Action = StepAction.Upload, Target = input, Value = fileName, FileContent = Convert.ToBase64String(content), ContentType = contentType });
+        return this;
+    }
+
+    /// <summary>Selects a text file in a file input.</summary>
+    public InteractionBuilder Upload(Locator input, string fileName, string text, string contentType = "text/plain") =>
+        Upload(input, fileName, System.Text.Encoding.UTF8.GetBytes(text), contentType);
+
+    public InteractionBuilder ScrollIntoView(Locator target) => Add(StepAction.ScrollIntoView, target);
+    public InteractionBuilder ExpectEnabled(Locator target) => Add(StepAction.ExpectEnabled, target);
+    public InteractionBuilder ExpectDisabled(Locator target) => Add(StepAction.ExpectDisabled, target);
+    public InteractionBuilder ExpectChecked(Locator target) => Add(StepAction.ExpectChecked, target);
+    public InteractionBuilder ExpectUnchecked(Locator target) => Add(StepAction.ExpectUnchecked, target);
 
     private InteractionBuilder Add(StepAction action, Locator? target = null, string? value = null, string? expected = null, int? count = null)
     {
