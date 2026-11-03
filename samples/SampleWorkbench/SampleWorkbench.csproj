@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Description>Blazor Workbench host for the sample component library.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Hosting\BlazorWorkbench.Hosting.csproj" />
+    <ProjectReference Include="..\SampleComponents\SampleComponents.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Components</RootNamespace>
+    <Description>Blazor Workbench UI and preview runtime: explorer, parameter inspector, scenario host, environment simulation (fake HTTP, authentication, clock), diagnostics capture. Hosting-model agnostic Razor class library.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <SupportedPlatform Include="browser" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Core\BlazorWorkbench.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Hosting" />
+    <InternalsVisibleTo Include="BlazorWorkbench.Components.Tests" />
+    <InternalsVisibleTo Include="BlazorWorkbench.Testing.Bunit" />
+  </ItemGroup>
+</Project>

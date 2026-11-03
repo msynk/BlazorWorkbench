@@ -1,0 +1,74 @@
+<div class="wb-a11y">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">
+            Automated checks (axe-core) find a subset of WCAG issues. Passing them does not mean the component is accessible;
+            verify keyboard use, screen reader output and zoom manually.
+        </span>
+        <button type="button" class="wb-button" @onclick="() => OnRun.InvokeAsync()" disabled="@Running">@(Running ? "Scanning…" : "Run scan")</button>
+    </div>
+    @if (Scenario.Accessibility.Skip)
+    {
+        <p class="wb-muted">Automated runs skip this scenario: @Scenario.Accessibility.SkipReason</p>
+    }
+    @if (Scenario.Accessibility.DisabledRules.Count > 0)
+    {
+        <p class="wb-muted">Disabled rules: @string.Join(", ", Scenario.Accessibility.DisabledRules) — @Scenario.Accessibility.Justification</p>
+    }
+    @if (Result?.Error is { } error)
+    {
+        <p class="wb-error" role="alert">@error</p>
+    }
+    else if (Result is not null)
+    {
+        <p role="status">
+            <strong>@(Result.Violations?.Length ?? 0)</strong> violation(s), @(Result.Incomplete?.Length ?? 0) need review, @Result.Passes rule(s) passed
+            <span class="wb-muted">(@Result.Engine)</span>
+        </p>
+        @RenderRules("Violations", Result.Violations)
+        @RenderRules("Needs manual review", Result.Incomplete)
+    }
+</div>
+
+@code {
+    [Parameter] public A11yOutcome? Result { get; set; }
+    [Parameter] public bool Running { get; set; }
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter] public EventCallback OnRun { get; set; }
+
+    private static int ImpactOrder(string? impact) => impact switch { "critical" => 0, "serious" => 1, "moderate" => 2, "minor" => 3, _ => 4 };
+
+    private RenderFragment RenderRules(string title, A11yRule[]? rules) => __builder =>
+    {
+        if (rules is not { Length: > 0 })
+            return;
+        <h2 class="wb-h3">@title</h2>
+        @foreach (var rule in rules.OrderBy(r => ImpactOrder(r.Impact)))
+        {
+            <details class="wb-a11y-rule wb-impact-@(rule.Impact ?? "none")">
+                <summary><span class="wb-badge">@(rule.Impact ?? "n/a")</span> <strong>@rule.Help</strong> <code>@rule.Id</code> — @(rule.Nodes?.Length ?? 0) element(s)</summary>
+                <p>@rule.Description</p>
+                @if (rule.HelpUrl is { } url && SafeMarkdown.IsSafeUrl(url))
+                {
+                    <p><a href="@url" target="_blank" rel="noopener noreferrer">How to fix</a></p>
+                }
+                @if (rule.Tags is { Length: > 0 })
+                {
+                    <p class="wb-muted wb-small">@string.Join(", ", rule.Tags)</p>
+                }
+                <ul>
+                    @foreach (var node in rule.Nodes ?? [])
+                    {
+                        <li>
+                            <code>@node.Target</code>
+                            <pre>@node.Html</pre>
+                            @if (node.FailureSummary is { } summary)
+                            {
+                                <div class="wb-muted wb-small">@summary</div>
+                            }
+                        </li>
+                    }
+                </ul>
+            </details>
+        }
+    };
+}

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>BlazorWorkbench.Cli</RootNamespace>
+    <AssemblyName>workbench</AssemblyName>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>workbench</ToolCommandName>
+    <PackageId>BlazorWorkbench.Cli</PackageId>
+    <!-- Playwright ships helper PowerShell scripts in its driver folder; they are not NuGet install scripts. -->
+    <NoWarn>$(NoWarn);NU5111</NoWarn>
+    <Description>Blazor Workbench command line: list and validate scenarios, run browser tests, accessibility scans and visual regression checks in CI, approve baselines, publish static catalogs, and serve an MCP endpoint for coding agents.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Testing\BlazorWorkbench.Testing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Cli.Tests" />
+  </ItemGroup>
+</Project>

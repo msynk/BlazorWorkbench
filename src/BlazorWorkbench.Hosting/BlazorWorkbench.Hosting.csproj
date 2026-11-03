@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Hosting</RootNamespace>
+    <Description>Blazor Workbench preview host for ASP.NET Core: AddBlazorWorkbench/MapBlazorWorkbench, Interactive Server previews, catalog API, secure development defaults.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Provides the unmodified axe-core script (MPL-2.0) served to previews for in-browser accessibility scans. -->
+    <PackageReference Include="Deque.AxeCore.Commons" />
+    <!-- Workbench hosts usually contain no .razor files, so the SDK would not add blazor.web.js. This package's
+         buildTransitive targets add the framework scripts to consuming web projects (see docs/adr/0004). -->
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" VersionOverride="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Components\BlazorWorkbench.Components.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,28 @@
+@namespace SampleComponents.Account
+
+@* Greets the signed-in user and shows administrator tools to users in the Admin role. *@
+<div class="user-greeting">
+    <AuthorizeView>
+        <Authorized>
+            <span>Welcome back, <strong>@context.User.Identity?.Name</strong>!</span>
+            <AuthorizeView Roles="Admin" Context="admin">
+                <Authorized>
+                    <span class="badge badge-warning">Administrator</span>
+                    <button type="button" class="btn btn-ghost btn-small" @onclick="() => OnManage.InvokeAsync()">Manage users</button>
+                </Authorized>
+            </AuthorizeView>
+        </Authorized>
+        <NotAuthorized>
+            <span>You are not signed in.</span>
+            <button type="button" class="btn btn-primary btn-small" @onclick="() => OnSignIn.InvokeAsync()">Sign in</button>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    /// <summary>Raised when an anonymous user chooses to sign in.</summary>
+    [Parameter] public EventCallback OnSignIn { get; set; }
+
+    /// <summary>Raised when an administrator opens user management.</summary>
+    [Parameter] public EventCallback OnManage { get; set; }
+}

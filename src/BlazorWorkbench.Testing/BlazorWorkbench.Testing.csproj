@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Testing</RootNamespace>
+    <Description>Blazor Workbench test orchestration: runs scenarios in real browsers with Playwright (render checks, interaction tests, axe-core accessibility scans, visual regression, performance budgets) and writes JSON, JUnit and HTML reports.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Core\BlazorWorkbench.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Testing.Tests" />
+  </ItemGroup>
+</Project>

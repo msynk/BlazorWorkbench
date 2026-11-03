@@ -1,0 +1,39 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <Version>0.1.0</Version>
+    <Authors>Saleh Yusefnejad</Authors>
+    <Copyright>Copyright (c) 2026 Saleh Yusefnejad</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/msynk/BlazorWorkbench</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/msynk/BlazorWorkbench</RepositoryUrl>
+    <PackageTags>blazor;razor;components;storybook;workbench;testing;playwright;visual-regression;accessibility</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- Shipping libraries: XML docs, packaging, public API hygiene. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('src'))">
+    <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Missing XML comments are reported but do not break the build. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests')) Or $(MSBuildProjectDirectory.Contains('samples'))">
+    <!-- Tests and samples favor readability over analyzer strictness. -->
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA1861;CA2007;CA1822;CA1859;CA1304;CA1305;CA1307;CA1310;CA1311;CA1852;CA1062</NoWarn>
+  </PropertyGroup>
+</Project>

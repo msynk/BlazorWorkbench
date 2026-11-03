@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Testing.Bunit</RootNamespace>
+    <Description>bUnit integration for Blazor Workbench: render scenarios (with their services, fake HTTP, simulated users and fixtures) in fast unit tests, and smoke-test every scenario without a browser.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="bunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Components\BlazorWorkbench.Components.csproj" />
+  </ItemGroup>
+</Project>

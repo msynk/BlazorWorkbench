@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench</RootNamespace>
+    <Description>Blazor Workbench core: component discovery, scenario model, validation, environment simulation contracts, diagnostics and redaction. Has no UI or browser dependency.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Core.Tests" />
+    <InternalsVisibleTo Include="BlazorWorkbench.Components" />
+  </ItemGroup>
+</Project>

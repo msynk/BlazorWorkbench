@@ -1,0 +1,52 @@
+@inject IJSRuntime JS
+
+<div class="wb-code">
+    <section>
+        <header class="wb-code-header">
+            <h2 class="wb-h3">Razor usage</h2>
+            <button type="button" class="wb-button wb-button-small" @onclick="() => Copy(Razor, nameof(Razor))">@(_copied == nameof(Razor) ? "Copied" : "Copy")</button>
+        </header>
+        <pre class="wb-pre"><code>@Razor</code></pre>
+    </section>
+    <section>
+        <header class="wb-code-header">
+            <h2 class="wb-h3">Save as scenario</h2>
+            <button type="button" class="wb-button wb-button-small" @onclick="() => Copy(CSharp, nameof(CSharp))">@(_copied == nameof(CSharp) ? "Copied" : "Copy")</button>
+        </header>
+        <p class="wb-muted wb-small">Paste into <code>Configure</code> of a <code>ScenarioSet&lt;@Component.Metadata.Name&gt;</code> to keep the current controls as a reproducible scenario.</p>
+        <pre class="wb-pre"><code>@CSharp</code></pre>
+    </section>
+    <section>
+        <header class="wb-code-header">
+            <h2 class="wb-h3">Arguments (JSON)</h2>
+            <button type="button" class="wb-button wb-button-small" @onclick="() => Copy(Json, nameof(Json))">@(_copied == nameof(Json) ? "Copied" : "Copy")</button>
+        </header>
+        <p class="wb-muted wb-small">Inspector overrides as used in deep links (<code>?args=</code>) and by <code>workbench test --args</code>.</p>
+        <pre class="wb-pre"><code>@Json</code></pre>
+    </section>
+</div>
+
+@code {
+    private string? _copied;
+
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+    [Parameter] public IReadOnlyDictionary<string, ArgOverride> Overrides { get; set; } = new Dictionary<string, ArgOverride>();
+
+    private string Razor => RazorSnippetGenerator.Generate(Scenario, Component.Metadata, Overrides);
+    private string CSharp => ScenarioExporter.ToCSharp(Scenario, Component.Metadata, Overrides);
+    private string Json => ArgsCodec.Encode(Overrides);
+
+    private async Task Copy(string text, string key)
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
+            if (await module.InvokeAsync<bool>("copy", text))
+                _copied = key;
+        }
+        catch (JSException)
+        {
+        }
+    }
+}

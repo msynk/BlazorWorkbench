@@ -1,0 +1,87 @@
+<section class="wb-overview">
+    <h1 class="wb-title">@Catalog.Options.Title</h1>
+    <div class="wb-stats">
+        <div class="wb-stat"><span class="wb-stat-value">@Catalog.Components.Count</span><span>components</span></div>
+        <div class="wb-stat"><span class="wb-stat-value">@Catalog.Scenarios.Count(s => !s.IsGenerated)</span><span>declared scenarios</span></div>
+        <div class="wb-stat"><span class="wb-stat-value">@Catalog.Scenarios.Sum(s => s.Interactions.Count)</span><span>interaction tests</span></div>
+        <div class="wb-stat"><span class="wb-stat-value">@Percent(_scenarioCoverage)</span><span>components with scenarios</span></div>
+        <div class="wb-stat"><span class="wb-stat-value">@Percent(_docCoverage)</span><span>documented components</span></div>
+        <div class="wb-stat"><span class="wb-stat-value">@Percent(_parameterCoverage)</span><span>documented parameters</span></div>
+    </div>
+
+    <h2 class="wb-h2">Catalog issues</h2>
+    <div class="wb-inspector-actions">
+        <label class="wb-field"><span>Show</span>
+            <select @bind="_minimum">
+                <option value="@IssueSeverity.Error">Errors</option>
+                <option value="@IssueSeverity.Warning">Errors and warnings</option>
+                <option value="@IssueSeverity.Info">Everything</option>
+            </select>
+        </label>
+    </div>
+    @if (Issues.Count == 0)
+    {
+        <p class="wb-empty">No issues at this level.</p>
+    }
+    else
+    {
+        <table class="wb-table">
+            <thead><tr><th scope="col">Severity</th><th scope="col">Code</th><th scope="col">Message</th><th scope="col">Where</th></tr></thead>
+            <tbody>
+                @foreach (var issue in Issues)
+                {
+                    <tr class="wb-sev-@issue.Severity.ToString().ToLowerInvariant()">
+                        <td>@issue.Severity</td>
+                        <td><code>@issue.Code</code></td>
+                        <td>@issue.Message @if (issue.Remedy is { } r) { <div class="wb-muted wb-small">@r</div> }</td>
+                        <td>
+                            @if (issue.ScenarioId is { } sid && Catalog.FindScenario(sid) is not null) { <a href="@($"scenario/{sid}")">@sid</a> }
+                            else if (issue.ComponentId is { } cid) { <a href="@($"docs/{cid}")">@cid</a> }
+                            else { <span class="wb-muted">@issue.TypeName</span> }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_undocumented.Count > 0)
+    {
+        <h2 class="wb-h2">Components missing documentation</h2>
+        <ul class="wb-columns">
+            @foreach (var c in _undocumented) { <li><a href="@($"docs/{c.Id}")">@c.Title</a></li> }
+        </ul>
+    }
+
+    <h2 class="wb-h2">Getting started</h2>
+    <ol>
+        <li>Pick a scenario in the explorer, or press <kbd>/</kbd> to search.</li>
+        <li>Edit parameters in <strong>Controls</strong>; the URL is a shareable deep link to that state.</li>
+        <li>Use <strong>Environment</strong> to release gates, advance the clock and inspect simulated services.</li>
+        <li>Run <code>workbench test</code> to execute interactions, accessibility scans and visual comparisons in CI.</li>
+    </ol>
+</section>
+
+@code {
+    private IssueSeverity _minimum = IssueSeverity.Warning;
+    private double _scenarioCoverage, _docCoverage, _parameterCoverage;
+    private List<ComponentEntry> _undocumented = [];
+
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+
+    private List<CatalogIssue> Issues => Catalog.Issues.Where(i => i.Severity >= _minimum)
+        .OrderByDescending(i => i.Severity).ThenBy(i => i.Code, StringComparer.Ordinal).Take(500).ToList();
+
+    protected override void OnParametersSet()
+    {
+        var components = Catalog.Components;
+        _scenarioCoverage = Ratio(components.Count(c => !c.HasOnlyGeneratedScenarios), components.Count);
+        _docCoverage = Ratio(components.Count(c => c.Metadata.Summary is not null || c.Description is not null || c.Documentation is not null), components.Count);
+        var parameters = components.SelectMany(c => c.Metadata.Parameters.Where(p => p.Kind != ParameterKind.Cascading)).ToList();
+        _parameterCoverage = Ratio(parameters.Count(p => p.Summary is not null), parameters.Count);
+        _undocumented = components.Where(c => c.Metadata.Summary is null && c.Description is null && c.Documentation is null).ToList();
+    }
+
+    private static double Ratio(int part, int total) => total == 0 ? 1 : (double)part / total;
+    private static string Percent(double value) => value.ToString("P0", CultureInfo.InvariantCulture);
+}

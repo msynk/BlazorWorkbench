@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BlazorWorkbench.Core/BlazorWorkbench.Core.csproj" />
+    <Project Path="src/BlazorWorkbench.Components/BlazorWorkbench.Components.csproj" />
+    <Project Path="src/BlazorWorkbench.Hosting/BlazorWorkbench.Hosting.csproj" />
+    <Project Path="src/BlazorWorkbench.Testing/BlazorWorkbench.Testing.csproj" />
+    <Project Path="src/BlazorWorkbench.Cli/BlazorWorkbench.Cli.csproj" />
+    <Project Path="src/BlazorWorkbench.Testing.Bunit/BlazorWorkbench.Testing.Bunit.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleComponents/SampleComponents.csproj" />
+    <Project Path="samples/SampleWorkbench/SampleWorkbench.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BlazorWorkbench.Core.Tests/BlazorWorkbench.Core.Tests.csproj" />
+    <Project Path="tests/BlazorWorkbench.Components.Tests/BlazorWorkbench.Components.Tests.csproj" />
+    <Project Path="tests/BlazorWorkbench.Testing.Tests/BlazorWorkbench.Testing.Tests.csproj" />
+    <Project Path="tests/BlazorWorkbench.Cli.Tests/BlazorWorkbench.Cli.Tests.csproj" />
+    <Project Path="tests/BlazorWorkbench.E2E.Tests/BlazorWorkbench.E2E.Tests.csproj" />
+  </Folder>
+</Solution>

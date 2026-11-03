@@ -1,0 +1,316 @@
+@using System.Reflection
+@inject WorkbenchCatalogAccessor Catalogs
+
+<div class="wb-inspector">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">Changes are applied live and kept in the URL. They are not saved to the scenario until you export them from the Code tab.</span>
+        <button type="button" class="wb-button" @onclick="ResetAll" disabled="@(Overrides.Count == 0)">Reset all</button>
+    </div>
+    <table class="wb-table wb-params">
+        <thead>
+            <tr><th scope="col">Parameter</th><th scope="col">Value</th><th scope="col">Source</th><th scope="col"><span class="wb-visually-hidden">Actions</span></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Parameters)
+            {
+                var id = $"wb-param-{p.Name}";
+                var error = _errors.GetValueOrDefault(p.Name) ?? ArgErrors.GetValueOrDefault(p.Name);
+                <tr class="@(error is null ? "" : "wb-row-error")">
+                    <th scope="row">
+                        <label for="@id" class="wb-param-name">@p.Name</label>
+                        @if (p.IsRequired) { <span class="wb-badge wb-badge-required" title="[EditorRequired]">required</span> }
+                        @if (p.IsObsolete) { <span class="wb-badge" title="@p.ObsoleteMessage">obsolete</span> }
+                        <div class="wb-type"><code>@p.TypeName</code></div>
+                        @if (p.Summary is { } summary) { <div class="wb-muted wb-small">@summary</div> }
+                    </th>
+                    <td>
+                        @RenderEditor(p, id)
+                        @if (error is not null) { <div class="wb-error" role="alert" id="@($"{id}-error")">@error</div> }
+                    </td>
+                    <td><span class="wb-source wb-source-@SourceOf(p).ToLowerInvariant()">@SourceOf(p)</span></td>
+                    <td>
+                        @if (Overrides.ContainsKey(p.Name))
+                        {
+                            <button type="button" class="wb-button wb-button-small" @onclick="() => Remove(p.Name)" aria-label="@($"Reset {p.Name}")">Reset</button>
+                        }
+                        @if (p.IsNullable && p.Editor is not (EditorKind.Callback or EditorKind.Unsupported) && !IsNull(p))
+                        {
+                            <button type="button" class="wb-button wb-button-small" @onclick="() => Set(p.Name, ArgOverride.Null)" aria-label="@($"Set {p.Name} to null")">null</button>
+                        }
+                        @if (!p.IsRequired && p.Editor is not (EditorKind.Callback or EditorKind.Unsupported) && Scenario.FindParameter(p.Name) is not null && !(Overrides.GetValueOrDefault(p.Name)?.Kind == ArgKind.Unset))
+                        {
+                            <button type="button" class="wb-button wb-button-small" @onclick="() => Set(p.Name, ArgOverride.Unset)" title="Do not supply the parameter (use the component default)">unset</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (Parameters.Count == 0)
+    {
+        <p class="wb-empty">@Component.Metadata.Name has no parameters.</p>
+    }
+</div>
+
+@code {
+    private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _drafts = new(StringComparer.Ordinal);
+
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter, EditorRequired] public Dictionary<string, ArgOverride> Overrides { get; set; } = default!;
+    [Parameter] public IReadOnlyDictionary<string, string> ArgErrors { get; set; } = new Dictionary<string, string>();
+    [Parameter] public IReadOnlyDictionary<string, int> CallbackCounts { get; set; } = new Dictionary<string, int>();
+    [Parameter] public EventCallback<Dictionary<string, ArgOverride>> OverridesChanged { get; set; }
+
+    private IReadOnlyList<ParameterDescriptor> Parameters =>
+        Component.Metadata.Parameters.Where(p => p.Kind is not (ParameterKind.Cascading or ParameterKind.Expression)).ToList();
+
+    private IEnumerable<FixtureDefinition> FixturesFor(ParameterDescriptor p) =>
+        Scenario.Fixtures.Where(f => p.Type.IsAssignableFrom(f.ValueType));
+
+    private string SourceOf(ParameterDescriptor p)
+    {
+        if (Overrides.TryGetValue(p.Name, out var o))
+            return o.Kind switch { ArgKind.Unset => "Default", ArgKind.Fixture => "Fixture", _ => "Override" };
+        if (p.Kind == ParameterKind.EventCallback && Scenario.FindParameter(p.Name) is null) return "Logged";
+        return Scenario.FindParameter(p.Name) is not null ? "Scenario" : "Default";
+    }
+
+    private bool IsNull(ParameterDescriptor p) =>
+        Overrides.TryGetValue(p.Name, out var o) ? o.Kind == ArgKind.Null :
+        Scenario.FindParameter(p.Name) is { Kind: ParameterValueKind.Literal, Value: null };
+
+    /// <summary>Current value as editor text (null when the value is null or not representable).</summary>
+    private string? CurrentText(ParameterDescriptor p)
+    {
+        if (_drafts.TryGetValue(p.Name, out var draft))
+            return draft;
+        if (Overrides.TryGetValue(p.Name, out var o))
+        {
+            return o.Kind switch
+            {
+                ArgKind.Value when o.Value is { } v => v.ValueKind == JsonValueKind.String ? v.GetString() : v.GetRawText(),
+                ArgKind.Unset => p.HasDefaultValue ? TextOf(p.DefaultValue) : null,
+                _ => null,
+            };
+        }
+
+        return Scenario.FindParameter(p.Name) switch
+        {
+            { Kind: ParameterValueKind.Literal } a => TextOf(a.Value),
+            { Kind: ParameterValueKind.Text } a => a.Value as string,
+            null when p.HasDefaultValue => TextOf(p.DefaultValue),
+            _ => null,
+        };
+    }
+
+    private static string? TextOf(object? value) =>
+        value is not null && ParameterValueConverter.TrySerialize(value, out var json)
+            ? json.ValueKind == JsonValueKind.String ? json.GetString() : json.GetRawText()
+            : null;
+
+    private RenderFragment RenderEditor(ParameterDescriptor p, string id) => __builder =>
+    {
+        var text = CurrentText(p);
+        var describedBy = _errors.ContainsKey(p.Name) || ArgErrors.ContainsKey(p.Name) ? $"{id}-error" : null;
+        var scenarioValue = Scenario.FindParameter(p.Name);
+        var fixtures = FixturesFor(p).ToList();
+        var editor = p.Editor == EditorKind.Unsupported && fixtures.Count > 0 ? EditorKind.Fixture : p.Editor;
+        var nullType = Nullable.GetUnderlyingType(p.Type);
+        var isNull = IsNull(p);
+
+        switch (editor)
+        {
+            case EditorKind.Boolean when nullType is null && !isNull:
+                <input id="@id" type="checkbox" checked="@(text == "true")" aria-describedby="@describedBy"
+                       @onchange="e => SetJson(p, JsonSerializer.SerializeToElement(e.Value is true))" />
+                break;
+            case EditorKind.Boolean:
+                <select id="@id" aria-describedby="@describedBy" @onchange="e => OnSelect(p, e.Value as string)">
+                    <option value="$null" selected="@isNull">null</option>
+                    <option value="true" selected="@(!isNull && text == "true")">true</option>
+                    <option value="false" selected="@(!isNull && text == "false")">false</option>
+                </select>
+                break;
+            case EditorKind.Enum:
+                <select id="@id" aria-describedby="@describedBy" @onchange="e => OnSelect(p, e.Value as string)">
+                    @if (p.IsNullable) { <option value="$null" selected="@isNull">null</option> }
+                    @if (text is null && !isNull) { <option value="" selected>(component default)</option> }
+                    @foreach (var name in p.EnumValues)
+                    {
+                        <option value="@name" selected="@(!isNull && name == text)">@name</option>
+                    }
+                </select>
+                break;
+            case EditorKind.FlagsEnum:
+                var selected = (text ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+                <fieldset class="wb-flags" id="@id" aria-describedby="@describedBy">
+                    <legend class="wb-visually-hidden">@p.Name</legend>
+                    @foreach (var name in p.EnumValues)
+                    {
+                        <label><input type="checkbox" checked="@selected.Contains(name)" @onchange="e => ToggleFlag(p, selected, name, e.Value is true)" /> @name</label>
+                    }
+                </fieldset>
+                break;
+            case EditorKind.MultilineText:
+                <textarea id="@id" rows="2" aria-describedby="@describedBy" placeholder="@(isNull ? "null" : scenarioValue?.Kind == ParameterValueKind.Factory ? scenarioValue.Display : "")"
+                          @onchange="e => OnText(p, e.Value as string)">@text</textarea>
+                break;
+            case EditorKind.Text:
+            case EditorKind.Guid:
+            case EditorKind.TimeSpan:
+                <input id="@id" type="text" value="@text" placeholder="@(isNull ? "null" : PlaceholderFor(p))" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.Integer:
+            case EditorKind.Decimal:
+                <input id="@id" type="text" inputmode="@(editor == EditorKind.Integer ? "numeric" : "decimal")" value="@text" placeholder="@(isNull ? "null" : "")"
+                       aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.Date:
+                <input id="@id" type="date" value="@text" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.Time:
+                <input id="@id" type="time" step="1" value="@text" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.DateTime:
+                <input id="@id" type="datetime-local" step="1" value="@ToLocalInput(text)" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.Fixture:
+                var current = Overrides.GetValueOrDefault(p.Name) is { Kind: ArgKind.Fixture } f ? f.Fixture : scenarioValue?.FixtureName;
+                <select id="@id" aria-describedby="@describedBy" @onchange="e => OnFixture(p, e.Value as string)">
+                    @if (scenarioValue is not null && scenarioValue.FixtureName is null) { <option value="$scenario" selected="@(current is null)">Scenario value (@(scenarioValue.Display ?? "value"))</option> }
+                    @if (scenarioValue is null) { <option value="$unset" selected="@(current is null)">(not supplied)</option> }
+                    @if (p.IsNullable) { <option value="$null" selected="@isNull">null</option> }
+                    @foreach (var fixture in fixtures)
+                    {
+                        <option value="@fixture.Name" selected="@(current == fixture.Name)" title="@fixture.Description">@fixture.Name</option>
+                    }
+                </select>
+                break;
+            case EditorKind.Callback:
+                <span class="wb-muted">@(scenarioValue is not null ? "Handled by the scenario" : $"Logged to Actions ({CallbackCounts.GetValueOrDefault(p.Name)} call(s))")</span>
+                break;
+            case EditorKind.Custom when Catalogs.Options.ParameterEditors.TryGetValue(Nullable.GetUnderlyingType(p.Type) ?? p.Type, out var editorType):
+                <DynamicComponent Type="editorType" Parameters="CustomEditorParameters(p)" />
+                break;
+            default:
+                <span class="wb-muted wb-small">@(scenarioValue is not null ? $"Scenario value: {scenarioValue.Display ?? Naming.FormatValue(scenarioValue.Value)}. " : "")@p.UnsupportedReason</span>
+                break;
+        }
+    };
+
+    private static string PlaceholderFor(ParameterDescriptor p) => p.Editor switch
+    {
+        EditorKind.Guid => "00000000-0000-0000-0000-000000000000",
+        EditorKind.TimeSpan => "d.hh:mm:ss",
+        _ => "",
+    };
+
+    private static string? ToLocalInput(string? iso) =>
+        iso is not null && DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto) ? dto.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture) : iso;
+
+    private Task OnSelect(ParameterDescriptor p, string? value)
+    {
+        if (value == "$null") return Set(p.Name, ArgOverride.Null);
+        if (string.IsNullOrEmpty(value)) return Remove(p.Name);
+        return OnText(p, value);
+    }
+
+    private Task OnFixture(ParameterDescriptor p, string? value) => value switch
+    {
+        "$scenario" => Remove(p.Name),
+        "$unset" => Remove(p.Name),
+        "$null" => Set(p.Name, ArgOverride.Null),
+        null or "" => Remove(p.Name),
+        _ => Set(p.Name, ArgOverride.FromFixture(value)),
+    };
+
+    private Task ToggleFlag(ParameterDescriptor p, HashSet<string> selected, string name, bool on)
+    {
+        if (on) selected.Add(name); else selected.Remove(name);
+        var value = selected.Count == 0 ? "0" : string.Join(", ", p.EnumValues.Where(selected.Contains));
+        return OnText(p, value);
+    }
+
+    private Task OnText(ParameterDescriptor p, string? text)
+    {
+        text ??= "";
+        _drafts.Remove(p.Name);
+        _errors.Remove(p.Name);
+
+        if (p.Kind is ParameterKind.ChildContent or ParameterKind.RenderFragment || p.Type == typeof(string))
+            return SetJson(p, JsonSerializer.SerializeToElement(text));
+
+        var element = JsonSerializer.SerializeToElement(text);
+        if (!ParameterValueConverter.TryConvert(element, p.Type, out var value, out var error))
+        {
+            _drafts[p.Name] = text;
+            _errors[p.Name] = error ?? "Invalid value.";
+            return Task.CompletedTask;
+        }
+
+        return ParameterValueConverter.TrySerialize(value, out var json) ? SetJson(p, json) : Task.CompletedTask;
+    }
+
+    private Task SetJson(ParameterDescriptor p, JsonElement value)
+    {
+        _errors.Remove(p.Name);
+        return Set(p.Name, ArgOverride.FromValue(value));
+    }
+
+    private Task Set(string name, ArgOverride value)
+    {
+        var copy = new Dictionary<string, ArgOverride>(Overrides, StringComparer.Ordinal) { [name] = value };
+        return OverridesChanged.InvokeAsync(copy);
+    }
+
+    private Task Remove(string name)
+    {
+        _drafts.Remove(name);
+        _errors.Remove(name);
+        var copy = new Dictionary<string, ArgOverride>(Overrides, StringComparer.Ordinal);
+        copy.Remove(name);
+        return OverridesChanged.InvokeAsync(copy);
+    }
+
+    private Task ResetAll()
+    {
+        _drafts.Clear();
+        _errors.Clear();
+        return OverridesChanged.InvokeAsync(new Dictionary<string, ArgOverride>(StringComparer.Ordinal));
+    }
+
+    // ---- Custom editors ----
+
+    private static readonly MethodInfo s_callback = typeof(ParameterInspector).GetMethod(nameof(CreateCallback), BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    private Dictionary<string, object?> CustomEditorParameters(ParameterDescriptor p)
+    {
+        var valueType = p.Type;
+        object? value = null;
+        if (Overrides.TryGetValue(p.Name, out var o) && o is { Kind: ArgKind.Value, Value: { } json })
+        {
+            try { value = json.Deserialize(valueType, WorkbenchJson.Options); }
+            catch (JsonException) { }
+        }
+        else if (Scenario.FindParameter(p.Name) is { Kind: ParameterValueKind.Literal } assignment)
+        {
+            value = assignment.Value;
+        }
+        else if (p.HasDefaultValue)
+        {
+            value = p.DefaultValue;
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["Parameter"] = p,
+            ["Value"] = value,
+            ["ValueChanged"] = s_callback.MakeGenericMethod(valueType).Invoke(this, [p]),
+        };
+    }
+
+    private EventCallback<T?> CreateCallback<T>(ParameterDescriptor p) =>
+        EventCallback.Factory.Create<T?>(this, value => SetJson(p, JsonSerializer.SerializeToElement(value, typeof(T), WorkbenchJson.Options)));
+}

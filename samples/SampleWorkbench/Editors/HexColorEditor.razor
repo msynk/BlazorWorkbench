@@ -1,0 +1,18 @@
+@namespace SampleWorkbench.Editors
+@inherits ParameterEditorBase<HexColor?>
+
+@* A custom Workbench parameter editor: a native color picker for HexColor parameters. *@
+<span class="wb-inline-actions">
+    <input id="@($"wb-param-{Parameter.Name}")" type="color" value="@(Value?.Value ?? Black)" aria-label="@Parameter.Name" @onchange="OnChange" />
+    <code>@(Value?.Value ?? "null")</code>
+    @if (Value is not null && Parameter.IsNullable)
+    {
+        <button type="button" class="wb-button wb-button-small" @onclick="() => SetValueAsync(null)">Clear</button>
+    }
+</span>
+
+@code {
+    private const string Black = "#000000";
+
+    private Task OnChange(ChangeEventArgs e) => SetValueAsync(new HexColor(e.Value?.ToString() ?? Black));
+}

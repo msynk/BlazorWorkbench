@@ -1,0 +1,51 @@
+<div class="wb-interactions">
+    <p class="wb-muted wb-small">
+        Interaction tests run against a freshly loaded scenario. This in-browser runner is best effort;
+        <code>workbench test</code> runs the same steps with Playwright and is authoritative.
+    </p>
+    @if (Scenario.Interactions.Count == 0)
+    {
+        <p class="wb-empty">No interaction tests. Add them with <code>.Interaction("name", i =&gt; i.Click(By.Role("button", "Save")).ExpectCallback("OnClick"))</code>.</p>
+    }
+    @foreach (var test in Scenario.Interactions)
+    {
+        var result = Results.GetValueOrDefault(test.Name);
+        <section class="wb-interaction">
+            <header>
+                <h2 class="wb-h3">
+                    @if (result is not null && Running != test.Name)
+                    {
+                        <span class="@(result.Passed ? "wb-pass" : "wb-fail")">@(result.Passed ? "✔ passed" : "✖ failed")</span><text> · </text>
+                    }
+                    @test.Name
+                </h2>
+                <button type="button" class="wb-button" @onclick="() => OnRun.InvokeAsync(test.Name)" disabled="@(Running is not null)">@(Running == test.Name ? "Running…" : "Run")</button>
+            </header>
+            <ol class="wb-steps">
+                @for (var i = 0; i < test.Steps.Count; i++)
+                {
+                    var index = i;
+                    var step = result?.Results.FirstOrDefault(r => r.Index == index);
+                    <li class="wb-step wb-step-@(step?.Status ?? "idle")">
+                        <code>@test.Steps[index]</code>
+                        @if (step?.DurationMs is { } ms)
+                        {
+                            <span class="wb-muted"> @ms ms</span>
+                        }
+                        @if (step?.Error is { } error)
+                        {
+                            <div class="wb-error" role="alert">@error</div>
+                        }
+                    </li>
+                }
+            </ol>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter] public IReadOnlyDictionary<string, InteractionOutcome> Results { get; set; } = new Dictionary<string, InteractionOutcome>();
+    [Parameter] public string? Running { get; set; }
+    [Parameter] public EventCallback<string> OnRun { get; set; }
+}

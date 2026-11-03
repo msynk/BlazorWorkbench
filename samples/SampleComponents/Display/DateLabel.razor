@@ -1,0 +1,30 @@
+@namespace SampleComponents.Display
+@inject TimeProvider Time
+
+@* Shows a date in the current culture with a relative description computed from TimeProvider. *@
+<time class="date-label" datetime="@Value.ToString("O", CultureInfo.InvariantCulture)" title="@Value.ToString("F", CultureInfo.CurrentCulture)">
+    @Value.ToString(Format, CultureInfo.CurrentCulture) <span class="date-relative">(@Relative)</span>
+</time>
+
+@code {
+    /// <summary>The date to display.</summary>
+    [Parameter, EditorRequired] public DateTimeOffset Value { get; set; }
+
+    /// <summary>A .NET date format string; formatted with the current culture.</summary>
+    [Parameter] public string Format { get; set; } = "D";
+
+    private string Relative
+    {
+        get
+        {
+            var delta = Time.GetUtcNow() - Value;
+            var future = delta < TimeSpan.Zero;
+            var span = future ? -delta : delta;
+            var text = span.TotalMinutes < 1 ? "just now"
+                : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min"
+                : span.TotalDays < 1 ? $"{(int)span.TotalHours} h"
+                : $"{(int)span.TotalDays} d";
+            return text == "just now" ? text : future ? $"in {text}" : $"{text} ago";
+        }
+    }
+}

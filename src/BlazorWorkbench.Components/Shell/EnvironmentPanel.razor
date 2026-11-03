@@ -1,0 +1,153 @@
+<div class="wb-env">
+    <section>
+        <h2 class="wb-h2">Environment</h2>
+        <dl class="wb-dl">
+            <dt>Culture</dt><dd>@(Scenario.Environment.Culture ?? "host default")</dd>
+            <dt>Direction</dt><dd>@Scenario.Environment.Direction</dd>
+            <dt>Theme</dt><dd>@(Scenario.Environment.Theme ?? Options.Themes.FirstOrDefault()?.Name ?? "none")</dd>
+            <dt>Viewport</dt><dd>@(Scenario.Environment.Viewport ?? "responsive")</dd>
+            <dt>User</dt><dd>@(Scenario.Environment.User?.ToString() ?? "Anonymous (unspecified)")</dd>
+            <dt>Clock</dt>
+            <dd>
+                @if (Scenario.Environment.Clock is { } clock)
+                {
+                    <span>Fixed at <time>@CurrentClock(clock)</time></span>
+                    <span class="wb-inline-actions">
+                        <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(1000)">+1 s</button>
+                        <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(60_000)">+1 min</button>
+                        <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(3_600_000)">+1 h</button>
+                        <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(86_400_000)">+1 day</button>
+                    </span>
+                }
+                else
+                {
+                    <span>Real time</span>
+                }
+            </dd>
+            <dt>Random seed</dt><dd>@(Scenario.Environment.Seed?.ToString(CultureInfo.InvariantCulture) ?? $"{StableHash.Compute(Scenario.Id)} (derived from the scenario id)")</dd>
+            <dt>Network</dt><dd>@(Scenario.Environment.Offline ? "Offline: every request fails" : "Fake backend (requests never leave the browser session)")</dd>
+        </dl>
+    </section>
+
+    <section>
+        <h2 class="wb-h2">Gates <span class="wb-muted wb-small">— control when held operations complete</span></h2>
+        @if (Gates.Count == 0)
+        {
+            <p class="wb-muted">No gates. Use <code>.Http(h =&gt; h.Get("/api/x").Hold())</code> or <code>ScenarioGates.WaitAsync("name")</code> in a fake service.</p>
+        }
+        else
+        {
+            <table class="wb-table">
+                <thead><tr><th scope="col">Gate</th><th scope="col">Status</th><th scope="col">Waiting</th><th scope="col"><span class="wb-visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var gate in Gates)
+                    {
+                        <tr>
+                            <td><code>@gate.Name</code></td>
+                            <td>@gate.Status @(gate.FailureMessage is null ? "" : $"({gate.FailureMessage})")</td>
+                            <td>@gate.Waiters</td>
+                            <td>
+                                @if (gate.Status == GateStatus.Pending)
+                                {
+                                    <button type="button" class="wb-button wb-button-small" @onclick="() => OnGate.InvokeAsync((gate.Name, false))">Release</button>
+                                    <button type="button" class="wb-button wb-button-small" @onclick="() => OnGate.InvokeAsync((gate.Name, true))">Fail</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section>
+        <h2 class="wb-h2">Fake HTTP rules</h2>
+        @if (Scenario.Environment.Http is not { Rules.Count: > 0 } http)
+        {
+            <p class="wb-muted">No rules. Every request is answered with 404 and reported in Diagnostics.</p>
+        }
+        else
+        {
+            <table class="wb-table">
+                <thead><tr><th scope="col">Request</th><th scope="col">Response</th><th scope="col">Latency</th><th scope="col">Times</th></tr></thead>
+                <tbody>
+                    @foreach (var rule in http.Rules)
+                    {
+                        <tr>
+                            <td><code>@rule.Method @rule.Pattern</code></td>
+                            <td>@(rule.Handler is not null ? "custom handler" : rule.Fault != HttpFault.None ? rule.Fault.ToString() : $"{(int)rule.Status} {rule.ContentType}")@(rule.Gate is null ? "" : $" · held at '{rule.Gate}'")</td>
+                            <td>@((rule.Latency ?? http.Latency).TotalMilliseconds) ms</td>
+                            <td>@(rule.Times?.ToString(CultureInfo.InvariantCulture) ?? "∞")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section>
+        <h2 class="wb-h2">Services <button type="button" class="wb-button wb-button-small" @onclick="() => OnRefresh.InvokeAsync()">Refresh</button></h2>
+        @if (Services.Count > 0)
+        {
+            <table class="wb-table">
+                <thead><tr><th scope="col">Service</th><th scope="col">Source</th><th scope="col">Implementation</th></tr></thead>
+                <tbody>
+                    @foreach (var s in Services)
+                    {
+                        <tr><td><code>@s.ServiceType</code></td><td><span class="wb-source wb-source-@s.Source.Split(' ')[0].ToLowerInvariant()">@s.Source</span></td><td>@s.Implementation</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (Exchanges.Count > 0)
+        {
+            <h3 class="wb-h3">Requests</h3>
+            <table class="wb-table">
+                <thead><tr><th scope="col">Request</th><th scope="col">Outcome</th><th scope="col">Duration</th></tr></thead>
+                <tbody>
+                    @foreach (var x in Exchanges)
+                    {
+                        <tr><td><code>@x.Method @x.Url</code></td><td>@(x.Status?.ToString(CultureInfo.InvariantCulture) ?? x.Outcome)</td><td>@x.DurationMs ms</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+        @if (Component.Metadata.Parameters.Any(p => p.Kind == ParameterKind.Cascading))
+        {
+            <h3 class="wb-h3">Cascading parameters</h3>
+            <ul>
+                @foreach (var p in Component.Metadata.Parameters.Where(p => p.Kind == ParameterKind.Cascading))
+                {
+                    var supplied = Scenario.CascadingValues.Any(c => p.Type.IsAssignableFrom(c.ValueType));
+                    <li><code>@p.TypeName</code> @p.Name — @(supplied ? "supplied by the scenario" : "not supplied by the scenario")</li>
+                }
+            </ul>
+        }
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+    [Parameter, EditorRequired] public WorkbenchOptions Options { get; set; } = default!;
+    [Parameter] public IReadOnlyList<GateInfo> Gates { get; set; } = [];
+    [Parameter] public JsonElement? Session { get; set; }
+    [Parameter] public EventCallback<(string Name, bool Fail)> OnGate { get; set; }
+    [Parameter] public EventCallback<double> OnAdvanceClock { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+
+    private List<ServiceSourceInfo> Services =>
+        Session is { } s && s.TryGetProperty("services", out var services)
+            ? services.Deserialize<List<ServiceSourceInfo>>(WorkbenchJson.Options) ?? []
+            : [];
+
+    private List<HttpExchange> Exchanges =>
+        Session is { } s && s.TryGetProperty("http", out var http)
+            ? http.Deserialize<List<HttpExchange>>(WorkbenchJson.Options) ?? []
+            : [];
+
+    private string CurrentClock(DateTimeOffset declared) =>
+        Session is { } s && s.TryGetProperty("clock", out var c) && c.ValueKind == JsonValueKind.String
+            ? c.GetString()!
+            : declared.ToString("O", CultureInfo.InvariantCulture);
+}

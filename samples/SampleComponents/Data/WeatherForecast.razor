@@ -1,0 +1,79 @@
+@namespace SampleComponents.Data
+@implements IDisposable
+@inject HttpClient Http
+@inject TimeProvider Time
+
+@* Loads the current weather for a city from GET api/weather?city=... and handles loading, empty, error and retry states. *@
+<section class="weather" aria-busy="@(_state == State.Loading ? "true" : "false")" aria-labelledby="weather-title">
+    <h2 id="weather-title" class="weather-title">Weather in @City</h2>
+    @switch (_state)
+    {
+        case State.Loading:
+            <p role="status" class="weather-loading"><span class="spinner" aria-hidden="true"></span> Loading forecast…</p>
+            break;
+        case State.Error:
+            <div role="alert" class="alert alert-error">
+                <span>Could not load the forecast. @_error</span>
+                <button type="button" class="btn btn-secondary btn-small" @onclick="LoadAsync">Retry</button>
+            </div>
+            break;
+        case State.Empty:
+            <p class="weather-empty">No forecast is available for @City.</p>
+            break;
+        default:
+            <p class="weather-temp"><span data-testid="temperature">@_forecast!.TemperatureC.ToString("0.#", CultureInfo.CurrentCulture) °C</span> · @_forecast.Summary</p>
+            <p class="weather-meta">Observed @_forecast.ObservedAt.ToString("t", CultureInfo.CurrentCulture) · updated @Ago</p>
+            break;
+    }
+</section>
+
+@code {
+    private enum State { Loading, Loaded, Empty, Error }
+
+    private readonly CancellationTokenSource _cts = new();
+    private State _state = State.Loading;
+    private Forecast? _forecast;
+    private string? _error;
+    private DateTimeOffset _loadedAt;
+
+    /// <summary>City to load.</summary>
+    [Parameter, EditorRequired] public string City { get; set; } = "";
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private string Ago => (Time.GetUtcNow() - _loadedAt) is var age && age.TotalSeconds < 60 ? "just now" : $"{(int)age.TotalMinutes} min ago";
+
+    private async Task LoadAsync()
+    {
+        _state = State.Loading;
+        _error = null;
+        try
+        {
+            var response = await Http.GetAsync($"api/weather?city={Uri.EscapeDataString(City)}", _cts.Token);
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            {
+                _state = State.Empty;
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            _forecast = await response.Content.ReadFromJsonAsync<Forecast>(_cts.Token);
+            _loadedAt = Time.GetUtcNow();
+            _state = _forecast is null ? State.Empty : State.Loaded;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _error = ex is TaskCanceledException ? "The request timed out." : ex.Message;
+            _state = State.Error;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

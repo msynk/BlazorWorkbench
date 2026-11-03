@@ -1,0 +1,573 @@
+@page "/"
+@page "/scenario/{ScenarioId}"
+@page "/docs/{ComponentId}"
+@implements IAsyncDisposable
+@inject WorkbenchCatalogAccessor Catalogs
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="wb-shell" data-shell-theme="@_shellTheme">
+    <header class="wb-header">
+        <a class="wb-brand" href="">
+            <span class="wb-logo" aria-hidden="true">◧</span>
+            <span>@Options.Title</span>
+        </a>
+        @if (_scenario is not null && ComponentId is null)
+        {
+            <div class="wb-toolbar" role="toolbar" aria-label="Preview environment">
+                <label class="wb-field">
+                    <span>Viewport</span>
+                    <select id="wb-viewport" @bind="ViewportName" @bind:after="OnViewportChanged">
+                        <option value="">Responsive</option>
+                        @foreach (var v in Options.Viewports)
+                        {
+                            <option value="@v.Name">@v.Name (@v.Width×@v.Height)</option>
+                        }
+                    </select>
+                </label>
+                <label class="wb-field">
+                    <span>Theme</span>
+                    <select id="wb-theme" @bind="ThemeName" @bind:after="OnThemeChanged">
+                        @foreach (var t in Options.Themes)
+                        {
+                            <option value="@t.Name">@t.Name</option>
+                        }
+                    </select>
+                </label>
+                <label class="wb-field">
+                    <span>Culture</span>
+                    <select id="wb-culture" @bind="CultureName" @bind:after="OnCultureChanged">
+                        <option value="">Scenario default@(_scenario.Environment.Culture is { } c ? $" ({c})" : "")</option>
+                        @foreach (var culture in Options.Cultures)
+                        {
+                            <option value="@culture">@culture</option>
+                        }
+                    </select>
+                </label>
+                <label class="wb-field">
+                    <span>Direction</span>
+                    <select id="wb-direction" @bind="Direction" @bind:after="OnDirectionChanged">
+                        <option value="">Auto</option>
+                        <option value="ltr">LTR</option>
+                        <option value="rtl">RTL</option>
+                    </select>
+                </label>
+                <span class="wb-toolbar-spacer"></span>
+                <button type="button" class="wb-button" title="Reload the preview, keeping changes (R)" @onclick="Reload">Reload</button>
+                <button type="button" class="wb-button" title="Reset to the scenario's declared state (Shift+R)" @onclick="Reset">Reset</button>
+                <a class="wb-button" href="@FrameSource" target="_blank" rel="noopener">Open ↗</a>
+                <button type="button" class="wb-button" @onclick="ToggleShellTheme" aria-label="Toggle Workbench theme">@(_shellTheme == "dark" ? "☀" : "☾")</button>
+            </div>
+        }
+        else
+        {
+            <div class="wb-toolbar"><span class="wb-toolbar-spacer"></span><button type="button" class="wb-button" @onclick="ToggleShellTheme" aria-label="Toggle Workbench theme">@(_shellTheme == "dark" ? "☀" : "☾")</button></div>
+        }
+    </header>
+
+    <aside class="wb-sidebar" aria-label="Component explorer">
+        <Explorer Catalog="Catalog" SelectedScenarioId="@_scenario?.Id" SelectedComponentId="@ComponentId" />
+    </aside>
+
+    <main class="wb-main" id="wb-main">
+        @if (ComponentId is not null)
+        {
+            @if (Catalog.FindComponent(ComponentId) is { } docComponent)
+            {
+                <ComponentDocs Component="docComponent" Catalog="Catalog" />
+            }
+            else
+            {
+                <div class="wb-empty" role="alert">Component '@ComponentId' was not found.</div>
+            }
+        }
+        else if (_scenario is null)
+        {
+            @if (ScenarioId is not null)
+            {
+                <div class="wb-empty" role="alert">
+                    <h2>Scenario '@ScenarioId' was not found</h2>
+                    <p>It may have been renamed. Scenario ids are <code>component-id--scenario-key</code>.</p>
+                </div>
+            }
+            <Overview Catalog="Catalog" />
+        }
+        else
+        {
+            <section class="wb-stage" aria-label="Preview">
+                <div class="wb-stage-header">
+                    <div>
+                        <div class="wb-crumbs">@(_component?.Title.Replace("/", " / "))</div>
+                        <h1 class="wb-title">@_scenario.Name
+                            @if (_scenario.IsGenerated) { <span class="wb-badge" title="No scenarios are declared for this component">generated</span> }
+                            @foreach (var tag in _scenario.Tags) { <span class="wb-badge">@tag</span> }
+                        </h1>
+                        @if (_scenario.Description is { } description) { <p class="wb-muted">@description</p> }
+                    </div>
+                    <div class="wb-stage-status">
+                        <span class="wb-state wb-state-@_previewState" role="status">@StateText</span>
+                        @if (_metrics?.ReadyMs is { } ready) { <span class="wb-muted" title="Time from navigation start until ready">ready in @ready.ToString("0") ms · @_metrics.DomUpdates DOM updates</span> }
+                        <a class="wb-link" href="@($"docs/{_component?.Id}")">Docs</a>
+                    </div>
+                </div>
+                @if (_scenarioIssues.Count > 0)
+                {
+                    <ul class="wb-issues" aria-label="Scenario issues">
+                        @foreach (var issue in _scenarioIssues)
+                        {
+                            <li class="wb-issue wb-sev-@issue.Severity.ToString().ToLowerInvariant()"><code>@issue.Code</code> @issue.Message @if (issue.Remedy is { } remedy) { <span class="wb-muted"> — @remedy</span> }</li>
+                        }
+                    </ul>
+                }
+                <div class="wb-frame-area @(_viewport is null ? "wb-frame-responsive" : "")">
+                    <iframe id="wb-preview-frame" title="Preview of @_scenario.Name" src="@_frameSrc"
+                            style="@FrameStyle" class="wb-frame"></iframe>
+                </div>
+            </section>
+
+            <section class="wb-panel" aria-label="Scenario tools">
+                <div class="wb-tabs" role="tablist">
+                    @foreach (var (key, label) in Tabs)
+                    {
+                        <button type="button" role="tab" id="wb-tab-@key" aria-selected="@(_tab == key ? "true" : "false")" aria-controls="wb-tabpanel"
+                                class="wb-tab @(_tab == key ? "active" : "")" @onclick="() => SelectTab(key)">
+                            @label
+                            @if (TabCount(key) is > 0 and var n) { <span class="wb-count @(key == "diagnostics" && HasErrors ? "wb-count-error" : "")">@n</span> }
+                        </button>
+                    }
+                </div>
+                <div class="wb-tabpanel" role="tabpanel" id="wb-tabpanel" aria-labelledby="wb-tab-@_tab">
+                    @switch (_tab)
+                    {
+                        case "controls":
+                            <ParameterInspector Component="_component!" Scenario="_scenario" Overrides="_overrides" ArgErrors="_argErrors"
+                                                OverridesChanged="OnOverridesChanged" CallbackCounts="_callbackCounts" />
+                            break;
+                        case "environment":
+                            <EnvironmentPanel Scenario="_scenario" Component="_component!" Options="Options" Gates="_gates" Session="_session"
+                                              OnGate="SendGate" OnAdvanceClock="AdvanceClock" OnRefresh="RequestSession" />
+                            break;
+                        case "actions":
+                            <ActionsPanel Callbacks="_callbacks" OnClear="() => { _callbacks.Clear(); _callbackCounts.Clear(); }" />
+                            break;
+                        case "diagnostics":
+                            <DiagnosticsPanel Diagnostics="_diagnostics" OnClear="() => _diagnostics.Clear()" />
+                            break;
+                        case "interactions":
+                            <InteractionsPanel Scenario="_scenario" Results="_interactionResults" Running="@_runningInteraction" OnRun="RunInteraction" />
+                            break;
+                        case "accessibility":
+                            <AccessibilityPanel Result="_a11y" Running="_a11yRunning" Scenario="_scenario" OnRun="RunAccessibility" />
+                            break;
+                        case "visual":
+                            <VisualPanel ScenarioId="@_scenario.Id" />
+                            break;
+                        case "code":
+                            <CodePanel Scenario="_scenario" Component="_component!" Overrides="_overrides" />
+                            break;
+                    }
+                </div>
+            </section>
+        }
+    </main>
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] Tabs =
+    [
+        ("controls", "Controls"), ("environment", "Environment"), ("actions", "Actions"), ("diagnostics", "Diagnostics"),
+        ("interactions", "Interactions"), ("accessibility", "Accessibility"), ("visual", "Visual"), ("code", "Code"),
+    ];
+
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<WorkbenchShell>? _self;
+    private ScenarioDefinition? _scenario;
+    private ComponentEntry? _component;
+    private List<CatalogIssue> _scenarioIssues = [];
+    private Dictionary<string, ArgOverride> _overrides = new(StringComparer.Ordinal);
+    private Dictionary<string, string> _argErrors = new(StringComparer.Ordinal);
+    private readonly List<DiagnosticDto> _diagnostics = [];
+    private readonly List<CallbackEntry> _callbacks = [];
+    private readonly Dictionary<string, int> _callbackCounts = new(StringComparer.Ordinal);
+    private List<GateInfo> _gates = [];
+    private JsonElement? _session;
+    private readonly Dictionary<string, InteractionOutcome> _interactionResults = new(StringComparer.Ordinal);
+    private string? _runningInteraction;
+    private string? _pendingInteraction;
+    private A11yOutcome? _a11y;
+    private bool _a11yRunning;
+    private bool _pendingA11y;
+    private PreviewMetrics? _metrics;
+    private string _previewState = "loading";
+    private string _frameSrc = "about:blank";
+    private string _tab = "controls";
+    private string _shellTheme = "light";
+    private ViewportPreset? _viewport;
+    private string? _loadedScenarioId;
+
+    [Parameter] public string? ScenarioId { get; set; }
+    [Parameter] public string? ComponentId { get; set; }
+    [SupplyParameterFromQuery(Name = "args")] public string? ArgsQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "viewport")] public string? ViewportQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "theme")] public string? ThemeQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "culture")] public string? CultureQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "dir")] public string? DirQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "panel")] public string? PanelQuery { get; set; }
+
+    private WorkbenchCatalog Catalog => Catalogs.Catalog;
+    private WorkbenchOptions Options => Catalogs.Options;
+    private string ViewportName { get; set; } = "";
+    private string ThemeName { get; set; } = "";
+    private string CultureName { get; set; } = "";
+    private string Direction { get; set; } = "";
+    private bool HasErrors => _diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
+
+    private string PageTitleText => ComponentId is not null
+        ? $"{Catalog.FindComponent(ComponentId)?.DisplayName ?? "Docs"} · {Options.Title}"
+        : _scenario is not null ? $"{_component?.DisplayName} / {_scenario.Name} · {Options.Title}" : Options.Title;
+
+    private string StateText => _previewState switch
+    {
+        "ready" => "Ready",
+        "error" => "Error",
+        "loading" => "Loading…",
+        _ => _previewState,
+    };
+
+    private string FrameStyle => _viewport is null ? "" : $"width:{_viewport.Width}px;height:{_viewport.Height}px;";
+
+    private string FrameSource => _scenario is null ? "about:blank" : BuildPreviewUrl(includeArgs: true);
+
+    protected override void OnInitialized()
+    {
+        Catalogs.Changed += OnCatalogChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        _scenario = ScenarioId is null ? null : Catalog.FindScenario(ScenarioId);
+        _component = _scenario is null ? null : Catalog.GetComponentOf(_scenario);
+        if (_scenario?.Id == _loadedScenarioId && _scenario is not null)
+            return;
+
+        _loadedScenarioId = _scenario?.Id;
+        ResetLiveState();
+        if (_scenario is null)
+            return;
+
+        _scenarioIssues = Catalog.IssuesFor(_scenario).Where(i => i.Severity != IssueSeverity.Info).ToList();
+        try { _overrides = ArgsCodec.Decode(ArgsQuery); }
+        catch (Exception ex) when (ex is JsonException or FormatException) { _overrides = new(StringComparer.Ordinal); }
+
+        ViewportName = Options.FindViewport(ViewportQuery ?? _scenario.Environment.Viewport)?.Name ?? "";
+        _viewport = Options.FindViewport(ViewportName);
+        ThemeName = Options.FindTheme(ThemeQuery ?? _scenario.Environment.Theme)?.Name ?? Options.Themes.FirstOrDefault()?.Name ?? "";
+        CultureName = CultureQuery ?? "";
+        Direction = DirQuery is "ltr" or "rtl" ? DirQuery : "";
+        if (PanelQuery is { } panel && Tabs.Any(t => t.Key == panel))
+            _tab = panel;
+        _frameSrc = BuildPreviewUrl(includeArgs: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
+            _self = DotNetObjectReference.Create(this);
+            await _module.InvokeVoidAsync("init", _self);
+            var theme = await _module.InvokeAsync<string?>("getPreference", "shell-theme");
+            if (theme is "dark" or "light" && theme != _shellTheme)
+            {
+                _shellTheme = theme;
+                StateHasChanged();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private void ResetLiveState()
+    {
+        _diagnostics.Clear();
+        _callbacks.Clear();
+        _callbackCounts.Clear();
+        _gates = [];
+        _session = null;
+        _interactionResults.Clear();
+        _runningInteraction = null;
+        _pendingInteraction = null;
+        _a11y = null;
+        _a11yRunning = false;
+        _pendingA11y = false;
+        _argErrors = new(StringComparer.Ordinal);
+        _metrics = null;
+        _previewState = "loading";
+        _scenarioIssues = [];
+    }
+
+    private string BuildPreviewUrl(bool includeArgs)
+    {
+        var query = new List<string>();
+        if (includeArgs && _overrides.Count > 0) query.Add("args=" + Uri.EscapeDataString(ArgsCodec.Encode(_overrides)));
+        if (CultureName.Length > 0) query.Add("culture=" + Uri.EscapeDataString(CultureName));
+        if (ThemeName.Length > 0) query.Add("theme=" + Uri.EscapeDataString(ThemeName));
+        if (Direction.Length > 0) query.Add("dir=" + Direction);
+        return $"_workbench/preview/{Uri.EscapeDataString(_scenario!.Id)}" + (query.Count > 0 ? "?" + string.Join('&', query) : "");
+    }
+
+    private void UpdateAddress()
+    {
+        if (_scenario is null)
+            return;
+        var query = new List<string>();
+        if (_overrides.Count > 0) query.Add("args=" + Uri.EscapeDataString(ArgsCodec.Encode(_overrides)));
+        if (ViewportName.Length > 0) query.Add("viewport=" + Uri.EscapeDataString(ViewportName));
+        if (ThemeName.Length > 0 && ThemeName != Options.Themes.FirstOrDefault()?.Name) query.Add("theme=" + Uri.EscapeDataString(ThemeName));
+        if (CultureName.Length > 0) query.Add("culture=" + Uri.EscapeDataString(CultureName));
+        if (Direction.Length > 0) query.Add("dir=" + Direction);
+        if (_tab != "controls") query.Add("panel=" + _tab);
+        Navigation.NavigateTo($"scenario/{Uri.EscapeDataString(_scenario.Id)}" + (query.Count > 0 ? "?" + string.Join('&', query) : ""), replace: true);
+    }
+
+    private async Task Post(string type, object? payload)
+    {
+        if (_module is null)
+            return;
+        try { await _module.InvokeVoidAsync("post", type, payload); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task ReloadFrame(bool keepArgs)
+    {
+        _previewState = "loading";
+        _metrics = null;
+        _diagnostics.Clear();
+        _callbacks.Clear();
+        _callbackCounts.Clear();
+        _gates = [];
+        _frameSrc = BuildPreviewUrl(keepArgs) + (BuildPreviewUrl(keepArgs).Contains('?') ? "&" : "?") + "r=" + System.Environment.TickCount64;
+        StateHasChanged();
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("reloadFrame", _frameSrc); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private Task Reload() => ReloadFrame(keepArgs: true);
+
+    private async Task Reset()
+    {
+        _overrides = new(StringComparer.Ordinal);
+        _argErrors = new(StringComparer.Ordinal);
+        CultureName = "";
+        Direction = "";
+        await ReloadFrame(keepArgs: false);
+        UpdateAddress();
+    }
+
+    [JSInvokable]
+    public Task OnShortcut(string action) => InvokeAsync(async () =>
+    {
+        if (_scenario is null) return;
+        if (action == "reset") await Reset(); else await Reload();
+    });
+
+    private async Task OnOverridesChanged(Dictionary<string, ArgOverride> overrides)
+    {
+        _overrides = overrides;
+        await Post("args", JsonSerializer.Deserialize<JsonElement>(ArgsCodec.Encode(_overrides)));
+        UpdateAddress();
+    }
+
+    private void OnViewportChanged()
+    {
+        _viewport = Options.FindViewport(ViewportName);
+        UpdateAddress();
+    }
+
+    private async Task OnThemeChanged()
+    {
+        var theme = Options.FindTheme(ThemeName);
+        await Post("theme", new { theme = theme?.Name, colorScheme = theme?.ColorScheme.ToString().ToLowerInvariant(), themeClass = theme?.CssClass, themeStylesheets = theme?.Stylesheets ?? [] });
+        UpdateAddress();
+    }
+
+    private async Task OnCultureChanged()
+    {
+        // Culture is applied when the session starts, so the preview reloads.
+        await ReloadFrame(keepArgs: true);
+        UpdateAddress();
+    }
+
+    private async Task OnDirectionChanged()
+    {
+        if (Direction.Length > 0)
+            await Post("dir", Direction);
+        else
+            await ReloadFrame(keepArgs: true);
+        UpdateAddress();
+    }
+
+    private void SelectTab(string key)
+    {
+        _tab = key;
+        if (key == "environment")
+            _ = RequestSession();
+        UpdateAddress();
+    }
+
+    private async Task ToggleShellTheme()
+    {
+        _shellTheme = _shellTheme == "dark" ? "light" : "dark";
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("setPreference", "shell-theme", _shellTheme); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private Task SendGate((string Name, bool Fail) gate) => Post("gate", new { name = gate.Name, action = gate.Fail ? "fail" : "release" });
+
+    private Task AdvanceClock(double milliseconds) => Post("clock", milliseconds);
+
+    private Task RequestSession() => Post("session", null);
+
+    private async Task RunInteraction(string name)
+    {
+        // Interactions run against a fresh session so results match automated runs.
+        _runningInteraction = name;
+        _interactionResults.Remove(name);
+        _pendingInteraction = name;
+        await ReloadFrame(keepArgs: false);
+    }
+
+    private async Task RunAccessibility()
+    {
+        _a11yRunning = true;
+        _a11y = null;
+        if (_previewState == "ready")
+            await Post("a11y", new { disabledRules = _scenario?.Accessibility.DisabledRules ?? [] });
+        else
+            _pendingA11y = true;
+    }
+
+    private int TabCount(string key) => key switch
+    {
+        "actions" => _callbacks.Count,
+        "diagnostics" => _diagnostics.Count(d => d.Severity >= DiagnosticSeverity.Warning),
+        "accessibility" => _a11y?.Violations?.Length ?? 0,
+        "controls" => _argErrors.Count,
+        "environment" => _gates.Count(g => g.Status == GateStatus.Pending),
+        _ => 0,
+    };
+
+    [JSInvokable]
+    public Task OnPreviewMessage(string json) => InvokeAsync(async () =>
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var type = root.GetProperty("type").GetString();
+        var scenarioId = root.TryGetProperty("scenarioId", out var sid) ? sid.GetString() : null;
+        if (_scenario is null || (scenarioId is { Length: > 0 } && !string.Equals(scenarioId, _scenario.Id, StringComparison.OrdinalIgnoreCase)))
+            return;
+        var payload = root.TryGetProperty("payload", out var p) ? p : default;
+
+        switch (type)
+        {
+            case "state":
+                _previewState = payload.GetProperty("state").GetString() ?? "loading";
+                _metrics = payload.TryGetProperty("metrics", out var m) ? m.Deserialize<PreviewMetrics>(WorkbenchJson.Options) : null;
+                if (_previewState is "ready" or "error")
+                {
+                    if (_pendingInteraction is { } pending && _scenario.Interactions.FirstOrDefault(i => i.Name == pending) is { } test)
+                    {
+                        _pendingInteraction = null;
+                        await Post("interaction", JsonSerializer.SerializeToElement(test, WorkbenchJson.Options));
+                    }
+
+                    if (_pendingA11y)
+                    {
+                        _pendingA11y = false;
+                        await Post("a11y", new { disabledRules = _scenario.Accessibility.DisabledRules });
+                    }
+                }
+                break;
+            case "diagnostic":
+                if (payload.Deserialize<DiagnosticDto>(WorkbenchJson.Options) is { } diagnostic)
+                {
+                    _diagnostics.Add(diagnostic);
+                    if (_diagnostics.Count > Options.MaxDiagnostics) _diagnostics.RemoveAt(0);
+                }
+                break;
+            case "callback":
+                if (payload.Deserialize<CallbackEntry>(WorkbenchJson.Options) is { } entry)
+                {
+                    _callbacks.Add(entry);
+                    _callbackCounts[entry.Name] = entry.Invocation;
+                }
+                break;
+            case "gates":
+                _gates = payload.Deserialize<List<GateInfo>>(WorkbenchJson.Options) ?? [];
+                break;
+            case "arg-errors":
+                _argErrors = payload.Deserialize<Dictionary<string, string>>(WorkbenchJson.Options) ?? new();
+                break;
+            case "args-changed":
+                // Two-way bound values changed inside the component (for example typing into an input).
+                foreach (var property in payload.EnumerateObject())
+                    _overrides[property.Name] = ArgsCodec.FromElement(property.Value);
+                UpdateAddress();
+                break;
+            case "session":
+                _session = payload.Clone();
+                break;
+            case "interaction-progress":
+            case "interaction":
+                if (payload.Deserialize<InteractionOutcome>(WorkbenchJson.Options) is { } outcome)
+                {
+                    _interactionResults[outcome.Name] = outcome;
+                    if (type == "interaction") _runningInteraction = null;
+                }
+                break;
+            case "a11y":
+                _a11y = payload.Deserialize<A11yOutcome>(WorkbenchJson.Options);
+                _a11yRunning = false;
+                break;
+        }
+
+        StateHasChanged();
+    });
+
+    private void OnCatalogChanged() => _ = InvokeAsync(async () =>
+    {
+        // Hot reload: re-resolve the scenario and reload the preview.
+        _loadedScenarioId = null;
+        OnParametersSet();
+        StateHasChanged();
+        if (_scenario is not null)
+            await ReloadFrame(keepArgs: true);
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        Catalogs.Changed -= OnCatalogChanged;
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+
+        _self?.Dispose();
+    }
+}

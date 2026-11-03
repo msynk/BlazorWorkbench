@@ -1,0 +1,14 @@
+/* Blazor Workbench preview document. Kept minimal so component styles are not affected. */
+html, body { margin: 0; min-height: 100%; }
+body { background: Canvas; color: CanvasText; }
+.wb-preview-root { box-sizing: border-box; }
+.wb-layout-padded { padding: 1rem; }
+.wb-layout-centered { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+.wb-layout-fullscreen { padding: 0; }
+.wb-preview-error {
+  font: 14px/1.4 system-ui, sans-serif; border: 1px solid #d13438; border-left-width: 4px; background: #fdf3f4; color: #4a0d0f;
+  padding: .75rem 1rem; border-radius: 4px; margin: .5rem 0;
+}
+.wb-preview-error pre { white-space: pre-wrap; font-size: 12px; max-height: 240px; overflow: auto; }
+.wb-preview-error button { margin-top: .5rem; }
+#blazor-error-ui { display: none; }

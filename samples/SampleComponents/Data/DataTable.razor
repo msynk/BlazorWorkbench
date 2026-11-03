@@ -1,0 +1,44 @@
+@namespace SampleComponents.Data
+@typeparam TItem
+
+@* A generic, templated table. *@
+<table class="table">
+    @if (Caption is not null)
+    {
+        <caption>@Caption</caption>
+    }
+    @if (HeaderTemplate is not null)
+    {
+        <thead><tr>@HeaderTemplate</tr></thead>
+    }
+    <tbody>
+        @if (Items is null || Items.Count == 0)
+        {
+            <tr><td class="table-empty" colspan="99">@EmptyText</td></tr>
+        }
+        else
+        {
+            @foreach (var item in Items)
+            {
+                <tr>@RowTemplate?.Invoke(item)</tr>
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    /// <summary>Rows to display.</summary>
+    [Parameter] public IReadOnlyList<TItem>? Items { get; set; }
+
+    /// <summary>Header cells (<c>&lt;th&gt;</c> elements).</summary>
+    [Parameter] public RenderFragment? HeaderTemplate { get; set; }
+
+    /// <summary>Cells (<c>&lt;td&gt;</c> elements) for one item.</summary>
+    [Parameter, EditorRequired] public RenderFragment<TItem>? RowTemplate { get; set; }
+
+    /// <summary>Text shown when there are no rows.</summary>
+    [Parameter] public string EmptyText { get; set; } = "No data.";
+
+    /// <summary>Accessible caption describing the table.</summary>
+    [Parameter] public string? Caption { get; set; }
+}

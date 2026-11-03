@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Testing\BlazorWorkbench.Testing.csproj" />
+    <!-- Built so the fixture can start it; not referenced as an assembly. -->
+    <ProjectReference Include="..\..\samples\SampleWorkbench\SampleWorkbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Cli\BlazorWorkbench.Cli.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

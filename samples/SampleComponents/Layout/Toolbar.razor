@@ -1,0 +1,31 @@
+@namespace SampleComponents.Layout
+
+@* A horizontal toolbar that mirrors correctly in right-to-left layouts (logical CSS properties only). *@
+<nav class="toolbar" aria-label="@Label">
+    <button type="button" class="toolbar-back" aria-label="Back" @onclick="() => OnBack.InvokeAsync()"><span class="toolbar-arrow" aria-hidden="true">←</span></button>
+    <ul class="toolbar-items">
+        @foreach (var item in Items)
+        {
+            <li><a href="@("#" + item.ToLowerInvariant())" aria-current="@(item == Active ? "page" : null)" class="@(item == Active ? "active" : "")"
+                   @onclick="() => OnSelect.InvokeAsync(item)" @onclick:preventDefault>@item</a></li>
+        }
+    </ul>
+    <span class="toolbar-end">@EndContent</span>
+</nav>
+
+@code {
+    /// <summary>Accessible name of the navigation landmark.</summary>
+    [Parameter] public string Label { get; set; } = "Section";
+
+    /// <summary>Navigation entries.</summary>
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+
+    /// <summary>The current entry.</summary>
+    [Parameter] public string? Active { get; set; }
+
+    /// <summary>Content at the end (right in LTR, left in RTL).</summary>
+    [Parameter] public RenderFragment? EndContent { get; set; }
+
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+}

@@ -1,0 +1,62 @@
+@inject WorkbenchHostOptions Options
+@inject IWebHostEnvironment Environment
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <base href="/" />
+    @if (IsPreview)
+    {
+        @* Loaded first so console, error and network capture starts before Blazor. *@
+        <script src="_content/BlazorWorkbench.Components/workbench-preview.js"></script>
+        <link rel="stylesheet" href="_content/BlazorWorkbench.Components/workbench-preview.css" />
+        @foreach (var href in PreviewStylesheets)
+        {
+            <link rel="stylesheet" href="@href" />
+        }
+    }
+    else
+    {
+        <link rel="stylesheet" href="_content/BlazorWorkbench.Components/workbench.css" />
+    }
+    <HeadOutlet @rendermode="RenderMode" />
+</head>
+<body>
+    <Routes @rendermode="RenderMode" />
+    <div id="blazor-error-ui" data-nosnippet hidden>
+        An unhandled error has occurred. <a href="" class="reload">Reload</a>
+    </div>
+    <script src="_framework/blazor.web.js"></script>
+    @if (IsPreview)
+    {
+        @foreach (var src in Options.PreviewScripts)
+        {
+            <script src="@src"></script>
+        }
+    }
+</body>
+</html>
+
+@code {
+    private static readonly IComponentRenderMode RenderMode = new InteractiveServerRenderMode(prerender: false);
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private bool IsPreview => HttpContext?.Request.Path.StartsWithSegments("/_workbench/preview") == true;
+
+    private IEnumerable<string> PreviewStylesheets
+    {
+        get
+        {
+            var entry = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
+            var bundle = entry is null ? null : $"{entry}.styles.css";
+            if (bundle is not null && Environment.WebRootFileProvider.GetFileInfo(bundle).Exists)
+                yield return bundle;
+            foreach (var href in Options.PreviewStylesheets)
+                yield return href;
+        }
+    }
+}

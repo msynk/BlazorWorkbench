@@ -1,0 +1,96 @@
+<article class="wb-docs">
+    <header>
+        <div class="wb-crumbs">@Component.Title.Replace("/", " / ")</div>
+        <h1 class="wb-title">@Component.Metadata.Name</h1>
+        <p class="wb-muted"><code>@Component.Metadata.FullName</code> · @Component.Metadata.AssemblyName@(Component.Metadata.BaseType is { } b ? $" · inherits {b}" : "")</p>
+        @if (Component.Tags.Count > 0)
+        {
+            <p>@foreach (var tag in Component.Tags) { <span class="wb-badge">@tag</span> }</p>
+        }
+    </header>
+
+    @if (Component.DeprecationMessage is { } deprecation)
+    {
+        <div class="wb-callout wb-callout-warning" role="note"><strong>Deprecated.</strong> @deprecation</div>
+    }
+
+    @if ((Component.Description ?? Component.Metadata.Summary) is { } summary)
+    {
+        <p class="wb-lead">@summary</p>
+    }
+    @if (Component.Metadata.Remarks is { } remarks)
+    {
+        <p>@remarks</p>
+    }
+    @if (Component.Documentation is { } markdown)
+    {
+        <div class="wb-markdown">@((MarkupString)SafeMarkdown.ToHtml(markdown))</div>
+    }
+
+    <h2 class="wb-h2" id="parameters">Parameters</h2>
+    @if (Component.Metadata.Parameters.Count == 0)
+    {
+        <p class="wb-muted">No parameters.</p>
+    }
+    else
+    {
+        <table class="wb-table">
+            <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Description</th></tr></thead>
+            <tbody>
+                @foreach (var p in Component.Metadata.Parameters)
+                {
+                    <tr>
+                        <th scope="row">
+                            <code>@p.Name</code>
+                            @if (p.IsRequired) { <span class="wb-badge wb-badge-required">required</span> }
+                            @if (p.Kind == ParameterKind.Cascading) { <span class="wb-badge">cascading</span> }
+                            @if (p.IsObsolete) { <span class="wb-badge" title="@p.ObsoleteMessage">obsolete</span> }
+                        </th>
+                        <td><code>@p.TypeName</code></td>
+                        <td>@(p.DefaultValueDisplay is { } d ? d : "—")</td>
+                        <td>@(p.Summary ?? "")@if (p.Summary is null) { <span class="wb-muted">Undocumented</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (Component.Metadata.Injections.Count > 0)
+    {
+        <h2 class="wb-h2" id="dependencies">Dependencies</h2>
+        <ul>
+            @foreach (var i in Component.Metadata.Injections)
+            {
+                <li><code>@i.ServiceTypeName</code> <span class="wb-muted">(@i.PropertyName)</span></li>
+            }
+        </ul>
+    }
+
+    <h2 class="wb-h2" id="scenarios">Scenarios</h2>
+    <div class="wb-doc-scenarios">
+        @foreach (var (scenario, index) in Component.Scenarios.Select((s, i) => (s, i)))
+        {
+            <section class="wb-doc-scenario">
+                <h3 class="wb-h3"><a href="@($"scenario/{scenario.Id}")">@scenario.Name</a></h3>
+                @if (scenario.Description is { } description) { <p class="wb-muted">@description</p> }
+                @if (index < MaxLivePreviews)
+                {
+                    <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@($"_workbench/preview/{scenario.Id}")"></iframe>
+                }
+                <pre class="wb-pre"><code>@RazorSnippetGenerator.Generate(scenario, Component.Metadata)</code></pre>
+            </section>
+        }
+    </div>
+
+    @if (Component.Metadata.Source is { } source)
+    {
+        <p class="wb-muted wb-small">Source: <code>@System.IO.Path.GetFileName(source.Path)</code></p>
+    }
+</article>
+
+@code {
+    private const int MaxLivePreviews = 6;
+
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+}

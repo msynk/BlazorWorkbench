@@ -1,0 +1,21 @@
+@namespace SampleComponents.Feedback
+
+@* Demonstrates failure diagnostics: it can throw while rendering, from an event handler, or log a console error. *@
+<div class="flaky">
+    @if (ThrowOnRender)
+    {
+        throw new InvalidOperationException("FlakyWidget was configured to fail while rendering.");
+    }
+    <p>@Message</p>
+    <button type="button" class="btn btn-danger btn-small" @onclick="Explode">Throw from handler</button>
+</div>
+
+@code {
+    /// <summary>Text shown when the widget renders.</summary>
+    [Parameter] public string Message { get; set; } = "Everything is fine.";
+
+    /// <summary>Throws during rendering.</summary>
+    [Parameter] public bool ThrowOnRender { get; set; }
+
+    private void Explode() => throw new InvalidOperationException("The button handler failed (simulated defect).");
+}

@@ -1,0 +1,39 @@
+@namespace SampleComponents.Data
+@inject IProductService Products
+
+@* Lists products from IProductService and lets the user add one to the cart. *@
+<div class="products">
+    @if (_products is null)
+    {
+        <p role="status">Loading products…</p>
+    }
+    else if (_products.Count == 0)
+    {
+        <p>No products found.</p>
+    }
+    else
+    {
+        <ul class="product-list">
+            @foreach (var product in _products)
+            {
+                <li class="product">
+                    <span class="product-name">@product.Name</span>
+                    <span class="product-price">@product.Price.ToString("C", CultureInfo.CurrentCulture)</span>
+                    <button type="button" class="btn btn-primary btn-small" disabled="@(!product.InStock)"
+                            aria-label="@(product.InStock ? $"Add {product.Name} to cart" : $"{product.Name} sold out")" @onclick="() => OnAdd.InvokeAsync(product)">
+                        @(product.InStock ? "Add" : "Sold out")
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<Product>? _products;
+
+    /// <summary>Raised when a product is added to the cart.</summary>
+    [Parameter] public EventCallback<Product> OnAdd { get; set; }
+
+    protected override async Task OnInitializedAsync() => _products = await Products.GetProductsAsync();
+}

@@ -1,0 +1,66 @@
+@namespace SampleComponents.Overlays
+
+@* A modal dialog that moves focus into itself when opened and closes on Escape. *@
+@if (Open)
+{
+    <div class="dialog-backdrop" @onclick="Close"></div>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1" @ref="_dialog" @onkeydown="OnKeyDown">
+        <h2 id="dialog-title" class="dialog-title">@Title</h2>
+        <div class="dialog-body">@ChildContent</div>
+        <div class="dialog-actions">
+            <button type="button" class="btn btn-secondary" @onclick="Close">@CancelText</button>
+            <button type="button" class="btn btn-primary" @onclick="Confirm">@ConfirmText</button>
+        </div>
+    </div>
+}
+
+@code {
+    private ElementReference _dialog;
+    private bool _focusPending;
+
+    /// <summary>Whether the dialog is open. Use <c>@bind-Open</c>.</summary>
+    [Parameter] public bool Open { get; set; }
+
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    /// <summary>Dialog heading (also its accessible name).</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+
+    /// <summary>Raised when the user confirms.</summary>
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    private bool _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen) _focusPending = true;
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusPending && Open)
+        {
+            _focusPending = false;
+            await _dialog.FocusAsync();
+        }
+    }
+
+    private async Task Close()
+    {
+        _wasOpen = false;
+        await OpenChanged.InvokeAsync(false);
+    }
+
+    private async Task Confirm()
+    {
+        await OnConfirm.InvokeAsync();
+        await Close();
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? Close() : Task.CompletedTask;
+}

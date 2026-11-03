@@ -1,0 +1,58 @@
+@namespace SampleComponents.Inputs
+
+@* A numeric stepper with keyboard support. *@
+<div class="counter" role="group" aria-label="@Label">
+    <button type="button" class="btn btn-secondary btn-small" aria-label="Decrease" disabled="@(_value <= Min)" @onclick="() => Change(-Step)">−</button>
+    <output data-testid="count" aria-live="polite" tabindex="0" @onkeydown="OnKeyDown">@_value</output>
+    <button type="button" class="btn btn-secondary btn-small" aria-label="Increase" disabled="@(Max is { } max && _value >= max)" @onclick="() => Change(Step)">+</button>
+</div>
+
+@code {
+    private int _value;
+    private int? _appliedStart;
+
+    /// <summary>Accessible name of the group.</summary>
+    [Parameter] public string Label { get; set; } = "Quantity";
+
+    /// <summary>Initial value.</summary>
+    [Parameter] public int Start { get; set; }
+
+    /// <summary>Amount added or removed per click or arrow key.</summary>
+    [Parameter] public int Step { get; set; } = 1;
+
+    /// <summary>Lowest allowed value.</summary>
+    [Parameter] public int Min { get; set; } = int.MinValue;
+
+    /// <summary>Highest allowed value, if any.</summary>
+    [Parameter] public int? Max { get; set; }
+
+    /// <summary>Raised with the new value after every change.</summary>
+    [Parameter] public EventCallback<int> OnChanged { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Only re-seed when Start changes; a parent re-render must not discard the user's changes.
+        if (_appliedStart != Start)
+        {
+            _appliedStart = Start;
+            _value = Start;
+        }
+
+        _value = Math.Clamp(_value, Min, Max ?? int.MaxValue);
+    }
+
+    private async Task Change(int delta)
+    {
+        var next = Math.Clamp(_value + delta, Min, Max ?? int.MaxValue);
+        if (next == _value) return;
+        _value = next;
+        await OnChanged.InvokeAsync(_value);
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key switch
+    {
+        "ArrowUp" or "ArrowRight" => Change(Step),
+        "ArrowDown" or "ArrowLeft" => Change(-Step),
+        _ => Task.CompletedTask,
+    };
+}

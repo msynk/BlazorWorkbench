@@ -1,0 +1,46 @@
+@namespace SampleComponents.Inputs
+
+@* A button with variants and sizes. *@
+<button type="@Type" class="btn btn-@Variant.ToString().ToLowerInvariant() btn-@Size.ToString().ToLowerInvariant()"
+        disabled="@Disabled" aria-busy="@(Loading ? "true" : null)" @onclick="HandleClick" @attributes="AdditionalAttributes">
+    @if (Loading)
+    {
+        <span class="spinner" aria-hidden="true"></span>
+    }
+    else if (Icon is not null)
+    {
+        <span class="icon" aria-hidden="true">@Icon</span>
+    }
+    @ChildContent
+</button>
+
+@code {
+    /// <summary>Visual emphasis of the button.</summary>
+    [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Primary;
+
+    /// <summary>Size of the button.</summary>
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+
+    /// <summary>Prevents interaction.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Shows a spinner and marks the button busy.</summary>
+    [Parameter] public bool Loading { get; set; }
+
+    /// <summary>Optional decorative icon (an emoji or glyph) shown before the label.</summary>
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>The HTML button type.</summary>
+    [Parameter] public string Type { get; set; } = "button";
+
+    /// <summary>The button label.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Raised when the button is clicked (not raised while disabled or loading).</summary>
+    [Parameter] public EventCallback<MouseEventArgs> OnClick { get; set; }
+
+    /// <summary>Additional HTML attributes such as <c>aria-label</c>.</summary>
+    [Parameter(CaptureUnmatchedValues = true)] public IDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private Task HandleClick(MouseEventArgs args) => Loading ? Task.CompletedTask : OnClick.InvokeAsync(args);
+}

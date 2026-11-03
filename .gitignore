@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/*
+!.vscode/extensions.json
+*.binlog
+TestResults/
+
+## Workbench outputs (baselines are committed; run artifacts are not)
+artifacts/
+.workbench/
+
+## Node / misc
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

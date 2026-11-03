@@ -1,0 +1,24 @@
+@namespace SampleComponents.Display
+
+@* A small status label. *@
+<span class="badge badge-@Tone.ToString().ToLowerInvariant()" style="@(Accent is { } accent ? $"border-color:{accent.Value};color:{accent.Value}" : null)">
+    @Text
+    @if (Count is { } count)
+    {
+        <span class="badge-count">@(count > 99 ? "99+" : count.ToString(CultureInfo.CurrentCulture))</span>
+    }
+</span>
+
+@code {
+    /// <summary>Label text.</summary>
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    /// <summary>Color tone conveying meaning (always pair with text, never color alone).</summary>
+    [Parameter] public Tone Tone { get; set; } = Tone.Neutral;
+
+    /// <summary>Overrides the tone color (edited with a custom color picker in Workbench).</summary>
+    [Parameter] public HexColor? Accent { get; set; }
+
+    /// <summary>Optional count; values above 99 are shown as 99+.</summary>
+    [Parameter] public int? Count { get; set; }
+}

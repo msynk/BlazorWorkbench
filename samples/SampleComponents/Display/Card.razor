@@ -1,0 +1,30 @@
+@namespace SampleComponents.Display
+
+@* A surface grouping related content. *@
+<section class="card @(Elevated ? "card-elevated" : "")" aria-labelledby="@(Title is null ? null : _id)">
+    @if (Title is not null)
+    {
+        <h2 id="@_id" class="card-title">@Title</h2>
+    }
+    <div class="card-body">@ChildContent</div>
+    @if (Footer is not null)
+    {
+        <footer class="card-footer">@Footer</footer>
+    }
+</section>
+
+@code {
+    private readonly string _id = "card-" + Guid.NewGuid().ToString("N")[..8];
+
+    /// <summary>Heading of the card.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Card content.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Optional footer (for example actions).</summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    /// <summary>Adds a shadow.</summary>
+    [Parameter] public bool Elevated { get; set; }
+}

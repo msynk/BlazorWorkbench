@@ -1,0 +1,77 @@
+@page "/_workbench/preview/{ScenarioId}"
+@inject WorkbenchCatalogAccessor Catalogs
+
+<PageTitle>@(_scenario?.Name ?? "Scenario not found") · Preview</PageTitle>
+
+@if (_scenario is null)
+{
+    <div class="wb-preview-error" role="alert" data-workbench-error="true">
+        <strong>Scenario '@ScenarioId' was not found.</strong>
+        @if (_suggestions.Count > 0)
+        {
+            <p>Did you mean: @string.Join(", ", _suggestions)?</p>
+        }
+    </div>
+}
+else if (_argsError is not null)
+{
+    <div class="wb-preview-error" role="alert" data-workbench-error="true">
+        <strong>Invalid arguments in the URL.</strong>
+        <p>@_argsError</p>
+    </div>
+}
+else
+{
+    <ScenarioHost Scenario="_scenario" InitialArgs="_args" Activation="_activation" EnableBridge="true" />
+}
+
+@code {
+    private ScenarioDefinition? _scenario;
+    private IReadOnlyDictionary<string, ArgOverride>? _args;
+    private ActivationOptions? _activation;
+    private string? _argsError;
+    private List<string> _suggestions = [];
+
+    [Parameter] public string ScenarioId { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "args")] public string? Args { get; set; }
+    [SupplyParameterFromQuery(Name = "culture")] public string? Culture { get; set; }
+    [SupplyParameterFromQuery(Name = "theme")] public string? Theme { get; set; }
+    [SupplyParameterFromQuery(Name = "dir")] public string? Dir { get; set; }
+
+    protected override void OnInitialized()
+    {
+        var catalog = Catalogs.Catalog;
+        _scenario = catalog.FindScenario(ScenarioId);
+        if (_scenario is null)
+        {
+            _suggestions = catalog.Scenarios
+                .Where(s => s.Id.Contains(ScenarioId.Split("--")[0], StringComparison.OrdinalIgnoreCase))
+                .Take(5).Select(s => s.Id).ToList();
+            return;
+        }
+
+        try
+        {
+            _args = ArgsCodec.Decode(Args);
+        }
+        catch (Exception ex) when (ex is JsonException or FormatException)
+        {
+            _argsError = ex.Message;
+        }
+
+        string? culture = null;
+        if (!string.IsNullOrWhiteSpace(Culture))
+        {
+            try { culture = CultureInfo.GetCultureInfo(Culture, predefinedOnly: true).Name; }
+            catch (CultureNotFoundException) { _argsError = $"Unknown culture '{Culture}'."; }
+        }
+
+        TextDirection? direction = Dir?.ToLowerInvariant() switch
+        {
+            "rtl" => TextDirection.Rtl,
+            "ltr" => TextDirection.Ltr,
+            _ => null,
+        };
+        _activation = new ActivationOptions(culture, string.IsNullOrWhiteSpace(Theme) ? null : Theme, direction);
+    }
+}

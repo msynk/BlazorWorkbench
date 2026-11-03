@@ -1,0 +1,112 @@
+@inject IServiceProvider Services
+
+<div class="wb-visual">
+    @if (_provider is null)
+    {
+        <p class="wb-empty">Visual results are not available in this host.</p>
+    }
+    else if (_loading)
+    {
+        <p role="status">Loading visual results…</p>
+    }
+    else if (_results.Count == 0)
+    {
+        <p class="wb-empty">
+            No visual results for this scenario yet. Run <code>workbench test --visual --filter "@ScenarioId"</code>,
+            then approve intended changes with <code>workbench approve --filter "@ScenarioId"</code>.
+        </p>
+        <p class="wb-muted wb-small">@_provider.Describe()</p>
+    }
+    else
+    {
+        <div class="wb-inspector-actions">
+            <div role="radiogroup" aria-label="Comparison mode" class="wb-segmented">
+                @foreach (var mode in Modes)
+                {
+                    <label class="@(_mode == mode ? "active" : "")"><input type="radio" name="wb-visual-mode" value="@mode" checked="@(_mode == mode)" @onchange="() => _mode = mode" /> @mode</label>
+                }
+            </div>
+            @if (_mode == "Overlay")
+            {
+                <label class="wb-field"><span>Opacity</span><input type="range" min="0" max="100" @bind="_opacity" @bind:event="oninput" /></label>
+            }
+            <span class="wb-toolbar-spacer"></span>
+            <button type="button" class="wb-button" @onclick="LoadAsync">Refresh</button>
+        </div>
+        <p class="wb-muted wb-small">@_provider.Describe()</p>
+        @foreach (var r in _results)
+        {
+            <section class="wb-visual-result">
+                <h2 class="wb-h3">
+                    <span class="wb-badge wb-visual-@r.Status.ToLowerInvariant()">@r.Status</span> @r.Variant
+                    @if (r.DiffRatio is { } ratio) { <span class="wb-muted"> · @((ratio * 100).ToString("0.###", CultureInfo.InvariantCulture))% pixels differ</span> }
+                    @if (r.RunAt is { } at) { <span class="wb-muted"> · @at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</span> }
+                </h2>
+                @if (r.Message is { } message) { <p class="wb-muted">@message</p> }
+                @switch (_mode)
+                {
+                    case "Side by side":
+                        <div class="wb-visual-grid">
+                            <figure><figcaption>Baseline</figcaption>@Image(r.BaselineUrl, "Baseline")</figure>
+                            <figure><figcaption>Current</figcaption>@Image(r.ActualUrl, "Current")</figure>
+                        </div>
+                        break;
+                    case "Overlay":
+                        <div class="wb-visual-overlay">
+                            @Image(r.BaselineUrl, "Baseline")
+                            @if (r.ActualUrl is not null)
+                            {
+                                <img src="@r.ActualUrl" alt="Current, overlaid on baseline" style="opacity:@(_opacity / 100.0)" />
+                            }
+                        </div>
+                        break;
+                    default:
+                        <figure><figcaption>Difference (changed pixels in red)</figcaption>@Image(r.DiffUrl, "Difference")</figure>
+                        break;
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private static readonly string[] Modes = ["Side by side", "Overlay", "Difference"];
+    private IVisualResultsProvider? _provider;
+    private IReadOnlyList<VisualComparisonView> _results = [];
+    private bool _loading;
+    private string _mode = Modes[0];
+    private int _opacity = 50;
+    private string? _loaded;
+
+    [Parameter, EditorRequired] public string ScenarioId { get; set; } = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _provider = Services.GetService(typeof(IVisualResultsProvider)) as IVisualResultsProvider;
+        if (_loaded != ScenarioId)
+        {
+            _loaded = ScenarioId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_provider is null) return;
+        _loading = true;
+        try { _results = await _provider.GetAsync(ScenarioId); }
+        finally { _loading = false; }
+    }
+
+    private static RenderFragment Image(string? url, string alt) => __builder =>
+    {
+        if (url is null)
+        {
+            <div class="wb-empty">No @alt.ToLowerInvariant() image</div>
+        }
+        else
+        {
+            <img src="@url" alt="@alt" loading="lazy" />
+        }
+    };
+}

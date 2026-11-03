@@ -1,0 +1,50 @@
+# Compatibility and support
+
+## Supported environments
+
+| Area | Supported | Notes |
+| --- | --- | --- |
+| Target framework | .NET 10 (`net10.0`) | The SDK pins to 10.0.x through `global.json` (`rollForward: latestMajor`, so later stable SDKs work). |
+| Preview hosting | **Blazor Web App, Interactive Server** | Provided by `BlazorWorkbench.Hosting`. Prerendering is disabled for Workbench pages. |
+| Components under test | Any Razor component library usable from Interactive Server | Includes generic, templated and `EditContext`-dependent components, components with constructor injection, and `AuthorizeView`. |
+| Browsers for automation | Chromium (default), Firefox, WebKit through Playwright | Visual baselines are captured with Chromium in CI and are specific to browser and platform. |
+| Workbench UI browsers | Current Chromium, Firefox and Safari | |
+| Operating systems | Windows, Linux, macOS | Baselines are stored per platform. |
+
+## Not supported (yet)
+
+| Scenario | Status | Workaround |
+| --- | --- | --- |
+| WebAssembly-only hosting of previews | Not implemented. `BlazorWorkbench.Components` does not depend on server APIs, but there is no WebAssembly host. | Preview the components in an Interactive Server host. Code that requires `IJSInProcessRuntime` or WebAssembly-only APIs cannot be previewed. |
+| .NET MAUI Blazor Hybrid | Not supported. | Preview the shared Razor library in a web host. Platform features need fakes. |
+| Static SSR-only components and `@page` routes | Pages are excluded by default (`IncludeRoutableComponents` enables them). Previews are always interactive. | Extract presentational components. |
+| Per-scenario `TimeProvider` override through `Services` | Rejected (`WB1022`). | Use `.Clock(...)`. |
+| Overriding services consumed by host singletons | Rejected by the container at startup. | Override the consumer. |
+| Media-query dark mode inside the UI iframe | Browsers cannot emulate it per iframe. | Theme attributes in the UI; real `prefers-color-scheme` emulation in CLI runs. |
+| Component render counts in browsers | Not observable without changing components. | `domUpdates` as a proxy; `cut.RenderCount` in bUnit. |
+| Affected-scenario detection | Not implemented. | Filters, tags, `--only-failed`. |
+
+## Known limitations
+
+- **Readiness** detects Workbench-tracked work (fake HTTP, gates). Other asynchronous work, such as your own timers, real JavaScript or third-party SDKs, is covered only by the 150 ms DOM quiet window. Use `ReadyWhen` or gates for such components.
+- **The in-browser interaction runner** (UI) simulates events and approximates accessible names. The Playwright runner (CLI) is authoritative.
+- **Accessibility automation** covers part of WCAG. Manual review is still required.
+- **Hot reload** rebuilds the catalog and reloads previews. A service type that becomes overridable only after startup needs a restart.
+- **Culture** is applied per circuit activity. Code that runs outside circuit activities (for example a `System.Threading.Timer` created without `InvokeAsync`) does not get the scenario culture.
+- **Scenario services** become scoped in the host container (see [environment](environment.md#services)).
+- **Package size**: the CLI tool contains the Playwright driver (about 40 MB).
+
+## Versioning policy
+
+- Packages follow semantic versioning. All Workbench packages are released together with the same version.
+- Public API, the JSON contracts (`schemaVersion`), `workbench.json`, CLI commands and exit codes, and `window.__workbench` change incompatibly only in major versions.
+- Deprecations: members are marked `[Obsolete]` with guidance for at least one minor version before removal.
+- Scenario ids are derived from titles and names. Changing them changes ids and baseline paths; use `.Key(...)` to keep an id stable.
+- Contracts carry `schemaVersion`. Readers ignore unknown properties, so newer minor versions stay readable.
+
+## Upgrading
+
+1. Update all `BlazorWorkbench.*` packages and the CLI tool to the same version.
+2. Run `workbench validate` and `workbench test`.
+3. If the Playwright or browser version changed, review the visual differences and re-approve them with `workbench approve --all`.
+4. Read the [CHANGELOG](../CHANGELOG.md) for migration notes.

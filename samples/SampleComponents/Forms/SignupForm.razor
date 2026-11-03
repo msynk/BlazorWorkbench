@@ -1,0 +1,54 @@
+@namespace SampleComponents.Forms
+
+@* A sign-up form with data annotation validation. *@
+<EditForm Model="_model" OnValidSubmit="Submit" class="signup-form" FormName="signup">
+    <DataAnnotationsValidator />
+    <div class="field">
+        <label for="signup-name">Name</label>
+        <InputText id="signup-name" @bind-Value="_model.Name" autocomplete="name" />
+        <ValidationMessage For="() => _model.Name" />
+    </div>
+    <div class="field">
+        <label for="signup-email">Email</label>
+        <InputText id="signup-email" type="email" @bind-Value="_model.Email" autocomplete="email" />
+        <ValidationMessage For="() => _model.Email" />
+    </div>
+    <div class="field field-inline">
+        <InputCheckbox id="signup-terms" @bind-Value="_model.AcceptTerms" />
+        <label for="signup-terms">I accept the terms</label>
+        <ValidationMessage For="() => _model.AcceptTerms" />
+    </div>
+    <button type="submit" class="btn btn-primary" disabled="@_submitting">@SubmitText</button>
+    @if (_submitted)
+    {
+        <p role="status" class="form-success">Thanks, @_model.Name! Check your inbox.</p>
+    }
+</EditForm>
+
+@code {
+    private SignupModel _model = new();
+    private bool _submitting, _submitted;
+
+    /// <summary>Label of the submit button.</summary>
+    [Parameter] public string SubmitText { get; set; } = "Create account";
+
+    /// <summary>Pre-filled values (copied; the form never mutates the caller's instance).</summary>
+    [Parameter] public SignupModel? Initial { get; set; }
+
+    /// <summary>Raised with the model after successful validation.</summary>
+    [Parameter] public EventCallback<SignupModel> OnSubmit { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Initial is not null)
+            _model = new SignupModel { Name = Initial.Name, Email = Initial.Email, AcceptTerms = Initial.AcceptTerms };
+    }
+
+    private async Task Submit()
+    {
+        _submitting = true;
+        await OnSubmit.InvokeAsync(_model);
+        _submitting = false;
+        _submitted = true;
+    }
+}

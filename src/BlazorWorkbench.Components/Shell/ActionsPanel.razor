@@ -1,0 +1,31 @@
+<div class="wb-actions">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">Event callbacks the scenario does not handle are recorded here, with redacted arguments.</span>
+        <button type="button" class="wb-button" @onclick="() => OnClear.InvokeAsync()" disabled="@(Callbacks.Count == 0)">Clear</button>
+    </div>
+    @if (Callbacks.Count == 0)
+    {
+        <p class="wb-empty">No callbacks yet. Interact with the component.</p>
+    }
+    else
+    {
+        <ol class="wb-log" reversed>
+            @foreach (var c in Callbacks.AsEnumerable().Reverse())
+            {
+                <li>
+                    <time class="wb-muted">@c.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)</time>
+                    <strong>@c.Name</strong> <span class="wb-muted">#@c.Invocation</span>
+                    @if (!string.IsNullOrEmpty(c.Arguments))
+                    {
+                        <code class="wb-args">@c.Arguments</code>
+                    }
+                </li>
+            }
+        </ol>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<CallbackEntry> Callbacks { get; set; } = [];
+    [Parameter] public EventCallback OnClear { get; set; }
+}

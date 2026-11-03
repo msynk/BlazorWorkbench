@@ -1,0 +1,69 @@
+<div class="wb-diagnostics">
+    <div class="wb-inspector-actions">
+        <label class="wb-field"><span>Minimum severity</span>
+            <select @bind="_minimum">
+                <option value="@DiagnosticSeverity.Trace">Trace</option>
+                <option value="@DiagnosticSeverity.Info">Info</option>
+                <option value="@DiagnosticSeverity.Warning">Warning</option>
+                <option value="@DiagnosticSeverity.Error">Error</option>
+            </select>
+        </label>
+        <label class="wb-field"><span>Source</span>
+            <select @bind="_source">
+                <option value="">All</option>
+                @foreach (var s in Enum.GetNames<DiagnosticSource>())
+                {
+                    <option value="@s">@s</option>
+                }
+            </select>
+        </label>
+        <span class="wb-toolbar-spacer"></span>
+        <button type="button" class="wb-button" @onclick="() => OnClear.InvokeAsync()" disabled="@(Diagnostics.Count == 0)">Clear</button>
+    </div>
+    @if (Filtered.Count == 0)
+    {
+        <p class="wb-empty">No diagnostics match the filter.</p>
+    }
+    else
+    {
+        <table class="wb-table wb-diag-table">
+            <thead><tr><th scope="col">Time</th><th scope="col">Severity</th><th scope="col">Source</th><th scope="col">Message</th></tr></thead>
+            <tbody>
+                @foreach (var d in Filtered)
+                {
+                    <tr class="wb-sev-@d.Severity.ToString().ToLowerInvariant()">
+                        <td><time class="wb-muted">@Time(d.Timestamp)</time></td>
+                        <td>@d.Severity</td>
+                        <td>@d.Source</td>
+                        <td>
+                            <span class="wb-diag-message">@d.Message</span>
+                            @if (d.Details is { Length: > 0 } details)
+                            {
+                                <details><summary>Details</summary><pre>@details</pre></details>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    <p class="wb-muted wb-small">Every entry carries its scenario id and timestamp. Secrets in URLs, headers and messages are redacted before display.</p>
+</div>
+
+@code {
+    private DiagnosticSeverity _minimum = DiagnosticSeverity.Info;
+    private string _source = "";
+
+    [Parameter] public IReadOnlyList<DiagnosticDto> Diagnostics { get; set; } = [];
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    private List<DiagnosticDto> Filtered => Diagnostics
+        .Where(d => d.Severity >= _minimum && (_source.Length == 0 || d.Source.ToString() == _source))
+        .Reverse()
+        .ToList();
+
+    private static string Time(string iso) =>
+        DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)
+            ? t.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)
+            : iso;
+}

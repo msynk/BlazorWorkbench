@@ -1,0 +1,190 @@
+@inject NavigationManager Navigation
+
+<div class="wb-explorer">
+    <div class="wb-search">
+        <label for="wb-search" class="wb-visually-hidden">Search components and scenarios</label>
+        <input id="wb-search" type="search" placeholder="Search ( / )" autocomplete="off"
+               @bind="Query" @bind:event="oninput" @onkeydown="OnSearchKey" aria-describedby="wb-search-hint" />
+        <span id="wb-search-hint" class="wb-visually-hidden">Matches component names, titles, tags, parameters and scenario names. Press Enter to open the first result.</span>
+    </div>
+
+    @if (_matches is not null)
+    {
+        <p class="wb-muted wb-small" role="status">@_matches.Count result@(_matches.Count == 1 ? "" : "s")</p>
+        <ul class="wb-results">
+            @foreach (var (component, scenario) in _matches.Take(200))
+            {
+                <li>
+                    <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")" aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">
+                        <span class="wb-result-component">@component.Title</span>
+                        <span>@scenario.Name</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <nav aria-label="Components">
+            @RenderGroup(_tree, 0)
+        </nav>
+    }
+
+    <div class="wb-explorer-footer">
+        <a href="">Overview</a>
+        <span class="wb-muted">@Catalog.Components.Count components · @Catalog.Scenarios.Count scenarios</span>
+        @if (_errors > 0)
+        {
+            <a href="" class="wb-count wb-count-error" title="Catalog errors">@_errors</a>
+        }
+    </div>
+</div>
+
+@code {
+    private Node _tree = new("", "");
+    private List<(ComponentEntry Component, ScenarioDefinition Scenario)>? _matches;
+    private string _query = "";
+    private int _errors;
+    private WorkbenchCatalog? _built;
+
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+    [Parameter] public string? SelectedScenarioId { get; set; }
+    [Parameter] public string? SelectedComponentId { get; set; }
+
+    private string Query
+    {
+        get => _query;
+        set
+        {
+            _query = value;
+            _matches = string.IsNullOrWhiteSpace(value) ? null : Search(value.Trim());
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_built, Catalog))
+        {
+            _built = Catalog;
+            _tree = BuildTree(Catalog);
+            _errors = Catalog.Issues.Count(i => i.Severity == IssueSeverity.Error);
+            if (_query.Length > 0)
+                _matches = Search(_query);
+        }
+    }
+
+    /// <summary>Ranks scenarios: every term must match somewhere; names and titles weigh more than tags and parameters.</summary>
+    private List<(ComponentEntry, ScenarioDefinition)> Search(string text)
+    {
+        var terms = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        static bool Has(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+
+        static int Score(ComponentEntry c, ScenarioDefinition s, string t) =>
+            (Has(s.Name, t) ? 3 : 0) + (Has(c.Title, t) ? 4 : 0) + (Has(c.Metadata.Name, t) ? 4 : 0) +
+            (s.Tags.Concat(c.Tags).Any(tag => Has(tag, t)) ? 2 : 0) +
+            (c.Metadata.Parameters.Any(p => Has(p.Name, t)) ? 1 : 0) +
+            (Has(c.Description, t) || Has(s.Description, t) ? 1 : 0);
+
+        return Catalog.Components
+            .SelectMany(c => c.Scenarios.Select(s => (c, s)))
+            .Select(x => (x.c, x.s, scores: terms.Select(t => Score(x.c, x.s, t)).ToArray()))
+            .Where(x => x.scores.All(score => score > 0))
+            .OrderByDescending(x => x.scores.Sum())
+            .ThenBy(x => x.c.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(x => (x.c, x.s))
+            .ToList();
+    }
+
+    private void OnSearchKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && _matches is { Count: > 0 })
+            Navigation.NavigateTo($"scenario/{_matches[0].Scenario.Id}");
+    }
+
+    private bool IsOpen(Node node) =>
+        (SelectedScenarioId is not null && node.Contains(c => c.Scenarios.Any(s => s.Id == SelectedScenarioId))) ||
+        (SelectedComponentId is not null && node.Contains(c => c.Id == SelectedComponentId));
+
+    private RenderFragment RenderGroup(Node node, int depth) => __builder =>
+    {
+        <ul class="wb-tree">
+            @foreach (var child in node.Children.Values.OrderBy(c => c.Component is null ? 0 : 1).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                if (child.Component is { } component)
+                {
+                    var open = component.Scenarios.Any(s => s.Id == SelectedScenarioId) || component.Id == SelectedComponentId;
+                    var issues = Catalog.IssuesFor(component).Count(i => i.Severity == IssueSeverity.Error);
+                    <li>
+                        <details open="@open">
+                            <summary class="wb-node-component">
+                                <span class="wb-icon" aria-hidden="true">◇</span>@child.Name
+                                @if (component.HasOnlyGeneratedScenarios)
+                                {
+                                    <span class="wb-dot" title="No declared scenarios"><span class="wb-visually-hidden">(no declared scenarios)</span></span>
+                                }
+                                @if (issues > 0)
+                                {
+                                    <span class="wb-count wb-count-error" title="@issues error(s)">@issues</span>
+                                }
+                                @if (component.DeprecationMessage is not null)
+                                {
+                                    <span class="wb-badge" title="@component.DeprecationMessage">deprecated</span>
+                                }
+                            </summary>
+                            <ul class="wb-tree">
+                                <li><a href="@($"docs/{component.Id}")" class="wb-node-docs @(component.Id == SelectedComponentId ? "active" : "")">Docs</a></li>
+                                @foreach (var scenario in component.Scenarios)
+                                {
+                                    <li>
+                                        <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")"
+                                           aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">@scenario.Name</a>
+                                    </li>
+                                }
+                            </ul>
+                        </details>
+                    </li>
+                }
+                else
+                {
+                    <li>
+                        <details open="@(depth == 0 || IsOpen(child) || node.Children.Count == 1)">
+                            <summary class="wb-node-group">@child.Name</summary>
+                            @RenderGroup(child, depth + 1)
+                        </details>
+                    </li>
+                }
+            }
+        </ul>
+    };
+
+    private static Node BuildTree(WorkbenchCatalog catalog)
+    {
+        var root = new Node("", "");
+        foreach (var component in catalog.Components)
+        {
+            var node = root;
+            var path = component.Path;
+            for (var i = 0; i < path.Count - 1; i++)
+            {
+                if (!node.Children.TryGetValue("g:" + path[i], out var next))
+                    node.Children["g:" + path[i]] = next = new Node(path[i], string.Join('/', path.Take(i + 1)));
+                node = next;
+            }
+
+            node.Children["c:" + component.Id] = new Node(component.DisplayName, component.Title) { Component = component };
+        }
+
+        return root;
+    }
+
+    private sealed class Node(string name, string path)
+    {
+        public string Name { get; } = name;
+        public string Path { get; } = path;
+        public ComponentEntry? Component { get; init; }
+        public Dictionary<string, Node> Children { get; } = new(StringComparer.Ordinal);
+
+        public bool Contains(Func<ComponentEntry, bool> predicate) =>
+            (Component is not null && predicate(Component)) || Children.Values.Any(c => c.Contains(predicate));
+    }
+}
