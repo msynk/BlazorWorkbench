@@ -146,7 +146,7 @@ You can also set `"framework"` in `workbench.json`. `list`, `validate`, `approve
 
 How a run works:
 
-1. The CLI picks two free loopback ports and starts the app with `dotnet run`. The environment variables `BLAZOR_WORKBENCH_AUTOMATION_URL`, `BLAZOR_WORKBENCH_CDP_PORT`, `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>` and `WEBVIEW2_USER_DATA_FOLDER` (a private temporary folder) are set for it.
+1. The CLI picks two free loopback ports and starts the app with `dotnet run`. The environment variables `BLAZOR_WORKBENCH_AUTOMATION_URL`, `BLAZOR_WORKBENCH_CDP_PORT`, `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>` and `WEBVIEW2_USER_DATA_FOLDER` (a private temporary folder) are set for it. When `BLAZOR_WORKBENCH_CDP_PORT` is already set, the CLI uses that port instead of a free one (see [Elevated processes and CI runners](#elevated-processes-and-ci-runners)).
 2. The app serves the read-only automation API (`/_workbench/api/health`, `catalog`, `validate`, `scenarios/{id}`) on the first port. Health reports `hostingModel: "Hybrid"`, the app origin (`https://0.0.0.1/`) and the DevTools endpoint, and returns 503 until the WebView exists.
 3. The runner connects Playwright to the WebView (`ConnectOverCDP`) and loads each preview at `https://0.0.0.1/_workbench/preview/{id}`. Before each load it sets the viewport, device scale factor, color scheme, reduced motion, locale and time zone of the variant through a DevTools session.
 4. When the run ends, the CLI stops the app and deletes the temporary WebView data.
@@ -162,6 +162,19 @@ Differences from web hosts:
 | Baselines | `{os}`, `{os}-webassembly` | `{os}-hybrid` (for example `windows-hybrid`) |
 
 Android, iOS and Mac Catalyst run the same app for manual review. Automated runs need Windows: Playwright cannot drive Android WebView or WKWebView through a supported API.
+
+### Elevated processes and CI runners
+
+WebView2 Runtime 150 and later ignore the `WEBVIEW2_*` environment variables (and per-user policies) when the app runs elevated ([WebView2Feedback#5640](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5640)). GitHub-hosted Windows runners run everything as administrator, so the WebView opens no DevTools port there and runs fail with `Could not connect to the WebView ... ECONNREFUSED`. .NET MAUI does not pass `BlazorWebViewInitializing` environment options to the WebView (MAUI 10), so the app cannot pass the port through the WebView2 API either.
+
+Elevated apps still honor the machine-wide policy. Set it for the app's executable with a fixed port, and set `BLAZOR_WORKBENCH_CDP_PORT` to the same port so the CLI and the app use it:
+
+```powershell
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v Contoso.Workbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
+"BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV   # GitHub Actions; elsewhere set the variable for the test process
+```
+
+The port is fixed, so run one hybrid app at a time on such a machine. The repository's CI does this (`.github/workflows/ci.yml`). `WEBVIEW2_USER_DATA_FOLDER` is still applied.
 
 ## Visual baselines
 
@@ -193,7 +206,7 @@ See [ADR 0009](adr/0009-blazor-hybrid.md) for the design decisions.
 | Symptom | Fix |
 | --- | --- |
 | `The Blazor Hybrid host exposes no WebView DevTools endpoint` | Start the app with `workbench test` (it sets the variables), or set `BLAZOR_WORKBENCH_CDP_PORT` and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` yourself. Automated runs need Windows. |
-| `Could not connect to the WebView` | Another process already uses the port, or the WebView joined another instance's browser process. Close other instances of the app and use a private `WEBVIEW2_USER_DATA_FOLDER`. |
+| `Could not connect to the WebView` | If the run is elevated (for example on a GitHub-hosted runner), WebView2 ignored the `WEBVIEW2_*` variables: see [Elevated processes and CI runners](#elevated-processes-and-ci-runners). Otherwise another process already uses the port, or the WebView joined another instance's browser process. Close other instances of the app and use a private `WEBVIEW2_USER_DATA_FOLDER`. |
 | `dotnet run` asks for a target framework | Pass `--framework` or set `"framework"` in `workbench.json`. |
 | A component name clashes with a MAUI type (`Button`, `Size`, `Toolbar`) | Remove the MAUI global usings in the app project: `<Using Remove="Microsoft.Maui.Controls" />`. |
 | `Conflicting assets with the same target path '_framework/blazor.modules.json'` | A class library references `Microsoft.AspNetCore.Components.WebView.Maui` with its build assets. Reference it with `ExcludeAssets="build;buildTransitive"` in libraries; only the app needs them. |

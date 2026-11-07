@@ -40,6 +40,14 @@ jobs:
         if: runner.os == 'Windows'
         run: dotnet workload install maui-windows
 
+      - name: Open the WebView2 DevTools port of the hybrid sample
+        # The runner is elevated, and WebView2 Runtime 150+ ignores WEBVIEW2_* variables for elevated apps; the HKLM policy
+        # still applies. See docs/hybrid.md#elevated-processes-and-ci-runners.
+        if: runner.os == 'Windows'
+        run: |
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v SampleWorkbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
+          "BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV
+
       - name: Restore
         run: dotnet restore ${{ matrix.solution }} -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
 
@@ -94,6 +102,11 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet workload install maui-windows
+      - name: Open the WebView2 DevTools port of the hybrid sample
+        # See the build-and-test job and docs/hybrid.md#elevated-processes-and-ci-runners.
+        run: |
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v SampleWorkbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
+          "BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV
       - run: dotnet build BlazorWorkbench.slnx -c Debug -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
       - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
       - name: Server

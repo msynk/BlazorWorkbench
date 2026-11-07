@@ -14,6 +14,10 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ### Changed
 - CI builds and tests the MAUI projects on Windows (`maui-windows` workload) and runs the sample scenarios in the MAUI app. Linux jobs use `BlazorWorkbench.Web.slnf`. Packing and releases run on Windows with the `maui` workload.
+- The runner uses a preset `BLAZOR_WORKBENCH_CDP_PORT` for hybrid apps instead of picking a free port. Elevated processes (GitHub-hosted Windows runners) need it: WebView2 Runtime 150 and later ignore the `WEBVIEW2_*` variables there, so the port comes from the HKLM `AdditionalBrowserArguments` policy. CI sets that policy, and the connection error explains it when the runner is elevated.
+
+### Fixed
+- The `Actions_panel_logs_callbacks_from_the_preview` end-to-end test no longer misses the Actions tab when the call count is already shown ("Actions 1").
 
 ### Verified
 - 320 unit, bUnit and end-to-end tests pass on Windows 11 (.NET 10.0.403, Chromium 156, WebView2 157).

@@ -124,7 +124,11 @@ public sealed class WorkbenchHost : IAsyncDisposable
         // Blazor Hybrid apps: the automation endpoint and the WebView DevTools endpoint (both loopback only). WebView2
         // reads its variables at startup; a private user data folder keeps the WebView from joining the browser process
         // of another instance, which would ignore the debugging port. Web hosts ignore these variables.
-        var devToolsPort = GetFreePort();
+        // A preset BLAZOR_WORKBENCH_CDP_PORT is kept: elevated apps (CI runners run as administrator) ignore the WEBVIEW2_*
+        // variables with WebView2 Runtime 150 and later, so the port then comes from a machine-wide (HKLM) policy.
+        var devToolsPort = int.TryParse(Environment.GetEnvironmentVariable(DevToolsPortVariable), out var presetPort) && presetPort is > 0 and < 65536
+            ? presetPort
+            : GetFreePort();
         var webViewData = Path.Combine(Path.GetTempPath(), "BlazorWorkbench", "WebView2", $"{Environment.ProcessId}-{devToolsPort}");
         start.Environment[AutomationUrlVariable] = url.ToString().TrimEnd('/');
         start.Environment[DevToolsPortVariable] = devToolsPort.ToString(System.Globalization.CultureInfo.InvariantCulture);

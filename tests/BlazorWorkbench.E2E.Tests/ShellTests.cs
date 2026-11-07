@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
 
@@ -96,7 +97,8 @@ public class ShellTests(WorkbenchFixture fixture)
         var page = await OpenAsync("scenario/inputs-counter--default");
         await WaitReadyAsync(page);
         await Preview(page).GetByRole(AriaRole.Button, new() { Name = "Increase" }).ClickAsync();
-        await page.GetByRole(AriaRole.Tab, new() { Name = "Actions", Exact = true }).ClickAsync();
+        // The tab name gains the call count ("Actions 1") once the callback arrives; "Interactions" must not match.
+        await page.GetByRole(AriaRole.Tab, new() { NameRegex = new Regex(@"^Actions\b") }).ClickAsync();
         var entry = page.Locator(".wb-log li").Last; // oldest entry (the log lists newest first)
         await Expect(entry).ToContainTextAsync("OnChanged");
         await Expect(entry).ToContainTextAsync("#1");

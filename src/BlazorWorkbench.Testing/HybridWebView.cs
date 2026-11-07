@@ -43,7 +43,12 @@ internal sealed class HybridWebView
             }
             catch (PlaywrightException ex)
             {
-                throw new WorkbenchInfrastructureException($"Could not connect to the WebView at {endpoint}: {ex.Message.Split('\n')[0]}", ex);
+                var hint = OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess
+                    ? " This process runs elevated: WebView2 Runtime 150 and later ignore the WEBVIEW2_* variables for elevated apps. Set the " +
+                      @"HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments policy for the app's executable to " +
+                      $"--remote-debugging-port=<port> and set {WorkbenchHost.DevToolsPortVariable} to the same port (see docs/hybrid.md)."
+                    : "";
+                throw new WorkbenchInfrastructureException($"Could not connect to the WebView at {endpoint}: {ex.Message.Split('\n')[0]}.{hint}", ex);
             }
         }
     }
