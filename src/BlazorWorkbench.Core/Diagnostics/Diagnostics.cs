@@ -20,6 +20,9 @@ public enum DiagnosticSource
     Accessibility,
     Focus,
     Host,
+
+    /// <summary>Simulated platform services (device APIs such as share, launcher or file picker in Blazor Hybrid apps).</summary>
+    Platform,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<DiagnosticSeverity>))]

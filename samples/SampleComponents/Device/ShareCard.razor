@@ -1,0 +1,53 @@
+@namespace SampleComponents.Device
+@using Microsoft.Maui.ApplicationModel
+@using Microsoft.Maui.ApplicationModel.DataTransfer
+@inject IShare Share
+
+@* A card with a Share button that opens the platform share sheet (IShare from .NET MAUI Essentials). *@
+<article class="card share-card">
+    <h3 class="card-title">@Title</h3>
+    <p>@Text</p>
+    <div class="card-footer">
+        @if (_status is not null)
+        {
+            <span class="share-status" role="status">@_status</span>
+        }
+        <button type="button" class="btn btn-primary btn-medium" disabled="@_sharing" @onclick="ShareAsync">Share</button>
+    </div>
+</article>
+
+@code {
+    private bool _sharing;
+    private string? _status;
+
+    /// <summary>Card and share sheet title.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>Text to share.</summary>
+    [Parameter] public string Text { get; set; } = "";
+
+    /// <summary>Optional link to share.</summary>
+    [Parameter] public string? Url { get; set; }
+
+    /// <summary>Raised after the share sheet was shown.</summary>
+    [Parameter] public EventCallback OnShared { get; set; }
+
+    private async Task ShareAsync()
+    {
+        _sharing = true;
+        try
+        {
+            await Share.RequestAsync(new ShareTextRequest { Title = Title, Text = Text, Uri = Url });
+            _status = "Shared";
+            await OnShared.InvokeAsync();
+        }
+        catch (FeatureNotSupportedException)
+        {
+            _status = "Sharing is not available on this device.";
+        }
+        finally
+        {
+            _sharing = false;
+        }
+    }
+}

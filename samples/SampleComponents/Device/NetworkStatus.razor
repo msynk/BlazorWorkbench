@@ -1,0 +1,49 @@
+@namespace SampleComponents.Device
+@using Microsoft.Maui.Networking
+@implements IDisposable
+@inject IConnectivity Connectivity
+
+@* Shows whether the device is online, using IConnectivity from .NET MAUI Essentials. Updates when connectivity changes. *@
+<div class="network @(Online ? "network-online" : "network-offline")" role="status">
+    <span class="network-dot" aria-hidden="true"></span>
+    @if (Online)
+    {
+        <span>Online · @ProfileName</span>
+    }
+    else
+    {
+        <span class="network-message">@(Limited ? LimitedMessage : OfflineMessage)</span>
+        <button type="button" class="btn btn-secondary btn-small" @onclick="Retry">Retry</button>
+    }
+</div>
+
+@code {
+    /// <summary>Message shown without network access.</summary>
+    [Parameter] public string OfflineMessage { get; set; } = "You are offline. Changes will sync when you reconnect.";
+
+    /// <summary>Message shown when the network is constrained or local only.</summary>
+    [Parameter] public string LimitedMessage { get; set; } = "Limited connectivity. Some content may be out of date.";
+
+    /// <summary>Raised when the user asks to retry while offline.</summary>
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    private bool Online => Connectivity.NetworkAccess == NetworkAccess.Internet;
+    private bool Limited => Connectivity.NetworkAccess is NetworkAccess.ConstrainedInternet or NetworkAccess.Local;
+
+    private string ProfileName => Connectivity.ConnectionProfiles.FirstOrDefault() switch
+    {
+        ConnectionProfile.WiFi => "Wi-Fi",
+        ConnectionProfile.Cellular => "Cellular",
+        ConnectionProfile.Ethernet => "Ethernet",
+        ConnectionProfile.Bluetooth => "Bluetooth",
+        _ => "Connected",
+    };
+
+    protected override void OnInitialized() => Connectivity.ConnectivityChanged += OnConnectivityChanged;
+
+    private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private Task Retry() => OnRetry.InvokeAsync();
+
+    public void Dispose() => Connectivity.ConnectivityChanged -= OnConnectivityChanged;
+}

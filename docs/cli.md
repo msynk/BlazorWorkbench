@@ -14,6 +14,7 @@ workbench --help
 | `--url <url>` | Use a running host instead of starting one. |
 | `--no-build` | Start the host without building it. |
 | `-c, --configuration <name>` | Build configuration of the host (default `Debug`). Must match an earlier build when combined with `--no-build`. |
+| `--framework <tfm>` | Target framework of a multi-targeted host, such as a .NET MAUI app (`net10.0-windows10.0.19041.0`). Default: `framework` in `workbench.json`. |
 | `-v, --verbose` | Stream host output to stderr. |
 
 Progress goes to **stderr**. Machine-readable output (`--json`) goes to **stdout**. Colors are disabled when output is redirected or `NO_COLOR` is set.
@@ -83,6 +84,7 @@ Starts the MCP server on stdio; see [MCP](mcp.md).
 ```jsonc
 {
   "project": "samples/SampleWorkbench/SampleWorkbench.csproj",   // host project
+  "framework": null,                                             // e.g. "net10.0-windows10.0.19041.0" for a MAUI app
   "baselines": "samples/SampleWorkbench/baselines",              // commit this directory
   "output": "artifacts/workbench",                               // reports; do not commit
   "browser": "chromium",
@@ -96,5 +98,7 @@ Starts the MCP server on stdio; see [MCP](mcp.md).
   "accessibility": { "failOn": "serious", "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] }
 }
 ```
+
+A .NET MAUI Blazor Hybrid app works as a host project too: `test`, `a11y`, `list`, `validate`, `approve`, `publish`, `dev` and `mcp` start it like a web host (automated runs need Windows; see [Blazor Hybrid](hybrid.md)).
 
 Paths are relative to the file. The preview host reads the same file, so the **Visual** panel can find baselines and results. Comments and trailing commas are allowed.

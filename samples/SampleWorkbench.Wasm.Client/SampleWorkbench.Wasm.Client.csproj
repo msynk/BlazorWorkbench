@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.WebAssembly\BlazorWorkbench.WebAssembly.csproj" />
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Maui.Essentials\BlazorWorkbench.Maui.Essentials.csproj" />
     <ProjectReference Include="..\SampleComponents\SampleComponents.csproj" />
   </ItemGroup>
   <ItemGroup>

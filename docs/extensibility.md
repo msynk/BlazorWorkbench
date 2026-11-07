@@ -14,7 +14,8 @@
 | Documentation | `set.Documentation(markdown)`, XML docs, `CatalogPublisher`, `CatalogDto` | The published catalog is generated from `CatalogDto`, so a custom generator can use the same contract. |
 | AI and agents | `workbench mcp` | See [MCP](mcp.md). |
 | Telemetry | `WorkbenchTelemetry` (`ActivitySource` and `Meter` named `BlazorWorkbench`) | Standard OpenTelemetry sources; see [testing](testing.md#tracing-with-opentelemetry). |
-| Hosting models | `WorkbenchHostOptions.Interactivity`, `BlazorWorkbench.WebAssembly` | See [WebAssembly](webassembly.md). |
+| Hosting models | `WorkbenchHostOptions.Interactivity`, `BlazorWorkbench.WebAssembly`, `BlazorWorkbench.Maui` | See [WebAssembly](webassembly.md) and [Blazor Hybrid](hybrid.md). Other BlazorWebView hosts (WPF, Windows Forms) can use `AddBlazorWorkbenchHybrid`, `WorkbenchHybridFileProvider` and `HybridAutomation` from `BlazorWorkbench.Hybrid`. |
+| Platform services | `BlazorWorkbench.Maui.Essentials` fakes (`FakeConnectivity`, `FakeGeolocation`, ...), `.Device(...)`, `AddSimulatedDevice()` | Use the fakes directly in tests, or write your own simulation with `.Service<T>(ctx => ...)` and report calls through `ctx.Diagnostics` (source `Platform`). |
 | Project template | `dotnet new blazorworkbench` | Package `BlazorWorkbench.Templates`. |
 
 ## Example: forwarding diagnostics to logging

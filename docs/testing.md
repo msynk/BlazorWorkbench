@@ -23,6 +23,8 @@ workbench test --url http://localhost:5000       # use a running host instead of
 
 By default the CLI builds and starts the host project from `workbench.json` on a free loopback port, waits for `/_workbench/api/health`, runs the scenarios in headless Chromium, and then stops the host.
 
+When the host is a .NET MAUI Blazor Hybrid app, the runner drives the app's own WebView2 instead of launching a browser, one scenario at a time. See [Blazor Hybrid](hybrid.md#automated-tests-windows).
+
 ### Outputs
 
 The output directory (default `artifacts/workbench`) contains:

@@ -5,7 +5,8 @@
 | Area | Supported | Notes |
 | --- | --- | --- |
 | Target framework | .NET 10 (`net10.0`) | The SDK pins to 10.0.x through `global.json` (`rollForward: latestMajor`, so later stable SDKs work). |
-| Preview hosting | **Blazor Web App, Interactive Server** (default) and **Interactive WebAssembly** | `BlazorWorkbench.Hosting`, plus `BlazorWorkbench.WebAssembly` for WebAssembly clients ([guide](webassembly.md)). Prerendering is disabled for Workbench pages. |
+| Preview hosting | **Blazor Web App, Interactive Server** (default), **Interactive WebAssembly** and **.NET MAUI Blazor Hybrid** | `BlazorWorkbench.Hosting`, plus `BlazorWorkbench.WebAssembly` for WebAssembly clients ([guide](webassembly.md)) and `BlazorWorkbench.Maui` for MAUI apps ([guide](hybrid.md)). Prerendering is disabled for Workbench pages. |
+| Blazor Hybrid platforms | Windows (WebView2): previews and automated runs. Android, iOS, Mac Catalyst: previews | `workbench test` drives WebView2 through the DevTools Protocol; other platform WebViews have no supported automation API. |
 | Components under test | Any Razor component library usable from Interactive Server | Includes generic, templated and `EditContext`-dependent components, components with constructor injection, and `AuthorizeView`. |
 | Browsers for automation | Chromium (default), Firefox, WebKit through Playwright | Visual baselines are captured with Chromium in CI and are specific to browser and platform. |
 | Workbench UI browsers | Current Chromium, Firefox and Safari | |
@@ -16,7 +17,9 @@
 | Scenario | Status | Workaround |
 | --- | --- | --- |
 | Standalone WebAssembly apps without an ASP.NET Core host | Not supported. The CLI, catalog API, axe-core script and baselines are served by the host. | Use the two-project WebAssembly host ([guide](webassembly.md)). |
-| .NET MAUI Blazor Hybrid | Not supported. | Preview the shared Razor library in a web host. Platform features need fakes. |
+| Automated runs of Blazor Hybrid apps on Android, iOS or Mac Catalyst | Not supported. Playwright cannot drive Android WebView or WKWebView. | Run the MAUI app there for manual review; automate on Windows, or run the same scenarios with `.Device(...)` in a web host. |
+| The full Workbench UI (explorer, panels) inside a MAUI app | Not supported. The shell uses iframes, which a BlazorWebView cannot host. | The MAUI app has a native scenario picker and one preview at a time; use a web host for the explorer. |
+| WPF and Windows Forms BlazorWebView | No ready-made integration. | Build one with `BlazorWorkbench.Hybrid` (see [extensibility](extensibility.md)). |
 | Static SSR-only components and `@page` routes | Pages are excluded by default (`IncludeRoutableComponents` enables them). Previews are always interactive. | Extract presentational components. |
 | Per-scenario `TimeProvider` override through `Services` | Rejected (`WB1022`). | Use `.Clock(...)`. |
 | Overriding services consumed by host singletons | Rejected by the container at startup. | Override the consumer. |
@@ -33,6 +36,7 @@
 - **Scenario services** become scoped in the host container (see [environment](environment.md#services)).
 - **Package size**: the CLI tool contains the Playwright driver (about 40 MB).
 - **WebAssembly clients** must not be trimmed, and each preview boots the runtime (slower readiness).
+- **Blazor Hybrid runs** use the app's single WebView page: scenarios run one at a time, without Playwright traces, and hybrid baselines depend on the installed WebView2 version.
 - **Change impact** (`--changed-since`) maps files through PDB source paths. Shared code and global assets select every scenario.
 
 ## Versioning policy

@@ -97,18 +97,14 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
             var cultureName = Activation.Culture ?? env.Culture;
             Culture = cultureName is { Length: > 0 } ? CultureInfo.GetCultureInfo(cultureName) : null;
 
-            // WebAssembly runs one preview per document on a single thread: the session and culture are process-wide.
-            if (OperatingSystem.IsBrowser())
+            // WebAssembly and Blazor Hybrid run one preview per document: the session and culture are process-wide.
+            if (OperatingSystem.IsBrowser() || ScenarioSessionContext.UseProcessWideSession)
             {
                 ScenarioSessionContext.Browser = this;
-                if (Culture is not null)
-                {
-                    CultureInfo.DefaultThreadCurrentCulture = CultureInfo.DefaultThreadCurrentUICulture = Culture;
-                    CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = Culture;
-                }
+                ScenarioSessionContext.ApplyProcessCulture(Culture);
             }
 
-            Context = new ScenarioContext(scenario, Time, Gates, Activity) { Services = services };
+            Context = new ScenarioContext(scenario, Time, Gates, Activity) { Services = services, Diagnostics = Diagnostics };
 
             foreach (var rule in env.Http?.Rules ?? [])
             {
@@ -283,7 +279,11 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     }
 
     // The cancellation source is intentionally not disposed: late requests may still link to its (canceled) token.
-    private void EndDispose() => Http.Dispose();
+    private void EndDispose()
+    {
+        Http.Dispose();
+        ScenarioSessionContext.ClearBrowser(this);
+    }
 
     private object Create(ServiceDescriptor descriptor, IServiceProvider services)
     {
@@ -364,8 +364,40 @@ public static class ScenarioSessionContext
         set => s_current.Value = value;
     }
 
-    /// <summary>The single active session of a WebAssembly preview document.</summary>
+    /// <summary>The single active session of a WebAssembly or Blazor Hybrid preview document.</summary>
     public static ScenarioSession? Browser { get; internal set; }
+
+    /// <summary>
+    /// Set by hosts that render one preview document at a time in-process (Blazor Hybrid). The active session and culture
+    /// then apply process-wide instead of per circuit activity.
+    /// </summary>
+    public static bool UseProcessWideSession { get; set; }
+
+    private static readonly Lock s_cultureLock = new();
+    private static (CultureInfo? Culture, CultureInfo? UICulture, CultureInfo Current, CultureInfo CurrentUI)? s_originalCulture;
+
+    /// <summary>
+    /// Applies the scenario culture process-wide, or restores the culture the process started with when the scenario
+    /// declares none (a hybrid app keeps running between previews).
+    /// </summary>
+    internal static void ApplyProcessCulture(CultureInfo? culture)
+    {
+        lock (s_cultureLock)
+        {
+            s_originalCulture ??= (CultureInfo.DefaultThreadCurrentCulture, CultureInfo.DefaultThreadCurrentUICulture, CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture);
+            var original = s_originalCulture.Value;
+            CultureInfo.DefaultThreadCurrentCulture = culture ?? original.Culture;
+            CultureInfo.DefaultThreadCurrentUICulture = culture ?? original.UICulture;
+            CultureInfo.CurrentCulture = culture ?? original.Current;
+            CultureInfo.CurrentUICulture = culture ?? original.CurrentUI;
+        }
+    }
+
+    internal static void ClearBrowser(ScenarioSession session)
+    {
+        if (ReferenceEquals(Browser, session))
+            Browser = null;
+    }
 }
 
 /// <summary>Singleton <see cref="TimeProvider"/> that uses the scenario clock of the current activity, otherwise the host's provider.</summary>

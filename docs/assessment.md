@@ -56,7 +56,7 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | Blazor Web App, Interactive Server | Primary: one circuit per preview gives natural session isolation, and server-side diagnostics are simple. **Implemented.** |
 | Interactive WebAssembly | Implemented: `BlazorWorkbench.WebAssembly` plus `Interactivity = WebAssembly`. All sample scenarios pass on both models; baselines are stored per hosting model ([ADR 0008](adr/0008-webassembly-hosting.md)). |
 | Interactive Auto | Not offered as a Workbench mode: previews must be deterministic, and Auto switches models between loads. Use Server or WebAssembly explicitly. |
-| .NET MAUI Blazor Hybrid | Previews of platform features need device fakes; components are previewed in a web host. **Not supported.** |
+| .NET MAUI Blazor Hybrid | Implemented: `BlazorWorkbench.Maui` runs scenarios in the platform WebView with a native picker; `workbench test` drives WebView2 on Windows over the DevTools Protocol; `BlazorWorkbench.Maui.Essentials` simulates device services in every hosting model ([ADR 0009](adr/0009-blazor-hybrid.md)). |
 
 ## Phase status
 
@@ -77,12 +77,13 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 
 | Measurement | Value |
 | --- | --- |
-| Sample catalog (17 components, 63 scenarios) | built at startup in well under 1 s |
+| Sample catalog (21 components, 76 scenarios) | built at startup in well under 1 s |
 | Synthetic catalog, 1,000 components × 10 parameters | build ≈ 0.75 s, filter ≈ 1 ms, catalog JSON ≈ 3 MB serialized in ≈ 0.25 s |
 | Explorer with 1,000 components (bUnit) | 25 collapsed groups; children render only when opened |
-| `workbench test --a11y --visual`, Interactive Server (63 scenarios, 4 workers) | ≈ 18 s after host start |
-| Same, Interactive WebAssembly | ≈ 65 s (each preview boots the runtime) |
-| Automated tests | Core 96 · Components 101 · Testing 33 · CLI 10 · E2E 31 (incl. WebAssembly), all passing |
+| `workbench test --a11y --visual`, Interactive Server (76 scenarios, 4 workers) | ≈ 18 s after host start |
+| Same, Interactive WebAssembly | ≈ 60 s (each preview boots the runtime) |
+| Same, .NET MAUI Blazor Hybrid (WebView2 157, one page) | ≈ 41 s after the app starts |
+| Automated tests | Core 96 · Components 114 · Hybrid 27 · Testing 39 · CLI 10 · E2E 34 (incl. WebAssembly and MAUI), all passing |
 | CI (GitHub Actions, first push) | Build/test on Ubuntu and Windows, Windows visual job and pack: all green |
 
 These numbers come from one workstation, and results on other hardware differ. Each report records the environment of its run.
@@ -94,6 +95,7 @@ Workbench found real defects in the sample library, which shows it works as inte
 - `Counter` and `SortableList` discarded user state when the parent re-rendered (render check and interaction tests).
 - `ProductList` had an accessible name that did not contain the visible text (axe `label-content-name-mismatch`, WCAG 2.5.3).
 - Server and WebAssembly render three scenarios differently (exception message resources, ICU data). This led to baselines per hosting model.
+- Blazor Hybrid: a BlazorWebView cannot host the iframe-based shell, MAUI did not apply WebView2 options from `BlazorWebViewInitializing`, and MAUI global usings clash with common component names (`Button`, `Size`). These led to the native picker, environment-variable activation of the DevTools port, and the documented `<Using Remove>` fix.
 - Readiness race: a fake response was counted as done before the component had consumed it. Fixed by tracking the response body.
 - Packaging: hosts without `.razor` files lacked `blazor.web.js` ([ADR 0004](adr/0004-blazor-framework-assets.md)), and the WebAssembly server package had vulnerable 10.0.x versions (pinned to 10.0.14).
 
@@ -103,6 +105,7 @@ Workbench found real defects in the sample library, which shows it works as inte
 | --- | --- | --- |
 | Linux visual baselines | This machine has no network inside Docker or WSL, so the CI container image cannot be built here. | The `visual-linux` CI job runs in bootstrap mode until baselines exist. Approve the first run's artifact (`workbench approve -o <artifact>`) and commit. |
 | Package publishing | Needs a version tag and the `NUGET_API_KEY` secret (and optionally a signing certificate). | Push tag `v0.1.0` after review. The release workflow has not run yet. |
-| .NET MAUI Blazor Hybrid previews | Needs device and platform fakes and a native host; out of scope for a web-based workbench. | Preview shared Razor libraries in a web host. |
+| Automated Blazor Hybrid runs on Android, iOS and Mac Catalyst | Playwright has no supported API for Android WebView or WKWebView. | Manual review in the MAUI app; automated runs on Windows. |
+| Gating hybrid visual checks in CI | WebView2 updates itself, so `windows-hybrid` baselines can drift on hosted runners. | Informational CI step; pin a Fixed Version WebView2 runtime to gate. |
 | Clipboard and drag between frames | Browser permission models differ across engines. | Add to the DSL when Playwright support is uniform. |
 | Screen reader verification | No automation can replace it. | Manual checklist in [accessibility](accessibility.md). |

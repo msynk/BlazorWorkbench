@@ -22,9 +22,16 @@ public sealed class BaselineStore(string directory, string? platform = null)
 
     public static string CurrentPlatform => OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsMacOS() ? "macos" : "linux";
 
-    /// <summary>Platform folder for a hosting model: rendering can differ between Server and WebAssembly (globalization data, exception messages).</summary>
-    public static string PlatformFor(string? hostingModel) =>
-        string.Equals(hostingModel, "WebAssembly", StringComparison.OrdinalIgnoreCase) ? CurrentPlatform + "-webassembly" : CurrentPlatform;
+    /// <summary>
+    /// Platform folder for a hosting model: rendering can differ between Server and WebAssembly (globalization data,
+    /// exception messages) and in Blazor Hybrid apps (the platform WebView renders text differently from Playwright's Chromium).
+    /// </summary>
+    public static string PlatformFor(string? hostingModel) => hostingModel?.ToLowerInvariant() switch
+    {
+        "webassembly" => CurrentPlatform + "-webassembly",
+        "hybrid" => CurrentPlatform + "-hybrid",
+        _ => CurrentPlatform,
+    };
 
     /// <summary>Path relative to <see cref="Directory"/> (includes the platform folder).</summary>
     public string RelativePath(string scenarioId, string variant) => $"{Platform}/{Sanitize(scenarioId)}/{Sanitize(variant)}.png";

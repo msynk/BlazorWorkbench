@@ -1,0 +1,28 @@
+@page "/_workbench/scenarios"
+@inject WorkbenchCatalogAccessor Catalogs
+@inject NavigationManager Navigation
+
+@* A minimal scenario list for hosts without the Workbench shell (for example Blazor Hybrid apps).
+   Links reload the document so every preview starts with a fresh scenario session. *@
+<PageTitle>Scenarios · @Catalogs.Options.Title</PageTitle>
+
+<main class="wb-index" style="font: 14px/1.5 system-ui, sans-serif; padding: 1rem; max-width: 760px">
+    <h1 style="font-size: 1.25rem">@Catalogs.Options.Title</h1>
+    <p style="color: GrayText">@Catalogs.Catalog.Components.Count components · @Catalogs.Catalog.Scenarios.Count scenarios</p>
+    @foreach (var component in Catalogs.Catalog.Components)
+    {
+        <section>
+            <h2 style="font-size: 1rem; margin: 1rem 0 .25rem">@component.Title</h2>
+            <ul style="margin: 0; padding-inline-start: 1.25rem">
+                @foreach (var scenario in component.Scenarios)
+                {
+                    <li><a href="@($"_workbench/preview/{scenario.Id}")" @onclick="() => Open(scenario.Id)" @onclick:preventDefault>@scenario.Name</a></li>
+                }
+            </ul>
+        </section>
+    }
+</main>
+
+@code {
+    private void Open(string id) => Navigation.NavigateTo($"_workbench/preview/{Uri.EscapeDataString(id)}", forceLoad: true);
+}

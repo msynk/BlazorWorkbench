@@ -22,6 +22,8 @@ baselines/
   manifest.json
   windows-webassembly/
     ...
+  windows-hybrid/                    # .NET MAUI app (WebView2)
+    ...
   windows/
     inputs-button--primary/
       laptop-light.png
@@ -30,7 +32,7 @@ baselines/
     ...
 ```
 
-Text rendering differs between operating systems (fonts, hinting, antialiasing), so each platform has its own baselines. Rendering can also differ between hosting models (WebAssembly ships reduced ICU data and can shorten exception messages), so WebAssembly hosts use `{os}-webassembly` folders. A run compares only against the baselines of the platform it runs on. Approving a report from another platform, for example a Linux CI artifact approved on Windows, writes to that platform's folder.
+Text rendering differs between operating systems (fonts, hinting, antialiasing), so each platform has its own baselines. Rendering can also differ between hosting models (WebAssembly ships reduced ICU data and can shorten exception messages), so WebAssembly hosts use `{os}-webassembly` folders. .NET MAUI Blazor Hybrid apps render in the platform WebView and use `{os}-hybrid` folders; WebView2 updates itself, so read [hybrid baselines](hybrid.md#visual-baselines) before you gate on them. A run compares only against the baselines of the platform it runs on. Approving a report from another platform, for example a Linux CI artifact approved on Windows, writes to that platform's folder.
 
 ## Variants
 

@@ -1,0 +1,71 @@
+@namespace SampleComponents.Device
+@using Microsoft.Maui.ApplicationModel
+@using Microsoft.Maui.Devices.Sensors
+@implements IDisposable
+@inject IGeolocation Geolocation
+
+@* Shows the device location (IGeolocation from .NET MAUI Essentials) and explains permission and settings problems. *@
+<section class="card location-card" aria-label="@Title">
+    <h3 class="card-title">@Title</h3>
+    @switch (_state)
+    {
+        case State.Loading:
+            <p><span class="spinner" aria-hidden="true"></span> Finding your location…</p>
+            break;
+        case State.Found:
+            <p class="location-coords">@_location!.Latitude.ToString("N4", CultureInfo.CurrentCulture), @_location.Longitude.ToString("N4", CultureInfo.CurrentCulture)</p>
+            @if (_location.Accuracy is { } accuracy)
+            {
+                <p class="field-help">Accurate to about @accuracy.ToString("N0", CultureInfo.CurrentCulture) m</p>
+            }
+            break;
+        case State.Denied:
+            <p class="location-problem" role="alert">Allow location access in Settings to see places near you.</p>
+            break;
+        case State.Disabled:
+            <p class="location-problem" role="alert">Turn on location services to see places near you.</p>
+            break;
+        default:
+            <p class="location-problem" role="alert">This device cannot determine its location.</p>
+            break;
+    }
+</section>
+
+@code {
+    private enum State { Loading, Found, Denied, Disabled, Unsupported }
+
+    private readonly CancellationTokenSource _cancel = new();
+    private State _state;
+    private Location? _location;
+
+    /// <summary>Card title.</summary>
+    [Parameter] public string Title { get; set; } = "Your location";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _location = await Geolocation.GetLocationAsync(new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(10)), _cancel.Token)
+                        ?? await Geolocation.GetLastKnownLocationAsync();
+            _state = _location is null ? State.Unsupported : State.Found;
+        }
+        catch (PermissionException)
+        {
+            _state = State.Denied;
+        }
+        catch (FeatureNotEnabledException)
+        {
+            _state = State.Disabled;
+        }
+        catch (FeatureNotSupportedException)
+        {
+            _state = State.Unsupported;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cancel.Cancel();
+        _cancel.Dispose();
+    }
+}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Maui.Essentials</RootNamespace>
+    <Description>Simulated .NET MAUI Essentials services for Blazor Workbench scenarios: network, device, location, battery, share, launcher, clipboard, preferences, secure storage, app info, vibration and haptics. Works in MAUI Blazor Hybrid hosts and in Interactive Server and WebAssembly hosts, so components that use device APIs can be previewed and tested anywhere.</Description>
+    <PackageTags>$(PackageTags);maui;essentials;blazor-hybrid;fakes</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Essentials" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Core\BlazorWorkbench.Core.csproj" />
+  </ItemGroup>
+</Project>

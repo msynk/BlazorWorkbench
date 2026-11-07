@@ -33,6 +33,11 @@ public sealed class CliContext
     public bool Verbose { get; }
     public string Configuration { get; init; } = "Debug";
 
+    /// <summary>Target framework from <c>--framework</c>; overrides <c>framework</c> in workbench.json.</summary>
+    public string? FrameworkOverride { get; init; }
+
+    public string? Framework => FrameworkOverride ?? Config.Framework;
+
     public string OutputDirectory(string? overridePath) => overridePath is not null ? Path.GetFullPath(overridePath) : Config.Resolve(Config.Output);
     public string BaselineDirectory(string? overridePath) => overridePath is not null ? Path.GetFullPath(overridePath) : Config.Resolve(Config.Baselines);
 
@@ -49,7 +54,7 @@ public sealed class CliContext
 
         Console.Error.WriteLine($"Starting {Path.GetFileName(Project)}{(NoBuild ? "" : " (building)")}…");
         return await WorkbenchHost.StartAsync(Project, NoBuild, Configuration, onOutput: Verbose ? line => Console.Error.WriteLine($"  host: {line}") : null,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken, framework: Framework).ConfigureAwait(false);
     }
 
     private static string? FindProject()

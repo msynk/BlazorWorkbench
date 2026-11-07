@@ -52,22 +52,40 @@ public static class CatalogPublisher
         {
             Directory.CreateDirectory(Path.Combine(output, "screenshots"));
             using var playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-            await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true }).ConfigureAwait(false);
+            // Blazor Hybrid hosts render in the app's own WebView (one page, so one screenshot at a time).
+            var hybrid = host.Info.IsHybrid;
+            await using var browser = hybrid
+                ? await HybridWebView.ConnectAsync(playwright, host.Info, cancellationToken).ConfigureAwait(false)
+                : await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true }).ConfigureAwait(false);
+            var webView = hybrid ? await HybridWebView.OpenAsync(browser, host.PreviewBaseAddress, cancellationToken).ConfigureAwait(false) : null;
             var viewport = catalog.Viewports.FirstOrDefault(v => v.Name == options.Viewport) ?? catalog.Viewports[0];
-            using var gate = new SemaphoreSlim(Math.Max(1, options.Workers));
+            var theme = catalog.Themes[0];
+            using var gate = new SemaphoreSlim(webView is null ? Math.Max(1, options.Workers) : 1);
             var work = components.SelectMany(c => c.Scenarios.Where(s => s.SkipReason is null)).Select(async scenario =>
             {
                 await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                IBrowserContext? context = null;
+                var acquired = false;
                 try
                 {
-                    await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+                    IPage page;
+                    if (webView is not null)
                     {
-                        ViewportSize = new ViewportSize { Width = viewport.Width, Height = viewport.Height },
-                        ReducedMotion = ReducedMotion.Reduce,
-                        TimezoneId = "UTC",
-                        Locale = scenario.Environment.Culture ?? "en-US",
-                    }).ConfigureAwait(false);
-                    var page = await context.NewPageAsync().ConfigureAwait(false);
+                        page = await webView.AcquireAsync(viewport, theme, scenario.Environment.Culture ?? "en-US").ConfigureAwait(false);
+                        acquired = true;
+                    }
+                    else
+                    {
+                        context = await browser.NewContextAsync(new BrowserNewContextOptions
+                        {
+                            ViewportSize = new ViewportSize { Width = viewport.Width, Height = viewport.Height },
+                            ReducedMotion = ReducedMotion.Reduce,
+                            TimezoneId = "UTC",
+                            Locale = scenario.Environment.Culture ?? "en-US",
+                        }).ConfigureAwait(false);
+                        page = await context.NewPageAsync().ConfigureAwait(false);
+                    }
+
                     await page.GotoAsync(host.PreviewUrl(scenario.Id).ToString()).ConfigureAwait(false);
                     await page.WaitForFunctionAsync("() => document.documentElement.getAttribute('data-workbench-state') === 'ready'", null,
                         new PageWaitForFunctionOptions { Timeout = 20_000 }).ConfigureAwait(false);
@@ -79,12 +97,16 @@ public static class CatalogPublisher
                     lock (screenshots)
                         screenshots.Add(scenario.Id);
                 }
-                catch (Exception ex) when (ex is PlaywrightException or TimeoutException)
+                catch (Exception ex) when (ex is PlaywrightException or TimeoutException or WorkbenchInfrastructureException)
                 {
                     log?.Invoke($"warning: screenshot of {scenario.Id} failed: {ex.Message.Split('\n')[0]}");
                 }
                 finally
                 {
+                    if (context is not null)
+                        await context.DisposeAsync().ConfigureAwait(false);
+                    else if (acquired)
+                        webView!.Release();
                     gate.Release();
                 }
             });

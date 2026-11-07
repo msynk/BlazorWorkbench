@@ -1,6 +1,6 @@
 # Architecture
 
-Blazor Workbench is a modular monolith: six packages with one-way dependencies and no services that must run elsewhere.
+Blazor Workbench is a modular monolith: packages with one-way dependencies and no services that must run elsewhere.
 
 ```
                  ┌───────────────────────────────┐
@@ -20,9 +20,13 @@ Blazor Workbench is a modular monolith: six packages with one-way dependencies a
    ┌──────────────────────┐  ┌───────────────────────────┐
    │ .WebAssembly (client)│  │ .Templates (dotnet new)   │
    └──────────────────────┘  └───────────────────────────┘
+   ┌──────────────────────┐  ┌───────────────────────────┐  ┌──────────────────────────────┐
+   │ .Hybrid (BlazorWebView│─▶│ .Maui (MAUI app, picker,  │  │ .Maui.Essentials (simulated  │
+   │ host page, automation)│  │ WebView, Essentials regs) │  │ device services, .Device())  │
+   └──────────────────────┘  └───────────────────────────┘  └──────────────────────────────┘
 ```
 
-The CLI never loads user assemblies. It talks to a running host over HTTP and drives the preview pages with Playwright. The host is the single source of truth for the catalog. This keeps the CLI independent of the user's dependency graph, and each hosting model only has to implement the preview contract.
+The CLI never loads user assemblies. It talks to a running host over HTTP and drives the preview pages with Playwright. The host is the single source of truth for the catalog. This keeps the CLI independent of the user's dependency graph, and each hosting model only has to implement the preview contract. A .NET MAUI Workbench app implements the same contract: a loopback automation endpoint serves the catalog, and the runner drives the app's WebView2 through the DevTools Protocol ([Blazor Hybrid](hybrid.md)).
 
 ## Runtime flow
 
@@ -60,6 +64,7 @@ The CLI never loads user assemblies. It talks to a running host over HTTP and dr
 | Serializable interaction DSL, Playwright authoritative | One definition serves the UI, the CLI and MCP; mature automation. | [0006](adr/0006-interaction-dsl.md) |
 | Platform-specific baselines | Text rendering differs between operating systems. | [0007](adr/0007-platform-baselines.md) |
 | WebAssembly hosting, baselines per hosting model | Components that need the browser runtime; the models render differently. | [0008](adr/0008-webassembly-hosting.md) |
+| .NET MAUI Blazor Hybrid host, WebView2 driven over CDP, simulated Essentials | Components must be checked in the platform WebView with platform services; Playwright cannot launch a WebView. | [0009](adr/0009-blazor-hybrid.md) |
 
 ## Isolation model
 

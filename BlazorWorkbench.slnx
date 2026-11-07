@@ -7,17 +7,22 @@
     <Project Path="src/BlazorWorkbench.Cli/BlazorWorkbench.Cli.csproj" />
     <Project Path="src/BlazorWorkbench.Testing.Bunit/BlazorWorkbench.Testing.Bunit.csproj" />
     <Project Path="src/BlazorWorkbench.WebAssembly/BlazorWorkbench.WebAssembly.csproj" />
+    <Project Path="src/BlazorWorkbench.Hybrid/BlazorWorkbench.Hybrid.csproj" />
+    <Project Path="src/BlazorWorkbench.Maui.Essentials/BlazorWorkbench.Maui.Essentials.csproj" />
+    <Project Path="src/BlazorWorkbench.Maui/BlazorWorkbench.Maui.csproj" />
     <Project Path="src/BlazorWorkbench.Templates/BlazorWorkbench.Templates.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SampleComponents/SampleComponents.csproj" />
     <Project Path="samples/SampleWorkbench/SampleWorkbench.csproj" />
     <Project Path="samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj" />
+    <Project Path="samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj" />
     <Project Path="samples/SampleWorkbench.Wasm.Client/SampleWorkbench.Wasm.Client.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlazorWorkbench.Core.Tests/BlazorWorkbench.Core.Tests.csproj" />
     <Project Path="tests/BlazorWorkbench.Components.Tests/BlazorWorkbench.Components.Tests.csproj" />
+    <Project Path="tests/BlazorWorkbench.Hybrid.Tests/BlazorWorkbench.Hybrid.Tests.csproj" />
     <Project Path="tests/BlazorWorkbench.Testing.Tests/BlazorWorkbench.Testing.Tests.csproj" />
     <Project Path="tests/BlazorWorkbench.Cli.Tests/BlazorWorkbench.Cli.Tests.csproj" />
     <Project Path="tests/BlazorWorkbench.E2E.Tests/BlazorWorkbench.E2E.Tests.csproj" />

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Multi-targeted: clear the single target framework from Directory.Build.props. -->
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!-- Building on Linux: only Android is available. -->
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('linux'))">net10.0-android</TargetFrameworks>
+    <!-- Override for faster local builds, for example -p:WorkbenchMauiTargets=net10.0-windows10.0.19041.0 -->
+    <TargetFrameworks Condition="'$(WorkbenchMauiTargets)' != ''">$(WorkbenchMauiTargets)</TargetFrameworks>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <RootNamespace>BlazorWorkbench.Maui</RootNamespace>
+    <Description>Blazor Workbench for .NET MAUI Blazor Hybrid: previews scenarios inside a native BlazorWebView with a scenario picker, registers MAUI Essentials services so scenarios can replace them, and lets 'workbench test' drive the WebView on Windows.</Description>
+    <PackageTags>$(PackageTags);maui;blazor-hybrid;blazorwebview</PackageTags>
+
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <!-- Only the API is needed here. The package's build targets add Blazor framework static web assets, which belong to
+         the app (the app references the package itself); importing them here would duplicate those assets. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" ExcludeAssets="build;buildTransitive" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Hybrid\BlazorWorkbench.Hybrid.csproj" />
+  </ItemGroup>
+</Project>

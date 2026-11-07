@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>BlazorWorkbench.Hybrid</RootNamespace>
+    <Description>Blazor Workbench for Blazor Hybrid (BlazorWebView) hosts: catalog and preview runtime, a generated preview host page, the axe-core script, and a loopback automation endpoint for the CLI runner. Platform-neutral; see BlazorWorkbench.Maui for .NET MAUI.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Provides the unmodified axe-core script (MPL-2.0) served to previews for in-app accessibility scans. -->
+    <PackageReference Include="Deque.AxeCore.Commons" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlazorWorkbench.Components\BlazorWorkbench.Components.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Maui" />
+    <InternalsVisibleTo Include="BlazorWorkbench.Components.Tests" />
+  </ItemGroup>
+</Project>

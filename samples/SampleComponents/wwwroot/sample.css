@@ -94,4 +94,15 @@ body { background: var(--c-bg); color: var(--c-text); }
 
 .flaky { border: 1px dashed var(--c-border); padding: .75rem; border-radius: var(--radius); max-width: 360px; }
 
+.network { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .75rem; border: 1px solid var(--c-border); border-radius: 999px; font-size: 14px; }
+.network-dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--c-success); }
+.network-offline { border-color: var(--c-warning); }
+.network-offline .network-dot { background: var(--c-warning); }
+.share-status { margin-inline-end: auto; color: var(--c-muted); font-size: 14px; align-self: center; }
+.location-coords { font-size: 18px; font-variant-numeric: tabular-nums; margin: .25rem 0; }
+.location-problem { color: var(--c-warning); }
+.device-summary dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem .9rem; margin: 0; }
+.device-summary dt { font-weight: 600; }
+.device-summary dd { margin: 0; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }

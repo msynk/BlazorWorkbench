@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using BlazorWorkbench.Contracts;
 
 namespace BlazorWorkbench.Testing;
@@ -10,25 +11,56 @@ namespace BlazorWorkbench.Testing;
 /// <summary>Thrown for infrastructure failures (host did not start, browser missing). Maps to exit code 3.</summary>
 public sealed class WorkbenchInfrastructureException(string message, Exception? inner = null) : Exception(message, inner);
 
+/// <summary>What a host reports from <c>/_workbench/api/health</c>.</summary>
+/// <param name="HostingModel">Server, WebAssembly or Hybrid.</param>
+/// <param name="Version">Workbench version of the host.</param>
+/// <param name="AppOrigin">Origin of previews inside a Blazor Hybrid app's WebView (null for web hosts).</param>
+/// <param name="DevToolsEndpoint">Chrome DevTools Protocol endpoint of a Blazor Hybrid app's WebView (null for web hosts).</param>
+public sealed record WorkbenchHostInfo(string HostingModel, string? Version, Uri? AppOrigin, Uri? DevToolsEndpoint)
+{
+    public bool IsHybrid => string.Equals(HostingModel, "Hybrid", StringComparison.OrdinalIgnoreCase);
+
+    internal static WorkbenchHostInfo Parse(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        string? Text(string name) => root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        Uri? Url(string name) => Uri.TryCreate(Text(name), UriKind.Absolute, out var url) ? url : null;
+        return new WorkbenchHostInfo(Text("hostingModel") ?? "Server", Text("version"), Url("appOrigin"), Url("devToolsEndpoint"));
+    }
+}
+
 /// <summary>
 /// A running Workbench host: either started from a project (<c>dotnet run</c>) on a free loopback port, or an existing
-/// URL. Disposing stops a started process tree.
+/// URL. Disposing stops a started process tree. Blazor Hybrid hosts (.NET MAUI apps) are started the same way; the
+/// runner then drives their WebView through its DevTools endpoint.
 /// </summary>
 public sealed class WorkbenchHost : IAsyncDisposable
 {
+    /// <summary>Environment variable with the automation URL of a Blazor Hybrid host (read by BlazorWorkbench.Hybrid).</summary>
+    public const string AutomationUrlVariable = "BLAZOR_WORKBENCH_AUTOMATION_URL";
+
+    /// <summary>Environment variable with the WebView DevTools port of a Blazor Hybrid host (read by BlazorWorkbench.Hybrid).</summary>
+    public const string DevToolsPortVariable = "BLAZOR_WORKBENCH_CDP_PORT";
+
     private readonly Process? _process;
     private readonly StringBuilder _log;
     private readonly HttpClient _http;
+    private readonly string? _webViewDataFolder;
 
-    private WorkbenchHost(Uri baseAddress, Process? process, StringBuilder log)
+    private WorkbenchHost(Uri baseAddress, Process? process, StringBuilder log, string? webViewDataFolder = null)
     {
         BaseAddress = baseAddress;
         _process = process;
         _log = log;
+        _webViewDataFolder = webViewDataFolder;
         _http = new HttpClient { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(30) };
     }
 
     public Uri BaseAddress { get; }
+
+    /// <summary>The hosting model and, for Blazor Hybrid apps, how to reach the WebView. Known once the host is healthy.</summary>
+    public WorkbenchHostInfo Info { get; private set; } = new("Server", null, null, null);
 
     /// <summary>Host console output (started hosts only).</summary>
     public string Log
@@ -49,8 +81,15 @@ public sealed class WorkbenchHost : IAsyncDisposable
     }
 
     /// <summary>Builds (unless <paramref name="noBuild"/>) and starts the host project on a free loopback port.</summary>
+    /// <param name="projectPath">The host project: an ASP.NET Core Workbench host or a .NET MAUI Blazor Hybrid Workbench app.</param>
+    /// <param name="noBuild">Skip the build.</param>
+    /// <param name="configuration">Build configuration.</param>
+    /// <param name="startupTimeout">How long to wait for the health endpoint.</param>
+    /// <param name="onOutput">Receives host console output.</param>
+    /// <param name="cancellationToken">Cancels the start.</param>
+    /// <param name="framework">Target framework for multi-targeted projects (<c>dotnet run -f</c>).</param>
     public static async Task<WorkbenchHost> StartAsync(string projectPath, bool noBuild = false, string configuration = "Debug",
-        TimeSpan? startupTimeout = null, Action<string>? onOutput = null, CancellationToken cancellationToken = default)
+        TimeSpan? startupTimeout = null, Action<string>? onOutput = null, CancellationToken cancellationToken = default, string? framework = null)
     {
         if (!File.Exists(projectPath))
             throw new WorkbenchInfrastructureException($"Workbench host project '{projectPath}' was not found.");
@@ -69,12 +108,29 @@ public sealed class WorkbenchHost : IAsyncDisposable
             start.ArgumentList.Add(arg);
         if (noBuild)
             start.ArgumentList.Add("--no-build");
+        if (!string.IsNullOrWhiteSpace(framework))
+        {
+            start.ArgumentList.Add("-f");
+            start.ArgumentList.Add(framework);
+        }
+
         start.ArgumentList.Add("--");
         start.ArgumentList.Add("--urls");
         start.ArgumentList.Add(url.ToString().TrimEnd('/'));
         start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
         start.Environment["DOTNET_NOLOGO"] = "1";
         start.Environment["Logging__LogLevel__Microsoft.AspNetCore"] = "Warning";
+
+        // Blazor Hybrid apps: the automation endpoint and the WebView DevTools endpoint (both loopback only). WebView2
+        // reads its variables at startup; a private user data folder keeps the WebView from joining the browser process
+        // of another instance, which would ignore the debugging port. Web hosts ignore these variables.
+        var devToolsPort = GetFreePort();
+        var webViewData = Path.Combine(Path.GetTempPath(), "BlazorWorkbench", "WebView2", $"{Environment.ProcessId}-{devToolsPort}");
+        start.Environment[AutomationUrlVariable] = url.ToString().TrimEnd('/');
+        start.Environment[DevToolsPortVariable] = devToolsPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        start.Environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] =
+            $"{Environment.GetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")} --remote-debugging-port={devToolsPort}".Trim();
+        start.Environment["WEBVIEW2_USER_DATA_FOLDER"] = webViewData;
 
         var log = new StringBuilder();
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
@@ -105,7 +161,7 @@ public sealed class WorkbenchHost : IAsyncDisposable
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        var host = new WorkbenchHost(url, process, log);
+        var host = new WorkbenchHost(url, process, log, webViewData);
         try
         {
             await host.WaitForHealthAsync(startupTimeout ?? TimeSpan.FromMinutes(3), cancellationToken).ConfigureAwait(false);
@@ -126,12 +182,15 @@ public sealed class WorkbenchHost : IAsyncDisposable
         await _http.GetFromJsonAsync<ValidationReportDto>("_workbench/api/validate", WorkbenchJson.Options, cancellationToken).ConfigureAwait(false)
         ?? throw new WorkbenchInfrastructureException("The host returned an empty validation report.");
 
+    /// <summary>The origin previews load from: the host URL, or the app origin inside the WebView of a Blazor Hybrid app.</summary>
+    public Uri PreviewBaseAddress => Info.IsHybrid && Info.AppOrigin is { } origin ? origin : BaseAddress;
+
     public Uri PreviewUrl(string scenarioId, string? theme = null, string? argsJson = null)
     {
         var query = new List<string>();
         if (theme is not null) query.Add("theme=" + Uri.EscapeDataString(theme));
         if (argsJson is not null) query.Add("args=" + Uri.EscapeDataString(argsJson));
-        return new Uri(BaseAddress, $"_workbench/preview/{Uri.EscapeDataString(scenarioId)}" + (query.Count > 0 ? "?" + string.Join('&', query) : ""));
+        return new Uri(PreviewBaseAddress, $"_workbench/preview/{Uri.EscapeDataString(scenarioId)}" + (query.Count > 0 ? "?" + string.Join('&', query) : ""));
     }
 
     private async Task WaitForHealthAsync(TimeSpan timeout, CancellationToken cancellationToken)
@@ -147,7 +206,19 @@ public sealed class WorkbenchHost : IAsyncDisposable
             {
                 using var response = await _http.GetAsync("_workbench/api/health", cancellationToken).ConfigureAwait(false);
                 if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    try
+                    {
+                        Info = WorkbenchHostInfo.Parse(await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+                    }
+                    catch (JsonException)
+                    {
+                        // Hosts without a JSON health response are Interactive Server hosts (the default).
+                    }
+
                     return;
+                }
+
                 last = new HttpRequestException($"Health check returned {(int)response.StatusCode}.");
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
@@ -189,6 +260,26 @@ public sealed class WorkbenchHost : IAsyncDisposable
         finally
         {
             _process.Dispose();
+            DeleteWebViewData();
+        }
+    }
+
+    private void DeleteWebViewData()
+    {
+        if (_webViewDataFolder is null || !Directory.Exists(_webViewDataFolder))
+            return;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                Directory.Delete(_webViewDataFolder, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // WebView2 child processes can hold files for a moment after the app exits.
+                Thread.Sleep(200);
+            }
         }
     }
 }

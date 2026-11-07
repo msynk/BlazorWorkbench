@@ -147,6 +147,7 @@ See [bUnit integration](bunit.md).
 
 - [Environment simulation](environment.md): fake HTTP, gates, users, clock and culture.
 - [WebAssembly hosting](webassembly.md), if your components depend on the WebAssembly runtime.
+- [.NET MAUI Blazor Hybrid](hybrid.md), to run scenarios in a MAUI app and simulate device APIs.
 - [Visual regression](visual-regression.md) and [accessibility](accessibility.md).
 - [Publish a static catalog](publishing.md) for your team.
 - [Connect a coding agent over MCP](mcp.md).

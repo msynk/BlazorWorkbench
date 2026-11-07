@@ -36,6 +36,9 @@ Use predefined culture names (`fa-IR`, not `fa`). Code that runs outside circuit
 ### Interaction passes in the UI but fails in the CLI (or the other way round)
 The CLI (Playwright) is authoritative. Typical causes: a locator matches several elements (strict mode), an element is covered or hidden, or keyboard default actions differ. Open the trace from `artifacts/workbench/traces` with `npx playwright show-trace`.
 
+### Blazor Hybrid (MAUI) problems
+See the [troubleshooting table in the Blazor Hybrid guide](hybrid.md#troubleshooting).
+
 ### WebAssembly previews stay at "Loading…"
 Every preview boots the .NET WebAssembly runtime. Check the browser console for failed `_framework/` requests, and make sure the host references the client project and sets `Interactivity = WebAssembly`. A trimmed client (Release publish) loses types that discovery needs; keep `PublishTrimmed=false`.
 

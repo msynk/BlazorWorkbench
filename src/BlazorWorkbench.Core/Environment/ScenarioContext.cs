@@ -40,6 +40,9 @@ public sealed class ScenarioContext
 
     /// <summary>The service provider of the preview (available while rendering; null during static validation).</summary>
     public IServiceProvider? Services { get; internal set; }
+
+    /// <summary>The session's diagnostic log, so simulated services can report what the component asked them to do.</summary>
+    public Diagnostics.DiagnosticLog? Diagnostics { get; internal set; }
 }
 
 /// <summary>Deterministic string hash (stable across processes, unlike <see cref="string.GetHashCode()"/>).</summary>

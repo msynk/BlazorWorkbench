@@ -32,6 +32,9 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
     private readonly string _output = Path.GetFullPath(options.OutputDirectory);
     private readonly ConcurrentQueue<string> _diagnosticLines = new();
     private BaselineStore? _baselines;
+    private HybridWebView? _hybrid;
+
+    private bool Traces => options.TraceOnFailure && _hybrid is null;
 
     public async Task<TestRunReport> RunAsync(CancellationToken cancellationToken = default)
     {
@@ -44,25 +47,35 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         PrepareOutputDirectory();
 
         using var playwright = await Playwright.CreateAsync().ConfigureAwait(false);
-        var browserType = options.Browser.ToLowerInvariant() switch
-        {
-            "chromium" or "chrome" => playwright.Chromium,
-            "firefox" => playwright.Firefox,
-            "webkit" => playwright.Webkit,
-            _ => throw new WorkbenchInfrastructureException($"Unknown browser '{options.Browser}'. Use chromium, firefox or webkit."),
-        };
-
         IBrowser browser;
-        try
+        if (host.Info.IsHybrid)
         {
-            browser = await browserType.LaunchAsync(new BrowserTypeLaunchOptions { Headless = !options.Headed }).ConfigureAwait(false);
+            // Blazor Hybrid: drive the app's own WebView. It has one page, so scenarios run one at a time.
+            browser = await HybridWebView.ConnectAsync(playwright, host.Info, cancellationToken).ConfigureAwait(false);
+            _hybrid = await HybridWebView.OpenAsync(browser, host.PreviewBaseAddress, cancellationToken).ConfigureAwait(false);
         }
-        catch (PlaywrightException ex)
+        else
         {
-            throw new WorkbenchInfrastructureException($"{options.Browser} could not be launched. Run 'workbench install-browsers' first.\n{ex.Message.Split('\n')[0]}", ex);
+            var browserType = options.Browser.ToLowerInvariant() switch
+            {
+                "chromium" or "chrome" => playwright.Chromium,
+                "firefox" => playwright.Firefox,
+                "webkit" => playwright.Webkit,
+                _ => throw new WorkbenchInfrastructureException($"Unknown browser '{options.Browser}'. Use chromium, firefox or webkit."),
+            };
+
+            try
+            {
+                browser = await browserType.LaunchAsync(new BrowserTypeLaunchOptions { Headless = !options.Headed }).ConfigureAwait(false);
+            }
+            catch (PlaywrightException ex)
+            {
+                throw new WorkbenchInfrastructureException($"{options.Browser} could not be launched. Run 'workbench install-browsers' first.\n{ex.Message.Split('\n')[0]}", ex);
+            }
         }
 
         await using var _ = browser.ConfigureAwait(false);
+        var workers = _hybrid is null ? Math.Max(1, options.Workers) : 1;
         var report = new TestRunReport
         {
             StartedAt = DateTimeOffset.UtcNow,
@@ -73,7 +86,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 Platform = BaselineStore.PlatformFor(catalog.HostingModel),
                 HostingModel = catalog.HostingModel,
                 Runtime = RuntimeInformation.FrameworkDescription,
-                Browser = options.Browser,
+                Browser = _hybrid is null ? options.Browser : "webview",
                 BrowserVersion = browser.Version,
                 Ci = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TF_BUILD")),
                 HostUrl = host.BaseAddress.ToString(),
@@ -86,7 +99,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 Visual = options.Visual,
                 Viewports = options.Viewports,
                 Themes = options.Themes,
-                Workers = options.Workers,
+                Workers = workers,
                 VisualThreshold = options.VisualThreshold,
                 MaxDiffPixelRatio = options.MaxDiffPixelRatio,
                 AccessibilityFailOn = options.AccessibilityFailOn,
@@ -95,7 +108,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         };
 
         var results = new ConcurrentDictionary<string, ScenarioResult>();
-        using var gate = new SemaphoreSlim(Math.Max(1, options.Workers));
+        using var gate = new SemaphoreSlim(workers);
         var tasks = selected.Select(async item =>
         {
             await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -214,18 +227,27 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             var primary = variants[0];
 
             // 1. Render health, performance, accessibility and the primary visual variant.
-            await using (var context = await NewContextAsync(browser, primary, scenario).ConfigureAwait(false))
+            await using (var lease = await OpenPageAsync(browser, primary, scenario).ConfigureAwait(false))
             {
-                var page = await context.NewPageAsync().ConfigureAwait(false);
-                var resources = TrackResources(page);
-                var load = await LoadAsync(page, scenario, primary).ConfigureAwait(false);
+                var page = lease.Page;
+                var (resources, detach) = TrackResources(page);
+                LoadResult load;
+                try
+                {
+                    load = await LoadAsync(page, scenario, primary).ConfigureAwait(false);
+                }
+                finally
+                {
+                    detach();
+                }
+
                 result.ReadyMs = load.ReadyMs;
                 result.DomUpdates = load.DomUpdates;
                 var diagnostics = load.Diagnostics.Where(d => d.Source != DiagnosticSource.Resource).Concat(resources).ToList();
                 result.Diagnostics.AddRange(diagnostics.Where(d => d.Severity >= DiagnosticSeverity.Warning).Take(100));
                 Export(scenario.Id, "render", diagnostics);
                 var render = RenderCheck(load, diagnostics);
-                if (load.State == "ready")
+                if (load.State == "ready" && _hybrid is null)
                     await AddServerMetricsAsync(page, render).ConfigureAwait(false);
                 result.Checks.Add(render);
 
@@ -247,8 +269,8 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 foreach (var variant in variants.Skip(1))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    await using var context = await NewContextAsync(browser, variant, scenario).ConfigureAwait(false);
-                    var page = await context.NewPageAsync().ConfigureAwait(false);
+                    await using var lease = await OpenPageAsync(browser, variant, scenario).ConfigureAwait(false);
+                    var page = lease.Page;
                     var load = await LoadAsync(page, scenario, variant).ConfigureAwait(false);
                     result.Checks.Add(load.State == "ready"
                         ? await VisualCheckAsync(page, scenario, variant, variant.Name).ConfigureAwait(false)
@@ -278,6 +300,38 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         result.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
         result.Conclude();
         return result;
+    }
+
+    /// <summary>A page for one load: a fresh browser context, or the Blazor Hybrid app's WebView emulating the variant.</summary>
+    private sealed class PageLease(IPage page, IBrowserContext context, Func<ValueTask> release) : IAsyncDisposable
+    {
+        public IPage Page => page;
+        public IBrowserContext Context => context;
+        public ValueTask DisposeAsync() => release();
+    }
+
+    private async Task<PageLease> OpenPageAsync(IBrowser browser, Variant variant, ScenarioDto scenario)
+    {
+        if (_hybrid is { } hybrid)
+        {
+            var page = await hybrid.AcquireAsync(variant.Viewport, variant.Theme, scenario.Environment.Culture ?? "en-US").ConfigureAwait(false);
+            return new PageLease(page, page.Context, () =>
+            {
+                hybrid.Release();
+                return ValueTask.CompletedTask;
+            });
+        }
+
+        var context = await NewContextAsync(browser, variant, scenario).ConfigureAwait(false);
+        try
+        {
+            return new PageLease(await context.NewPageAsync().ConfigureAwait(false), context, context.DisposeAsync);
+        }
+        catch
+        {
+            await context.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private Task<IBrowserContext> NewContextAsync(IBrowser browser, Variant variant, ScenarioDto scenario) =>
@@ -326,12 +380,12 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         return new LoadResult(state, ready, updates, pending, watch.Elapsed.TotalMilliseconds, diagnostics);
     }
 
-    private static List<DiagnosticDto> TrackResources(IPage page)
+    private static (List<DiagnosticDto> Items, Action Detach) TrackResources(IPage page)
     {
         var list = new List<DiagnosticDto>();
         void Add(string message) { lock (list) list.Add(new DiagnosticDto(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture), DiagnosticSource.Resource, DiagnosticSeverity.Error, "", message, null)); }
         // Exceptions must not escape Playwright event handlers: they would tear down the driver connection.
-        page.Response += (_, response) =>
+        EventHandler<IResponse> onResponse = (_, response) =>
         {
             try
             {
@@ -342,7 +396,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             {
             }
         };
-        page.RequestFailed += (_, request) =>
+        EventHandler<IRequest> onFailed = (_, request) =>
         {
             try
             {
@@ -353,7 +407,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             {
             }
         };
-        return list;
+        page.Response += onResponse;
+        page.RequestFailed += onFailed;
+        // A Blazor Hybrid WebView page is shared by every load, so handlers are removed after each load.
+        return (list, () =>
+        {
+            page.Response -= onResponse;
+            page.RequestFailed -= onFailed;
+        });
     }
 
     private CheckResult RenderCheck(LoadResult load, IReadOnlyList<DiagnosticDto> diagnostics)
@@ -542,11 +603,12 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
     {
         var check = new CheckResult { Kind = CheckKind.Interaction, Name = test.Name, Steps = [] };
         var watch = Stopwatch.StartNew();
-        await using var context = await NewContextAsync(browser, variant, scenario).ConfigureAwait(false);
-        if (options.TraceOnFailure)
+        await using var lease = await OpenPageAsync(browser, variant, scenario).ConfigureAwait(false);
+        var context = lease.Context;
+        if (Traces)
             await context.Tracing.StartAsync(new TracingStartOptions { Screenshots = true, Snapshots = true, Title = $"{scenario.Id} › {test.Name}" });
 
-        var page = await context.NewPageAsync().ConfigureAwait(false);
+        var page = lease.Page;
         var load = await LoadAsync(page, scenario, variant).ConfigureAwait(false);
         var failed = load.State != "ready";
         if (failed)
@@ -614,14 +676,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             {
             }
 
-            if (options.TraceOnFailure)
+            if (Traces)
             {
                 var trace = Path.Combine("traces", scenario.Id, safe + ".zip").Replace('\\', '/');
                 await context.Tracing.StopAsync(new TracingStopOptions { Path = EnsureDirectory(Path.Combine(_output, trace)) });
                 check.Steps.Add(new StepOutcome(test.Steps.Count + 1, $"trace: {trace} (open with 'npx playwright show-trace')", CheckStatus.Skipped, null, 0));
             }
         }
-        else if (options.TraceOnFailure)
+        else if (Traces)
         {
             await context.Tracing.StopAsync();
         }

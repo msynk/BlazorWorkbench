@@ -24,7 +24,8 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # Windows: BlazorWorkbench.Maui targets Android, iOS, Mac Catalyst and Windows, and the hybrid tests need WebView2.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +34,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+
+      - name: Install the .NET MAUI workload
+        run: dotnet workload install maui
 
       - name: Determine version
         id: version
@@ -44,7 +48,7 @@ jobs:
       - name: Build and test
         run: |
           dotnet build BlazorWorkbench.slnx -c Debug
-          dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers --with-deps
+          dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
           dotnet test BlazorWorkbench.slnx --no-build
 
       - name: Vulnerability audit
@@ -59,9 +63,8 @@ jobs:
       - name: Generate SBOM (SPDX)
         shell: bash
         run: |
-          curl -sSL -o sbom-tool https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64
-          chmod +x sbom-tool
-          ./sbom-tool generate -b artifacts/packages -bc . -pn BlazorWorkbench -pv "${{ steps.version.outputs.value }}" \
+          curl -sSL -o sbom-tool.exe https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-win-x64.exe
+          ./sbom-tool.exe generate -b artifacts/packages -bc . -pn BlazorWorkbench -pv "${{ steps.version.outputs.value }}" \
             -ps msynk -nsb https://github.com/msynk/BlazorWorkbench -V Warning
 
       - name: Sign packages

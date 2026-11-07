@@ -16,6 +16,7 @@ namespace BlazorWorkbench.Cli
         public static readonly Option<bool> NoBuild = new("--no-build") { Description = "Do not build the host project before starting it.", Recursive = true };
         public static readonly Option<bool> Verbose = new("--verbose", "-v") { Description = "Show host output.", Recursive = true };
         public static readonly Option<string> Configuration = new("--configuration", "-c") { Description = "Build configuration of the host project.", DefaultValueFactory = _ => "Debug", Recursive = true };
+        public static readonly Option<string?> Framework = new("--framework") { Description = "Target framework of a multi-targeted host project, such as a .NET MAUI app (default: 'framework' in workbench.json).", Recursive = true };
 
         public static async Task<int> RunAsync(string[] args)
         {
@@ -55,13 +56,13 @@ namespace BlazorWorkbench.Cli
         }
 
         private static CliContext Context(ParseResult r) =>
-            new(r.GetValue(Config), r.GetValue(Project), r.GetValue(Url), r.GetValue(NoBuild), r.GetValue(Verbose)) { Configuration = r.GetValue(Configuration)! };
+            new(r.GetValue(Config), r.GetValue(Project), r.GetValue(Url), r.GetValue(NoBuild), r.GetValue(Verbose)) { Configuration = r.GetValue(Configuration)!, FrameworkOverride = r.GetValue(Framework) };
 
         public static RootCommand Build()
         {
             var root = new RootCommand("Blazor Workbench: discover, preview, test and document Razor components in isolation.")
             {
-                Config, Project, Url, NoBuild, Verbose, Configuration,
+                Config, Project, Url, NoBuild, Verbose, Configuration, Framework,
             };
 
             // list

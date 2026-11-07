@@ -335,3 +335,32 @@ public class RunnerSelectionTests
     public void Restricts_to_previous_failures() =>
         Assert.Equal(["data-table--empty"], Select(null, new HashSet<string> { "data-table--empty" }));
 }
+
+public class HostInfoTests
+{
+    [Fact]
+    public void Health_of_a_hybrid_host_describes_the_WebView()
+    {
+        var info = WorkbenchHostInfo.Parse("""{"status":"ok","hostingModel":"Hybrid","version":"0.1.0","appOrigin":"https://0.0.0.1/","devToolsEndpoint":"http://127.0.0.1:9222/"}""");
+        Assert.True(info.IsHybrid);
+        Assert.Equal(new Uri("https://0.0.0.1/"), info.AppOrigin);
+        Assert.Equal(new Uri("http://127.0.0.1:9222/"), info.DevToolsEndpoint);
+    }
+
+    [Fact]
+    public void Health_of_a_web_host_has_no_WebView()
+    {
+        var info = WorkbenchHostInfo.Parse("""{"status":"ok","hostingModel":"WebAssembly"}""");
+        Assert.False(info.IsHybrid);
+        Assert.Null(info.DevToolsEndpoint);
+        Assert.Equal("Server", WorkbenchHostInfo.Parse("{}").HostingModel);
+    }
+
+    [Theory]
+    [InlineData("Server", "")]
+    [InlineData("WebAssembly", "-webassembly")]
+    [InlineData("Hybrid", "-hybrid")]
+    [InlineData(null, "")]
+    public void Baselines_are_kept_per_hosting_model(string? hostingModel, string suffix) =>
+        Assert.Equal(BaselineStore.CurrentPlatform + suffix, BaselineStore.PlatformFor(hostingModel));
+}

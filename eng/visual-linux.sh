@@ -16,7 +16,7 @@ rm -rf "$WORK" && mkdir -p "$WORK"
 tar -C "$SRC" --exclude=./artifacts --exclude=./.git --exclude=bin --exclude=obj -cf - . | tar -C "$WORK" -xf -
 cd "$WORK"
 
-dotnet build BlazorWorkbench.slnx -c Debug
+dotnet build BlazorWorkbench.Web.slnf -c Debug
 dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers --with-deps
 
 # Bootstrap: until Linux baselines are committed for a hosting model, report missing screenshots without failing so

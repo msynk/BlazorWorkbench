@@ -14,6 +14,7 @@ Scenarios can simulate the conditions a component depends on, without changing p
 | `IJSRuntime` | Real | The browser runs your component's JavaScript. |
 | Culture | Simulated per session | Applied to every circuit activity (events, rendering, JS interop callbacks). |
 | Theme, direction, viewport | Simulated | Attributes on the preview document and iframe size. CLI runs also emulate `prefers-color-scheme`. |
+| .NET MAUI Essentials (`IConnectivity`, `IGeolocation`, `IShare`, ...) | Real in a MAUI app, or **simulated** with `.Device(...)` | `BlazorWorkbench.Maui.Essentials`; works in every hosting model and in bUnit. See [device simulation](#device-simulation-net-maui-essentials). |
 
 The **Environment** panel lists the source of each service for the current session (*Scenario override*, *Simulated*, *Host registration*).
 
@@ -100,6 +101,16 @@ Limitations:
 - An overridden service becomes scoped. If a host *singleton* depends on it, the container rejects this at startup in Development. Override the consumer instead.
 - A service that is resolved in a preview circuit before the scenario activates cannot be swapped. Workbench reports this case in Diagnostics.
 - Keyed services and open generic types cannot be overridden (`WB1013`).
+
+## Device simulation (.NET MAUI Essentials)
+
+Components that use .NET MAUI Essentials interfaces can be previewed with a simulated device:
+
+```csharp
+s.Device(d => d.IPhone().Offline().Battery(0.12).LocationPermissionDenied());
+```
+
+`.Device(...)` replaces every supported Essentials service for the scenario. Each call a component makes (share, open a URI, read the location, ...) appears in Diagnostics with the source `Platform`. Web hosts register a default device with `builder.Services.AddSimulatedDevice()`. The full list of options is in the [Blazor Hybrid guide](hybrid.md#simulate-the-device-in-scenarios).
 
 ## Users and authorization
 

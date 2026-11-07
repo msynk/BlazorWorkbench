@@ -1,0 +1,46 @@
+@namespace SampleComponents.Device
+@using Microsoft.Maui.ApplicationModel
+@using Microsoft.Maui.Devices
+@inject IDeviceInfo DeviceInfo
+@inject IBattery Battery
+@inject IAppInfo AppInfo
+
+@* An "About this device" panel built from IDeviceInfo, IBattery and IAppInfo (.NET MAUI Essentials). *@
+<section class="card device-summary" aria-label="About this device">
+    <h3 class="card-title">About this device</h3>
+    <dl>
+        <dt>Device</dt>
+        <dd>@DeviceInfo.Manufacturer @DeviceInfo.Model</dd>
+        <dt>System</dt>
+        <dd>@DeviceInfo.Platform @DeviceInfo.VersionString · @DeviceInfo.Idiom</dd>
+        <dt>Battery</dt>
+        <dd>
+            @Battery.ChargeLevel.ToString("P0", CultureInfo.CurrentCulture) · @BatteryText
+            @if (LowBattery)
+            {
+                <span class="badge badge-danger">Low battery</span>
+            }
+            @if (Battery.EnergySaverStatus == EnergySaverStatus.On)
+            {
+                <span class="badge badge-warning">Energy saver</span>
+            }
+        </dd>
+        <dt>App</dt>
+        <dd>@AppInfo.Name @AppInfo.VersionString (build @AppInfo.BuildString)</dd>
+    </dl>
+</section>
+
+@code {
+    /// <summary>Charge level below which a warning is shown while discharging.</summary>
+    [Parameter] public double LowBatteryThreshold { get; set; } = 0.2;
+
+    private bool LowBattery => Battery.ChargeLevel < LowBatteryThreshold && Battery.State != BatteryState.Charging;
+
+    private string BatteryText => Battery.State switch
+    {
+        BatteryState.Charging => $"charging ({Battery.PowerSource})",
+        BatteryState.Full => "full",
+        BatteryState.NotPresent => "no battery",
+        _ => "on battery",
+    };
+}

@@ -13,6 +13,9 @@ public sealed class WorkbenchConfig
     /// <summary>The Workbench host project (<c>.csproj</c>).</summary>
     public string? Project { get; init; }
 
+    /// <summary>Target framework passed to <c>dotnet run -f</c> for multi-targeted hosts (for example a .NET MAUI app).</summary>
+    public string? Framework { get; init; }
+
     /// <summary>Directory of approved visual baselines (commit it).</summary>
     public string Baselines { get; init; } = "workbench-baselines";
 

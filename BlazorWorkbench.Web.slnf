@@ -1,0 +1,27 @@
+{
+  "solution": {
+    "path": "BlazorWorkbench.slnx",
+    "projects": [
+      "src\\BlazorWorkbench.Core\\BlazorWorkbench.Core.csproj",
+      "src\\BlazorWorkbench.Components\\BlazorWorkbench.Components.csproj",
+      "src\\BlazorWorkbench.Hosting\\BlazorWorkbench.Hosting.csproj",
+      "src\\BlazorWorkbench.Testing\\BlazorWorkbench.Testing.csproj",
+      "src\\BlazorWorkbench.Cli\\BlazorWorkbench.Cli.csproj",
+      "src\\BlazorWorkbench.Testing.Bunit\\BlazorWorkbench.Testing.Bunit.csproj",
+      "src\\BlazorWorkbench.WebAssembly\\BlazorWorkbench.WebAssembly.csproj",
+      "src\\BlazorWorkbench.Hybrid\\BlazorWorkbench.Hybrid.csproj",
+      "src\\BlazorWorkbench.Maui.Essentials\\BlazorWorkbench.Maui.Essentials.csproj",
+      "src\\BlazorWorkbench.Templates\\BlazorWorkbench.Templates.csproj",
+      "samples\\SampleComponents\\SampleComponents.csproj",
+      "samples\\SampleWorkbench\\SampleWorkbench.csproj",
+      "samples\\SampleWorkbench.Wasm\\SampleWorkbench.Wasm.csproj",
+      "samples\\SampleWorkbench.Wasm.Client\\SampleWorkbench.Wasm.Client.csproj",
+      "tests\\BlazorWorkbench.Core.Tests\\BlazorWorkbench.Core.Tests.csproj",
+      "tests\\BlazorWorkbench.Components.Tests\\BlazorWorkbench.Components.Tests.csproj",
+      "tests\\BlazorWorkbench.Hybrid.Tests\\BlazorWorkbench.Hybrid.Tests.csproj",
+      "tests\\BlazorWorkbench.Testing.Tests\\BlazorWorkbench.Testing.Tests.csproj",
+      "tests\\BlazorWorkbench.Cli.Tests\\BlazorWorkbench.Cli.Tests.csproj",
+      "tests\\BlazorWorkbench.E2E.Tests\\BlazorWorkbench.E2E.Tests.csproj"
+    ]
+  }
+}

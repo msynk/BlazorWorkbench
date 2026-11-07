@@ -47,6 +47,18 @@ steps:
     artifact: workbench-report
 ```
 
+## .NET MAUI Blazor Hybrid in CI
+
+Automated hybrid runs need a Windows runner (WebView2 is preinstalled on GitHub's Windows images) and the MAUI workload:
+
+```yaml
+- run: dotnet workload install maui-windows
+- run: dotnet build -c Debug
+- run: workbench test --no-build --a11y -p src/Contoso.Workbench.Maui/Contoso.Workbench.Maui.csproj --framework net10.0-windows10.0.19041.0
+```
+
+Linux runners can still build and test everything else. This repository uses a solution filter without the MAUI projects (`BlazorWorkbench.Web.slnf`) on Linux.
+
 ## Visual baselines in CI
 
 Baselines are stored per platform (`baselines/linux`, `baselines/windows`, …). The first visual run on a new CI platform reports every screenshot as *missing*. To set it up:
@@ -56,7 +68,7 @@ Baselines are stored per platform (`baselines/linux`, `baselines/windows`, …).
 3. Run `workbench approve -o <downloaded report dir>`. Screenshots go to the platform folder that captured them, even when you approve on another OS.
 4. Commit the new baselines.
 
-Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. For Linux, the repository runs the visual suite in a container image (`eng/visual-linux.sh`), so you can reproduce and approve Linux baselines locally with Docker; see [visual regression](visual-regression.md#linux-baselines). The report records the browser version and OS of every run.
+Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. Blazor Hybrid baselines (`windows-hybrid`) depend on the WebView2 runtime of the runner instead; this repository runs them as an informational step (see [Blazor Hybrid](hybrid.md#visual-baselines)). For Linux, the repository runs the visual suite in a container image (`eng/visual-linux.sh`), so you can reproduce and approve Linux baselines locally with Docker; see [visual regression](visual-regression.md#linux-baselines). The report records the browser version and OS of every run.
 
 ## Distinguishing failures
 

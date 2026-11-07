@@ -182,6 +182,12 @@ public static class Commands
         var start = new ProcessStartInfo("dotnet") { UseShellExecute = false };
         foreach (var arg in new[] { "watch", "--project", context.Project })
             start.ArgumentList.Add(arg);
+        if (context.Framework is { Length: > 0 } framework)
+        {
+            // Multi-targeted hosts such as .NET MAUI apps.
+            start.ArgumentList.Add("--framework");
+            start.ArgumentList.Add(framework);
+        }
         using var process = Process.Start(start) ?? throw new WorkbenchInfrastructureException("dotnet watch could not be started.");
         await process.WaitForExitAsync(ct);
         return process.ExitCode;

@@ -12,6 +12,8 @@ Workbench is a development tool that runs next to application code. It is secure
 | No real network for components | `HttpClient` points at `https://workbench.invalid/`, a reserved domain that never resolves. Unmatched requests return 404 and are reported; they are never passed through. |
 | Isolated simulations | Simulated users, clocks and service overrides exist only in the preview session that activated the scenario. Host authorization is never weakened. |
 | `noindex` | Workbench pages ask search engines not to index them. |
+| Blazor Hybrid automation | The MAUI app opens its read-only automation API (loopback, `Host` header checked, no CORS) and the WebView2 DevTools port (loopback) only when the CLI starts it with the corresponding environment variables. See [Blazor Hybrid](hybrid.md#security). |
+| Simulated device data | `.Device(...)` fakes never call platform APIs. Secure storage values are never written to diagnostics. |
 
 ## Remote access
 
@@ -76,6 +78,7 @@ Scenario factories, fixtures, fake services and providers are your own code and 
 | bunit | MIT | bUnit integration package only. |
 | System.CommandLine | MIT | CLI. |
 | ModelContextProtocol | Apache-2.0 | MCP server. |
+| Microsoft.Maui.* (Controls, Essentials, WebView.Maui) | MIT | `BlazorWorkbench.Maui` and `BlazorWorkbench.Maui.Essentials` only. |
 | Microsoft.Extensions.* / ASP.NET Core | MIT | Runtime. `Microsoft.AspNetCore.Components.WebAssembly.Server` is pinned to 10.0.14 because earlier 10.0.x servicing releases have high-severity advisories (GHSA-g27p-qf6j-c96c, GHSA-qjpx-jqm5-h2c4). |
 
 Restore fails on known vulnerabilities, because NuGet audit warnings are treated as errors. CI and the release workflow also run `dotnet list package --vulnerable --include-transitive`. Releases attach an SPDX SBOM and symbol packages; packages are built deterministically with Source Link.

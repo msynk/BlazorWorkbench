@@ -2,6 +2,23 @@
 
 All notable changes are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+- **.NET MAUI Blazor Hybrid**: `BlazorWorkbench.Maui` (`UseBlazorWorkbenchApp`, `UseBlazorWorkbench`, `WorkbenchPage`, `WorkbenchBlazorWebView`) runs scenarios in the platform WebView with a native scenario picker. `BlazorWorkbench.Hybrid` provides the generated host page, the axe-core file and a loopback, read-only automation API. See [docs/hybrid.md](docs/hybrid.md) and [ADR 0009](docs/adr/0009-blazor-hybrid.md).
+- **Hybrid automation**: `workbench test`, `list`, `validate`, `approve`, `publish` and `mcp` work with a MAUI app as the host project. On Windows the runner drives WebView2 through the DevTools Protocol and emulates viewport, color scheme, reduced motion, locale and time zone. Baselines go to `{os}-hybrid`.
+- **Device simulation**: `BlazorWorkbench.Maui.Essentials` with `.Device(...)` and `AddSimulatedDevice()`: simulated connectivity, device info, geolocation (including permission and settings failures), battery, share, launcher, clipboard, preferences, secure storage, app info, vibration and haptics. Works in Server, WebAssembly, MAUI and bUnit. Calls are reported as `Platform` diagnostics.
+- **CLI**: `--framework` and `"framework"` in `workbench.json` for multi-targeted hosts; `workbench dev` passes it to `dotnet watch`.
+- **Components**: the `/_workbench/scenarios` page, a minimal scenario list for hosts without the shell.
+- **Sample**: device components (`NetworkStatus`, `ShareCard`, `LocationCard`, `DeviceSummary`) with 13 scenarios, and `SampleWorkbench.Maui`, a MAUI app that reuses every sample scenario. Baselines for `windows`, `windows-webassembly` and `windows-hybrid`.
+
+### Changed
+- CI builds and tests the MAUI projects on Windows (`maui-windows` workload) and runs the sample scenarios in the MAUI app. Linux jobs use `BlazorWorkbench.Web.slnf`. Packing and releases run on Windows with the `maui` workload.
+
+### Verified
+- 320 unit, bUnit and end-to-end tests pass on Windows 11 (.NET 10.0.403, Chromium 156, WebView2 157).
+- All 76 sample scenarios pass render, interaction, accessibility and visual checks on Interactive Server, Interactive WebAssembly and in the .NET MAUI app (one scenario is intentionally skipped). Hybrid visual results were reproducible across runs.
+
 ## 0.1.0 — 2026-11-03
 
 First release.

@@ -11,6 +11,8 @@ permissions:
 env:
   DOTNET_NOLOGO: "1"
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  # CI builds the MAUI library for Windows only; the pack job builds every platform.
+  MAUI_WINDOWS: net10.0-windows10.0.19041.0
 
 jobs:
   build-and-test:
@@ -19,7 +21,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          # Linux builds everything except the .NET MAUI projects (BlazorWorkbench.Web.slnf).
+          - os: ubuntu-latest
+            solution: BlazorWorkbench.Web.slnf
+          - os: windows-latest
+            solution: BlazorWorkbench.slnx
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,17 +36,21 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Install the .NET MAUI workload
+        if: runner.os == 'Windows'
+        run: dotnet workload install maui-windows
+
       - name: Restore
-        run: dotnet restore BlazorWorkbench.slnx
+        run: dotnet restore ${{ matrix.solution }} -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
 
       - name: Build
-        run: dotnet build BlazorWorkbench.slnx --no-restore -c Debug
+        run: dotnet build ${{ matrix.solution }} --no-restore -c Debug -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
 
       - name: Install Playwright browser
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers ${{ runner.os == 'Linux' && '--with-deps' || '' }}
 
       - name: Unit, component and end-to-end tests
-        run: dotnet test BlazorWorkbench.slnx --no-build --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
+        run: dotnet test ${{ matrix.solution }} --no-build --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
 
       - name: Validate sample scenarios
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- validate --no-build --warnings-as-errors
@@ -50,10 +61,14 @@ jobs:
       - name: Workbench tests, Interactive WebAssembly
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/workbench-wasm
 
+      - name: Workbench tests, .NET MAUI Blazor Hybrid (WebView2)
+        if: runner.os == 'Windows'
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/workbench-hybrid
+
       - name: Dependency vulnerability check
         shell: bash
         run: |
-          dotnet list BlazorWorkbench.slnx package --vulnerable --include-transitive | tee artifacts/vulnerabilities.txt
+          dotnet list ${{ matrix.solution }} package --vulnerable --include-transitive | tee artifacts/vulnerabilities.txt
           ! grep -q "has the following vulnerable packages" artifacts/vulnerabilities.txt
 
       - name: Upload reports
@@ -64,6 +79,7 @@ jobs:
           path: |
             artifacts/workbench
             artifacts/workbench-wasm
+            artifacts/workbench-hybrid
             artifacts/test-results
             artifacts/e2e
           retention-days: 14
@@ -77,12 +93,18 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - run: dotnet build BlazorWorkbench.slnx -c Debug
+      - run: dotnet workload install maui-windows
+      - run: dotnet build BlazorWorkbench.slnx -c Debug -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
       - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
       - name: Server
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -o artifacts/visual-windows-server
       - name: WebAssembly
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/visual-windows-webassembly
+      - name: Blazor Hybrid (informational)
+        # windows-hybrid baselines depend on the WebView2 runtime, which updates itself (Evergreen) and may differ on
+        # the runner. The step reports differences without failing the job; see docs/hybrid.md#visual-baselines.
+        continue-on-error: true
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/visual-windows-hybrid
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -115,7 +137,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Pack
-        run: dotnet pack BlazorWorkbench.slnx -c Release -o artifacts/packages
+        run: dotnet pack BlazorWorkbench.Web.slnf -c Release -o artifacts/packages
       - name: Create, build and test a host from the template
         shell: bash
         run: |
@@ -136,14 +158,16 @@ jobs:
           ../tools/workbench test --no-build --a11y
 
   pack:
+    # Windows: BlazorWorkbench.Maui targets Android, iOS, Mac Catalyst and Windows.
     name: Pack
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: [build-and-test]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - run: dotnet workload install maui
       - run: dotnet pack BlazorWorkbench.slnx -c Release -o artifacts/packages
       - uses: actions/upload-artifact@v4
         with:

@@ -55,3 +55,4 @@ Runtime diagnostics appear in the **Diagnostics** panel and in reports. Each one
 | `Navigation` | Intercepted navigation. |
 | `Callback` | Calls of instrumented `EventCallback` parameters. |
 | `Focus` | Focus changes (Trace severity). |
+| `Platform` | Calls to simulated device services from `.Device(...)`: share requests, opened URIs, location requests, clipboard and preference writes. |
