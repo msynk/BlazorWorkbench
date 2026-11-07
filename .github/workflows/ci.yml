@@ -67,7 +67,9 @@ jobs:
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -o artifacts/workbench
 
       - name: Workbench tests, Interactive WebAssembly
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/workbench-wasm
+        # --no-budgets: every WebAssembly preview starts the .NET runtime, which takes 3-5 s on hosted runners; the
+        # Interactive Server step checks the budgets. See docs/testing.md#performance-measurements.
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --no-budgets --retries 1 -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/workbench-wasm
 
       - name: Workbench tests, .NET MAUI Blazor Hybrid (WebView2)
         if: runner.os == 'Windows'
