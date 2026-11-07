@@ -140,6 +140,7 @@ namespace BlazorWorkbench.Cli
             var accessibility = new Option<bool>("--a11y") { Description = "Run axe-core accessibility scans." };
             var visual = new Option<bool>("--visual") { Description = "Compare screenshots against approved baselines." };
             var noInteractions = new Option<bool>("--no-interactions") { Description = "Skip interaction tests." };
+            var noBudgets = new Option<bool>("--no-budgets") { Description = "Do not check performance budgets (timings are still reported)." };
             var viewport = new Option<string[]>("--viewport") { Description = "Viewport preset(s) (default: workbench.json).", AllowMultipleArgumentsPerToken = true };
             var theme = new Option<string[]>("--theme") { Description = "Theme(s) (default: workbench.json).", AllowMultipleArgumentsPerToken = true };
             var workers = new Option<int?>("--workers", "-j") { Description = "Parallel browser contexts." };
@@ -159,7 +160,7 @@ namespace BlazorWorkbench.Cli
 
             var command = new Command(name, description)
             {
-                filter, accessibility, visual, noInteractions, viewport, theme, workers, retries, output, baselines, browser, headed,
+                filter, accessibility, visual, noInteractions, noBudgets, viewport, theme, workers, retries, output, baselines, browser, headed,
                 onlyFailed, failOn, noTrace, allowMissing, timeout, includeAntiAliasing, changedSince,
             };
 
@@ -173,6 +174,7 @@ namespace BlazorWorkbench.Cli
                     Accessibility = a11yOnly || r.GetValue(accessibility),
                     Visual = !a11yOnly && r.GetValue(visual),
                     Interactions = !a11yOnly && !r.GetValue(noInteractions),
+                    Performance = !r.GetValue(noBudgets),
                     Viewports = r.GetValue(viewport) is { Length: > 0 } v ? v : config.Viewports,
                     Themes = r.GetValue(theme) is { Length: > 0 } t ? t : config.Themes,
                     Workers = r.GetValue(workers) ?? config.Workers,

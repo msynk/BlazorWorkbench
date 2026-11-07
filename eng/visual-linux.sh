@@ -31,8 +31,8 @@ mode() {
 }
 
 status=0
-dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions $(mode linux) \
+dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets $(mode linux) \
   -o "$SRC/artifacts/visual-linux-server" || status=$?
-dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions $(mode linux-webassembly) \
+dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets $(mode linux-webassembly) \
   -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o "$SRC/artifacts/visual-linux-webassembly" || status=$?
 exit $status

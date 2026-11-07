@@ -38,6 +38,7 @@ Validates every scenario without rendering it ([codes](diagnostics-codes.md)). E
 | `--a11y` | Run axe-core scans. |
 | `--visual` | Compare screenshots with baselines. |
 | `--no-interactions` | Skip interaction tests. |
+| `--no-budgets` | Do not check performance budgets. Ready time and DOM updates are still reported. |
 | `--viewport <names…>`, `--theme <names…>` | Variant matrix. |
 | `-j, --workers <n>` | Parallel browser contexts (default from config: 2). |
 | `--retries <n>` | Retry failed scenarios; passes on retry are reported as flaky. |

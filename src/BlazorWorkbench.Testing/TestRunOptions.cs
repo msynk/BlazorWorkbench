@@ -13,6 +13,9 @@ public sealed class TestRunOptions
     public bool Accessibility { get; set; }
     public bool Visual { get; set; }
 
+    /// <summary>Check the scenarios' performance budgets (default true). Ready time and DOM updates are reported either way.</summary>
+    public bool Performance { get; set; } = true;
+
     /// <summary>Viewport preset names for visual and default runs. Empty uses the first viewport or the scenario's viewport.</summary>
     public IReadOnlyList<string> Viewports { get; set; } = [];
 

@@ -110,14 +110,14 @@ jobs:
       - run: dotnet build BlazorWorkbench.slnx -c Debug -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
       - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
       - name: Server
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -o artifacts/visual-windows-server
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -o artifacts/visual-windows-server
       - name: WebAssembly
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/visual-windows-webassembly
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/visual-windows-webassembly
       - name: Blazor Hybrid (informational)
         # windows-hybrid baselines depend on the WebView2 runtime, which updates itself (Evergreen) and may differ on
         # the runner. The step reports differences without failing the job; see docs/hybrid.md#visual-baselines.
         continue-on-error: true
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/visual-windows-hybrid
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/visual-windows-hybrid
       - if: always()
         uses: actions/upload-artifact@v4
         with:

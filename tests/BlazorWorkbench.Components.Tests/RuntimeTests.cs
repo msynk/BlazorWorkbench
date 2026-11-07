@@ -204,7 +204,8 @@ public class HttpSimulationTests
         var response = await pending;
         Assert.Equal(0, session.Activity.Pending);
         Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
-        Assert.True(session.Http.Exchanges.Single().DurationMs >= 70);
+        // Task.Delay runs on the system tick (about 15.6 ms on Windows), so the measured time can be up to one tick short.
+        Assert.True(session.Http.Exchanges.Single().DurationMs >= 60);
     }
 
     [Fact]

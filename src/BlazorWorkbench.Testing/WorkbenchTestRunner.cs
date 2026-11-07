@@ -97,6 +97,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 Interactions = options.Interactions,
                 Accessibility = options.Accessibility,
                 Visual = options.Visual,
+                Performance = options.Performance,
                 Viewports = options.Viewports,
                 Themes = options.Themes,
                 Workers = workers,
@@ -251,7 +252,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                     await AddServerMetricsAsync(page, render).ConfigureAwait(false);
                 result.Checks.Add(render);
 
-                if (BudgetCheck(scenario, load) is { } budget)
+                if (options.Performance && BudgetCheck(scenario, load) is { } budget)
                     result.Checks.Add(budget);
 
                 if (load.State == "ready")
@@ -656,7 +657,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         {
         }
 
-        if (!failed && scenario.Budget.InteractionWithinMs is { } limit && check.DurationMs > limit)
+        if (!failed && options.Performance && scenario.Budget.InteractionWithinMs is { } limit && check.DurationMs > limit)
         {
             check.Status = CheckStatus.Failed;
             check.Message = $"Interaction took {check.DurationMs:0} ms (budget {limit:0} ms).";

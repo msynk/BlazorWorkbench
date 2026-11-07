@@ -5,7 +5,7 @@ Workbench does not add a new test framework. It reuses [Playwright](https://play
 | Check | Runs when | Fails when |
 | --- | --- | --- |
 | **render** | always | The preview does not become ready within the timeout, the error boundary catches an exception, or error diagnostics appear (console errors, failed resources, JS interop errors). |
-| **performance** | the scenario declares a `Budget` | Ready time or DOM update count exceeds the budget. |
+| **performance** | the scenario declares a `Budget` and `--no-budgets` is not set | Ready time, DOM update count or interaction time exceeds the budget. |
 | **interaction** | `--no-interactions` not set | A step fails. Each test starts from a fresh activation. |
 | **accessibility** | `--a11y` (or `workbench a11y`) | axe-core reports violations at or above `--fail-on` (default `serious`). |
 | **visual** | `--visual` | Screenshots differ from approved baselines, or the baseline is missing. |
@@ -121,6 +121,7 @@ The run prints why it selected what it did. With no affecting changes it exits 0
 - `serverActivities`, `serverMs` and `serverMaxMs` (Interactive Server only) are the number and total and maximum duration of inbound circuit activities: events, JS interop calls and render acknowledgements, as measured on the server by a circuit handler. They show server-side processing cost, separate from network and browser time.
 - bUnit: `this.MeasureScenario(id, assemblies)` returns the allocated bytes and time of the synchronous initial render, and `cut.ComponentRenderCount()` returns how often the scenario's component rendered.
 - Instrumentation overhead (MutationObserver, diagnostic hooks) is included in both values. Compare budgets only between runs on the same machine type and browser version, which the report records.
+- In Interactive WebAssembly, every preview is a full document load, so `readyMs` includes downloading and starting the .NET runtime. Budgets set for Interactive Server can fail there on slow or busy machines. Runs that check something else (for example visual-only CI jobs) can pass `--no-budgets`; timings are still reported.
 
 ## Tracing with OpenTelemetry
 

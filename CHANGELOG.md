@@ -9,6 +9,7 @@ All notable changes are documented here. The project follows [Semantic Versionin
 - **Hybrid automation**: `workbench test`, `list`, `validate`, `approve`, `publish` and `mcp` work with a MAUI app as the host project. On Windows the runner drives WebView2 through the DevTools Protocol and emulates viewport, color scheme, reduced motion, locale and time zone. Baselines go to `{os}-hybrid`.
 - **Device simulation**: `BlazorWorkbench.Maui.Essentials` with `.Device(...)` and `AddSimulatedDevice()`: simulated connectivity, device info, geolocation (including permission and settings failures), battery, share, launcher, clipboard, preferences, secure storage, app info, vibration and haptics. Works in Server, WebAssembly, MAUI and bUnit. Calls are reported as `Platform` diagnostics.
 - **CLI**: `--framework` and `"framework"` in `workbench.json` for multi-targeted hosts; `workbench dev` passes it to `dotnet watch`.
+- **CLI**: `workbench test --no-budgets` skips performance budget checks (timings are still reported; `settings.performance` in the report is false). The visual CI jobs use it, because in Interactive WebAssembly the ready time includes starting the .NET runtime, which on busy CI machines exceeded the sample's 3 s budget.
 - **Components**: the `/_workbench/scenarios` page, a minimal scenario list for hosts without the shell.
 - **Sample**: device components (`NetworkStatus`, `ShareCard`, `LocationCard`, `DeviceSummary`) with 13 scenarios, and `SampleWorkbench.Maui`, a MAUI app that reuses every sample scenario. Baselines for `windows`, `windows-webassembly` and `windows-hybrid`.
 
@@ -18,6 +19,7 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ### Fixed
 - The `Actions_panel_logs_callbacks_from_the_preview` end-to-end test no longer misses the Actions tab when the call count is already shown ("Actions 1").
+- `HttpSimulationTests.Latency_and_activity_tracking` allows for the Windows timer resolution, which can end a simulated 80 ms latency up to one tick early.
 
 ### Verified
 - 320 unit, bUnit and end-to-end tests pass on Windows 11 (.NET 10.0.403, Chromium 156, WebView2 157).
