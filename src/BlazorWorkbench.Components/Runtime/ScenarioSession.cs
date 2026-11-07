@@ -104,7 +104,8 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
                 ScenarioSessionContext.ApplyProcessCulture(Culture);
             }
 
-            Context = new ScenarioContext(scenario, Time, Gates, Activity) { Services = services, Diagnostics = Diagnostics };
+            // Fixtures and factories see the culture the component renders in (including toolbar / ?culture= overrides).
+            Context = new ScenarioContext(scenario, Time, Gates, Activity, Culture) { Services = services, Diagnostics = Diagnostics };
 
             foreach (var rule in env.Http?.Rules ?? [])
             {
@@ -129,6 +130,14 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
                 {
                     Diagnostics.Add(DiagnosticSource.Scenario, DiagnosticSeverity.Error, scenario.Id,
                         "TimeProvider cannot be overridden with Services(...); use .Clock(...) to freeze the scenario clock.");
+                    continue;
+                }
+
+                if (descriptor.IsKeyedService)
+                {
+                    // Overrides are keyed by service type only; a keyed registration would replace the unkeyed service.
+                    Diagnostics.Add(DiagnosticSource.Scenario, DiagnosticSeverity.Error, scenario.Id,
+                        $"Keyed service {Naming.FormatTypeName(descriptor.ServiceType)} (key '{descriptor.ServiceKey}') cannot be overridden by scenarios; the registration is ignored.");
                     continue;
                 }
 
@@ -191,7 +200,9 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
         {
             foreach (var (type, descriptor) in _overrides.OrderBy(o => o.Key.FullName, StringComparer.Ordinal))
             {
-                var impl = descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType() ??
+                var impl = (descriptor.IsKeyedService
+                               ? descriptor.KeyedImplementationType ?? descriptor.KeyedImplementationInstance?.GetType()
+                               : descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType()) ??
                            (_instances.TryGetValue(type, out var instance) ? instance?.GetType() : null);
                 result.Add(new(Naming.FormatTypeName(type), "Scenario override", impl is null ? "factory" : Naming.FormatTypeName(impl)));
             }

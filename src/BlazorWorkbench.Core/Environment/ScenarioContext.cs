@@ -9,6 +9,19 @@ namespace BlazorWorkbench;
 public sealed class ScenarioContext
 {
     public ScenarioContext(ScenarioDefinition scenario, TimeProvider time, ScenarioGates gates, ScenarioActivityTracker activity)
+        : this(scenario, time, gates, activity, culture: null)
+    {
+    }
+
+    /// <param name="scenario">The activated scenario.</param>
+    /// <param name="time">The scenario clock.</param>
+    /// <param name="gates">The session's gates.</param>
+    /// <param name="activity">The session's activity tracker.</param>
+    /// <param name="culture">
+    /// The culture the preview renders in, including a toolbar or <c>?culture=</c> override, so fixtures and factories format
+    /// data like the component does. Null uses the scenario's declared culture, otherwise the current culture.
+    /// </param>
+    public ScenarioContext(ScenarioDefinition scenario, TimeProvider time, ScenarioGates gates, ScenarioActivityTracker activity, CultureInfo? culture)
     {
         Scenario = scenario;
         Time = time;
@@ -16,7 +29,7 @@ public sealed class ScenarioContext
         Activity = activity;
         Seed = scenario.Environment.Seed ?? StableHash.Compute(scenario.Id);
         Random = new Random(Seed);
-        Culture = scenario.Environment.Culture is { Length: > 0 } c ? CultureInfo.GetCultureInfo(c) : CultureInfo.CurrentCulture;
+        Culture = culture ?? (scenario.Environment.Culture is { Length: > 0 } c ? CultureInfo.GetCultureInfo(c) : CultureInfo.CurrentCulture);
     }
 
     public ScenarioDefinition Scenario { get; }

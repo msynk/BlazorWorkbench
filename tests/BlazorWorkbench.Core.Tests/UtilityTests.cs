@@ -95,6 +95,27 @@ public class ValueConversionTests
     }
 
     [Fact]
+    public void Non_finite_floating_point_values_round_trip()
+    {
+        foreach (var value in new[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+        {
+            Assert.True(ParameterValueConverter.TrySerialize(value, out var json));
+            Assert.True(ParameterValueConverter.TryConvert(json, typeof(double), out var back, out _));
+            Assert.Equal(value, (double)back!);
+        }
+
+        Assert.True(ParameterValueConverter.TrySerialize(float.NaN, out _));
+    }
+
+    [Fact]
+    public void Pointer_sized_integers_are_not_supported()
+    {
+        Assert.False(ParameterValueConverter.IsSupported(typeof(nint)));
+        Assert.False(ParameterValueConverter.IsSupported(typeof(nuint?)));
+        Assert.False(ParameterValueConverter.TrySerialize((nint)1, out _));
+    }
+
+    [Fact]
     public void Args_codec_preserves_null_unset_fixture_and_values()
     {
         var args = new Dictionary<string, ArgOverride>
@@ -135,6 +156,16 @@ public class RedactionTests
         Assert.Equal("{\"apiKey\": \"[REDACTED]\"}", R.RedactText("{\"apiKey\": \"sk-123\"}"));
         Assert.Equal("Server=x;Password=[REDACTED];", R.RedactText("Server=x;Password=p@ss;"));
         Assert.Equal("Response status code: 404", R.RedactText("Response status code: 404"));
+    }
+
+    [Fact]
+    public void Redacts_quoted_secrets_entirely()
+    {
+        Assert.Equal("{\"userName\":\"a\",\"password\":\"[REDACTED]\"}", R.RedactText("{\"userName\":\"a\",\"password\":\"hunter 2\"}"));
+        Assert.Equal("{\"password\":\"[REDACTED]\",\"x\":1}", R.RedactText("{\"password\":\"p@ss,wo;rd&}\",\"x\":1}"));
+        Assert.Equal("{\"secret\":\"[REDACTED]\"}", R.RedactText("{\"secret\":\"a \\\" b\"}"));
+        Assert.Equal("password: \"[REDACTED]", R.RedactText("password: \"cut off at the end"));
+        Assert.Equal("{\"name\":\"Ada Lovelace\"}", R.RedactText("{\"name\":\"Ada Lovelace\"}"));
     }
 
     [Fact]

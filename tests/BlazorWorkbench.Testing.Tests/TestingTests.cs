@@ -238,6 +238,46 @@ public class BaselineAndReportTests : IDisposable
     }
 
     [Fact]
+    public void Narrowed_runs_are_recorded_as_subsets()
+    {
+        Assert.False(new RunSettings().IsSubset);
+        Assert.True(new RunSettings { Filter = "inputs-*" }.IsSubset);
+        Assert.True(new RunSettings { Partial = true }.IsSubset);
+
+        var dir = Path.Combine(_root.FullName, "partial");
+        ReportWriter.WriteAll(new TestRunReport { Settings = new RunSettings { Partial = true } }, dir);
+        Assert.True(TestRunReport.Load(Path.Combine(dir, "report.json"))!.Settings.IsSubset);
+    }
+
+    [Fact]
+    public void Publish_refuses_unrelated_folders()
+    {
+        var docs = Path.Combine(_root.FullName, "docs");
+        Directory.CreateDirectory(Path.Combine(docs, "components"));
+        File.WriteAllText(Path.Combine(docs, "guide.md"), "keep");
+
+        Assert.Throws<WorkbenchInfrastructureException>(() => CatalogPublisher.PrepareOutput(docs));
+        Assert.True(File.Exists(Path.Combine(docs, "guide.md")));
+        Assert.True(Directory.Exists(Path.Combine(docs, "components")));
+    }
+
+    [Fact]
+    public void Republishing_replaces_only_catalog_files()
+    {
+        var output = Path.Combine(_root.FullName, "catalog");
+        CatalogPublisher.PrepareOutput(output);
+        File.WriteAllText(Path.Combine(output, "index.html"), "old");
+        File.WriteAllText(Path.Combine(output, "components", "removed.html"), "old");
+        File.WriteAllText(Path.Combine(output, "CNAME"), "catalog.example.com");
+
+        CatalogPublisher.PrepareOutput(output);
+        Assert.False(File.Exists(Path.Combine(output, "index.html")));
+        Assert.False(File.Exists(Path.Combine(output, "components", "removed.html")));
+        Assert.True(File.Exists(Path.Combine(output, "CNAME")));
+        Assert.True(File.Exists(Path.Combine(output, CatalogPublisher.MarkerFile)));
+    }
+
+    [Fact]
     public void Summary_distinguishes_failures_skips_and_infrastructure_errors()
     {
         var report = ReportWithScreenshot(CheckStatus.Missing);

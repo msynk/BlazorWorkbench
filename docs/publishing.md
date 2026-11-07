@@ -15,6 +15,9 @@ The output contains:
 | `screenshots/{scenario}.png` | Screenshots captured in the `laptop` viewport (skip them with `--no-screenshots`). |
 | `search.json` | Search index. |
 | `coverage.json` | Documentation and scenario coverage: components with scenarios, documented components and parameters, and lists of gaps. |
+| `.workbench-catalog` | Marker identifying the folder as a published catalog. |
+
+Publishing into an existing folder replaces only the entries above and keeps anything else (for example a `CNAME` file). The output folder must be new, empty, or a previously published catalog: `publish` refuses any other non-empty folder (such as `.` or `docs`) instead of deleting it.
 
 ## What is published, and what is not
 

@@ -165,9 +165,10 @@ public sealed partial class Redactor
         var r = _options.Replacement;
         text = BearerRegex().Replace(text, m => $"{m.Groups[1].Value} {r}");
         text = JwtRegex().Replace(text, r);
-        text = KeyValueRegex().Replace(text, m => IsSensitiveTextName(m.Groups["name"].Value)
-            ? $"{m.Groups["name"].Value}{m.Groups["q0"].Value}{m.Groups["sep"].Value}{m.Groups["q"].Value}{r}{m.Groups["q"].Value}"
-            : m.Value);
+        text = KeyValueRegex().Replace(text, m => !IsSensitiveTextName(m.Groups["name"].Value) ? m.Value
+            : m.Groups["quoted"].Success
+                ? $"{m.Groups["name"].Value}{m.Groups["q0"].Value}{m.Groups["sep"].Value}\"{r}{m.Groups["qend"].Value}"
+                : $"{m.Groups["name"].Value}{m.Groups["q0"].Value}{m.Groups["sep"].Value}{r}");
         text = UrlCredentialsRegex().Replace(text, m => $"{m.Groups[1].Value}{r}@");
         foreach (var pattern in _options.Patterns)
             text = pattern.Replace(text, r);
@@ -228,8 +229,10 @@ public sealed partial class Redactor
     [GeneratedRegex(@"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*")]
     private static partial Regex JwtRegex();
 
-    // name=value, name: value, "name": "value" (JSON) and Password=...; (connection strings).
-    [GeneratedRegex("""(?<name>[A-Za-z][A-Za-z0-9_\-]{1,40})(?<q0>"?)(?<sep>\s*[=:]\s*)(?<q>"?)(?<value>[^\s"&;,}]+)\k<q>""")]
+    // name=value, name: value, "name": "value" (JSON) and Password=...; (connection strings). A quoted value is matched up
+    // to its closing quote (honoring \" escapes) or the end of the text, so values containing spaces, commas, semicolons,
+    // ampersands or braces are redacted entirely.
+    [GeneratedRegex("""(?<name>[A-Za-z][A-Za-z0-9_\-]{1,40})(?<q0>"?)(?<sep>\s*[=:]\s*)(?:"(?<quoted>(?:[^"\\]|\\.)*)(?<qend>"|$)|(?<value>[^\s"&;,}]+))""")]
     private static partial Regex KeyValueRegex();
 
     [GeneratedRegex(@"(\b[a-z][a-z0-9+.\-]*://)[^/\s:@]+:[^/\s@]+@", RegexOptions.IgnoreCase)]

@@ -140,6 +140,10 @@ public static class ScenarioValidator
         {
             if (descriptor.ServiceType == typeof(TimeProvider))
                 Add(IssueSeverity.Error, "WB1022", "TimeProvider cannot be overridden with Services(...).", "Use .Clock(...) to freeze the scenario clock.");
+            else if (descriptor.IsKeyedService)
+                // A keyed registration must not be treated as an override of the unkeyed service of the same type.
+                Add(IssueSeverity.Error, "WB1013", $"Keyed service {Naming.FormatTypeName(descriptor.ServiceType)} (key '{descriptor.ServiceKey}') cannot be overridden per scenario.",
+                    "Override the unkeyed service, or register the keyed service in the Workbench host.");
             else if (descriptor.ServiceType.ContainsGenericParameters)
                 Add(IssueSeverity.Error, "WB1013", $"Open generic service {Naming.FormatTypeName(descriptor.ServiceType)} cannot be overridden per scenario.",
                     "Register the closed service type instead.");

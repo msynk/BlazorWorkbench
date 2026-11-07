@@ -216,25 +216,31 @@ public static class DeviceSimulationExtensions
 
     private static IServiceCollection AddDeviceSimulation(this IServiceCollection services, DeviceSimulation simulation, ScenarioContext? context, bool replace)
     {
-        void Add<TService>(Func<PlatformLog, TService> create) where TService : class
+        // In host mode (AddSimulatedDevice) there is no scenario at registration time, so the scenario context (and with it
+        // the scenario clock) is resolved per scope, like the diagnostics log.
+        void Add<TService>(Func<PlatformLog, TimeProvider, TService> create) where TService : class
         {
-            var descriptor = ServiceDescriptor.Scoped<TService>(sp => create(new PlatformLog(context ?? TryGetContext(sp))));
+            var descriptor = ServiceDescriptor.Scoped<TService>(sp =>
+            {
+                var scenario = context ?? TryGetContext(sp);
+                return create(new PlatformLog(scenario), scenario?.Time ?? sp.GetService<TimeProvider>() ?? TimeProvider.System);
+            });
             if (replace) services.Replace(descriptor);
             else services.TryAdd(descriptor);
         }
 
-        Add<IConnectivity>(log => new FakeConnectivity(simulation, log));
-        Add<IDeviceInfo>(_ => new FakeDeviceInfo(simulation));
-        Add<IGeolocation>(log => new FakeGeolocation(simulation, log, context?.Time ?? TimeProvider.System));
-        Add<IBattery>(_ => new FakeBattery(simulation));
-        Add<IShare>(log => new FakeShare(simulation, log));
-        Add<ILauncher>(log => new FakeLauncher(simulation, log));
-        Add<IClipboard>(log => new FakeClipboard(simulation, log));
-        Add<IPreferences>(log => new FakePreferences(simulation, log));
-        Add<ISecureStorage>(log => new FakeSecureStorage(simulation, log));
-        Add<IAppInfo>(log => new FakeAppInfo(simulation, log));
-        Add<IVibration>(log => new FakeVibration(simulation, log));
-        Add<IHapticFeedback>(log => new FakeHapticFeedback(simulation, log));
+        Add<IConnectivity>((log, _) => new FakeConnectivity(simulation, log));
+        Add<IDeviceInfo>((_, _) => new FakeDeviceInfo(simulation));
+        Add<IGeolocation>((log, time) => new FakeGeolocation(simulation, log, time));
+        Add<IBattery>((_, _) => new FakeBattery(simulation));
+        Add<IShare>((log, _) => new FakeShare(simulation, log));
+        Add<ILauncher>((log, _) => new FakeLauncher(simulation, log));
+        Add<IClipboard>((log, _) => new FakeClipboard(simulation, log));
+        Add<IPreferences>((log, _) => new FakePreferences(simulation, log));
+        Add<ISecureStorage>((log, _) => new FakeSecureStorage(simulation, log));
+        Add<IAppInfo>((log, _) => new FakeAppInfo(simulation, log));
+        Add<IVibration>((log, _) => new FakeVibration(simulation, log));
+        Add<IHapticFeedback>((log, _) => new FakeHapticFeedback(simulation, log));
         return services;
     }
 

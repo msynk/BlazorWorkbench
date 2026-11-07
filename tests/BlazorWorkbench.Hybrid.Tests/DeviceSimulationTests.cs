@@ -143,6 +143,21 @@ public class DeviceSimulationTests
     }
 
     [Fact]
+    public async Task Host_level_geolocation_follows_the_scenario_clock()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2026, 1, 15, 9, 0, 0, TimeSpan.Zero));
+        var scenario = new ScenarioDefinition { Key = "k", Name = "k", ComponentType = typeof(object) };
+        var services = new ServiceCollection();
+        services.AddSimulatedDevice();
+        services.AddScoped(_ => new ScenarioContext(scenario, clock, new ScenarioGates(), new ScenarioActivityTracker()));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var location = await scope.ServiceProvider.GetRequiredService<IGeolocation>().GetLocationAsync(new GeolocationRequest(), CancellationToken.None);
+        Assert.Equal(clock.GetUtcNow(), location!.Timestamp);
+    }
+
+    [Fact]
     public void Scenario_simulation_drives_the_component_and_reports_to_diagnostics()
     {
         using var context = new BunitContext();

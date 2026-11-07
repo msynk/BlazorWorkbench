@@ -94,6 +94,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             Settings = new RunSettings
             {
                 Filter = options.Filter,
+                Partial = options.OnlyScenarios is not null,
                 Interactions = options.Interactions,
                 Accessibility = options.Accessibility,
                 Visual = options.Visual,
@@ -285,7 +286,16 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 foreach (var test in scenario.Interactions)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    result.Checks.Add(await InteractionCheckAsync(browser, scenario, primary, test).ConfigureAwait(false));
+                    var checkpoints = new List<CheckResult>();
+                    try
+                    {
+                        result.Checks.Add(await InteractionCheckAsync(browser, scenario, primary, test, checkpoints).ConfigureAwait(false));
+                    }
+                    finally
+                    {
+                        // Checkpoint screenshots are visual checks of their own, so 'workbench approve' can approve them.
+                        result.Checks.AddRange(checkpoints);
+                    }
                 }
             }
         }
@@ -296,6 +306,12 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         catch (PlaywrightException ex)
         {
             result.Checks.Add(new CheckResult { Kind = CheckKind.Render, Name = "infrastructure", Status = CheckStatus.Error, Message = FirstLine(ex.Message) });
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Navigation/screenshot timeouts (System.TimeoutException), unreadable baselines and file system errors are
+            // reported on the scenario so one failure never aborts the run before report.json and junit.xml are written.
+            result.Checks.Add(new CheckResult { Kind = CheckKind.Render, Name = "infrastructure", Status = CheckStatus.Error, Message = $"{ex.GetType().Name}: {FirstLine(ex.Message)}" });
         }
 
         result.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
@@ -341,11 +357,17 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             BaseURL = host.BaseAddress.ToString(),
             ViewportSize = new ViewportSize { Width = variant.Viewport.Width, Height = variant.Viewport.Height },
             DeviceScaleFactor = (float)variant.Viewport.DeviceScaleFactor,
+            // Mobile presets emulate a phone: mobile viewport (meta viewport, no scrollbars) and touch, so (hover: none),
+            // (pointer: coarse) and touch events apply. Firefox does not support IsMobile; it still gets touch.
+            IsMobile = variant.Viewport.IsMobile && !IsFirefox(browser),
+            HasTouch = variant.Viewport.IsMobile,
             ColorScheme = variant.Theme.ColorScheme == BlazorWorkbench.ColorScheme.Dark ? PwColorScheme.Dark : PwColorScheme.Light,
             Locale = scenario.Environment.Culture ?? "en-US",
             TimezoneId = "UTC",
             ReducedMotion = ReducedMotion.Reduce,
         });
+
+    private static bool IsFirefox(IBrowser browser) => string.Equals(browser.BrowserType.Name, "firefox", StringComparison.OrdinalIgnoreCase);
 
     private sealed record LoadResult(string State, double? ReadyMs, int? DomUpdates, int Pending, double LoadMs, IReadOnlyList<DiagnosticDto> Diagnostics);
 
@@ -566,7 +588,20 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         };
         check.Visual = visual;
 
-        var baseline = store.TryLoad(scenario.Id, variantName);
+        PngImage? baseline;
+        try
+        {
+            baseline = store.TryLoad(scenario.Id, variantName);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            // For example a Git LFS pointer committed instead of the image, or a PNG format the decoder does not support.
+            check.Status = CheckStatus.Error;
+            check.Message = $"Baseline {relative} could not be read ({ex.GetType().Name}: {FirstLine(ex.Message)}). Fetch it (git lfs pull) or re-approve it.";
+            check.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
+            return check;
+        }
+
         if (baseline is null)
         {
             visual.DiffRatio = 1;
@@ -600,7 +635,12 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         return check;
     }
 
-    private async Task<CheckResult> InteractionCheckAsync(IBrowser browser, ScenarioDto scenario, Variant variant, InteractionTest test)
+    /// <summary>
+    /// Runs one interaction test. Visual checkpoints are added to <paramref name="checkpoints"/> as separate visual checks;
+    /// a failed or missing checkpoint fails the scenario through that check without stopping the interaction, so one run
+    /// captures every checkpoint for review and approval.
+    /// </summary>
+    private async Task<CheckResult> InteractionCheckAsync(IBrowser browser, ScenarioDto scenario, Variant variant, InteractionTest test, List<CheckResult> checkpoints)
     {
         var check = new CheckResult { Kind = CheckKind.Interaction, Name = test.Name, Steps = [] };
         var watch = Stopwatch.StartNew();
@@ -632,8 +672,9 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                     if (options.Visual)
                     {
                         var checkpoint = await VisualCheckAsync(page, scenario, variant, $"{variant.Name}-{Naming.ToKebabCase(name)}").ConfigureAwait(false);
-                        if (checkpoint.Status is CheckStatus.Failed or CheckStatus.Missing)
-                            throw new PlaywrightException($"Visual checkpoint '{name}': {checkpoint.Message}");
+                        if (checkpoint.Message is { } message && checkpoint.Status != CheckStatus.Passed)
+                            checkpoint.Message = $"Checkpoint '{name}' ({test.Name}): {message}";
+                        checkpoints.Add(checkpoint);
                     }
                 }).ConfigureAwait(false);
                 check.Steps.Add(new StepOutcome(i, step.ToString(), CheckStatus.Passed, null, Math.Round(stepWatch.Elapsed.TotalMilliseconds)));

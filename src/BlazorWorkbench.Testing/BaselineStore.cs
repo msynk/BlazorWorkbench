@@ -122,10 +122,12 @@ public sealed class BaselineStore(string directory, string? platform = null)
         if (!System.IO.Directory.Exists(platformDirectory))
             return removed;
         var manifest = LoadManifest();
+        // Folders are named after the sanitized scenario id.
+        var keep = scenarioIds.Select(Sanitize).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var dir in System.IO.Directory.EnumerateDirectories(platformDirectory))
         {
             var id = Path.GetFileName(dir);
-            if (scenarioIds.Contains(id))
+            if (keep.Contains(id))
                 continue;
             foreach (var file in System.IO.Directory.EnumerateFiles(dir, "*.png"))
                 removed.Add($"{Platform}/{id}/{Path.GetFileName(file)}");

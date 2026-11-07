@@ -41,6 +41,28 @@ public sealed class CliContext
     public string OutputDirectory(string? overridePath) => overridePath is not null ? Path.GetFullPath(overridePath) : Config.Resolve(Config.Output);
     public string BaselineDirectory(string? overridePath) => overridePath is not null ? Path.GetFullPath(overridePath) : Config.Resolve(Config.Baselines);
 
+    /// <summary>
+    /// Test run options with every workbench.json setting applied. <c>workbench test</c> and the MCP <c>run_tests</c> tool
+    /// both start from these, so agents get the same browser, thresholds and accessibility rules as CI.
+    /// </summary>
+    public TestRunOptions CreateTestRunOptions(string? outputDirectory = null, string? baselineDirectory = null) => new()
+    {
+        Filter = Config.Filter,
+        Viewports = Config.Viewports,
+        Themes = Config.Themes,
+        Workers = Config.Workers,
+        Retries = Config.Retries,
+        OutputDirectory = OutputDirectory(outputDirectory),
+        BaselineDirectory = BaselineDirectory(baselineDirectory),
+        Browser = Config.Browser,
+        AccessibilityFailOn = Config.Accessibility.FailOn,
+        AccessibilityTags = Config.Accessibility.Tags,
+        VisualThreshold = Config.Visual.Threshold,
+        MaxDiffPixelRatio = Config.Visual.MaxDiffPixelRatio,
+        IgnoreAntiAliasing = Config.Visual.IgnoreAntiAliasing,
+        ReadyTimeout = TimeSpan.FromSeconds(Config.TimeoutSeconds),
+    };
+
     public async Task<WorkbenchHost> ConnectAsync(CancellationToken cancellationToken)
     {
         if (Url is not null)

@@ -57,7 +57,7 @@ Validates every scenario without rendering it ([codes](diagnostics-codes.md)). E
 Same as `test --a11y --no-interactions`, without visual checks.
 
 ### `workbench approve [-f <filter>] [--all] [--prune] [-o <report dir>] [--baselines <dir>]`
-Copies the screenshots of failed or missing visual checks from the last report into the baselines and updates `manifest.json`. See [visual regression](visual-regression.md).
+Copies the screenshots of failed or missing visual checks from the last report into the baselines and updates `manifest.json`. See [visual regression](visual-regression.md). `--prune` deletes baselines of scenarios missing from the report, in the platform folder the report was captured for; it refuses reports of narrowed runs (`--filter`, `--only-failed`, `--changed-since`).
 
 ### `workbench publish [-o <dir>] [--no-screenshots] [--exclude-tag <tags…>] [--version-label <v>]`
 Publishes a static catalog; see [publishing](publishing.md).

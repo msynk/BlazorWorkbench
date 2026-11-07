@@ -36,6 +36,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     private IDisposable? _navigationRegistration;
     private WorkbenchErrorBoundary? _boundary;
     private Exception? _activationError;
+    private string? _reportedSetupError;
     private int _componentKey;
     private bool _bridgeAttached;
     private bool _disposed;
@@ -139,10 +140,12 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         }
         catch (Exception ex)
         {
+            ReportSetupError(ex);
             RenderSetupError(builder, ex);
             return;
         }
 
+        _reportedSetupError = null;
         RenderFragment content = b =>
         {
             b.OpenComponent<DynamicComponent>(0);
@@ -169,16 +172,33 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         builder.AddContent(0, content);
     }
 
+    /// <summary>
+    /// Records a parameter/fixture setup failure as an error diagnostic and reports it to the bridge so readiness checks,
+    /// render checks and visual runs fail instead of treating the error panel as a successful render. Re-renders with the
+    /// same failure are reported once.
+    /// </summary>
+    private void ReportSetupError(Exception ex)
+    {
+        var message = $"{ex.GetType().Name}: {ex.Message}";
+        if (_reportedSetupError == message)
+            return;
+        _reportedSetupError = message;
+        Session.Diagnostics.Add(DiagnosticSource.Scenario, DiagnosticSeverity.Error, Scenario.Id, $"Scenario setup failed: {ex.Message}", ex.ToString());
+        if (EnableBridge)
+            Bridge("BlazorWorkbenchPreview.setError", message);
+    }
+
     private static void RenderSetupError(RenderTreeBuilder builder, Exception ex)
     {
         builder.OpenElement(20, "div");
         builder.AddAttribute(21, "class", "wb-preview-error");
         builder.AddAttribute(22, "role", "alert");
-        builder.OpenElement(23, "strong");
-        builder.AddContent(24, "Scenario setup failed");
+        builder.AddAttribute(23, "data-workbench-error", "true");
+        builder.OpenElement(24, "strong");
+        builder.AddContent(25, "Scenario setup failed");
         builder.CloseElement();
-        builder.OpenElement(25, "p");
-        builder.AddContent(26, $"{ex.GetType().Name}: {ex.Message}");
+        builder.OpenElement(26, "p");
+        builder.AddContent(27, $"{ex.GetType().Name}: {ex.Message}");
         builder.CloseElement();
         builder.CloseElement();
     }

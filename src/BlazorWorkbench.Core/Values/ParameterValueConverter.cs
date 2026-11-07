@@ -106,14 +106,21 @@ public static class ArgsCodec
 /// <summary>Converts JSON inspector values to parameter types and back. Only explicitly supported types are converted.</summary>
 public static class ParameterValueConverter
 {
-    private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
+    // NaN and ±Infinity travel as the strings "NaN", "Infinity" and "-Infinity", which TryConvert parses back.
+    private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web)
+    {
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     /// <summary>True when values of <paramref name="type"/> can be edited and serialized by the inspector.</summary>
     public static bool IsSupported(Type type)
     {
         var t = Nullable.GetUnderlyingType(type) ?? type;
-        return t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(decimal) || t == typeof(DateTime) || t == typeof(DateTimeOffset) ||
-               t == typeof(DateOnly) || t == typeof(TimeOnly) || t == typeof(TimeSpan) || t == typeof(Guid) || t == typeof(Uri);
+        // IntPtr/UIntPtr are primitives but have no JSON representation.
+        return (t.IsPrimitive && t != typeof(nint) && t != typeof(nuint)) || t.IsEnum || t == typeof(string) || t == typeof(decimal) ||
+               t == typeof(DateTime) || t == typeof(DateTimeOffset) || t == typeof(DateOnly) || t == typeof(TimeOnly) || t == typeof(TimeSpan) ||
+               t == typeof(Guid) || t == typeof(Uri);
     }
 
     public static bool TryConvert(JsonElement element, Type target, out object? value, out string? error)
@@ -203,18 +210,27 @@ public static class ParameterValueConverter
         if (!IsSupported(value.GetType()))
             return false;
 
-        element = value switch
+        try
         {
-            DateTime dt => JsonSerializer.SerializeToElement(dt.ToString("O", CultureInfo.InvariantCulture)),
-            DateTimeOffset dto => JsonSerializer.SerializeToElement(dto.ToString("O", CultureInfo.InvariantCulture)),
-            DateOnly d => JsonSerializer.SerializeToElement(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-            TimeOnly t => JsonSerializer.SerializeToElement(t.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
-            TimeSpan ts => JsonSerializer.SerializeToElement(ts.ToString("c", CultureInfo.InvariantCulture)),
-            Uri u => JsonSerializer.SerializeToElement(u.OriginalString),
-            char c => JsonSerializer.SerializeToElement(c.ToString()),
-            _ => JsonSerializer.SerializeToElement(value, value.GetType(), s_json),
-        };
-        return true;
+            element = value switch
+            {
+                DateTime dt => JsonSerializer.SerializeToElement(dt.ToString("O", CultureInfo.InvariantCulture)),
+                DateTimeOffset dto => JsonSerializer.SerializeToElement(dto.ToString("O", CultureInfo.InvariantCulture)),
+                DateOnly d => JsonSerializer.SerializeToElement(d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                TimeOnly t => JsonSerializer.SerializeToElement(t.ToString("HH:mm:ss", CultureInfo.InvariantCulture)),
+                TimeSpan ts => JsonSerializer.SerializeToElement(ts.ToString("c", CultureInfo.InvariantCulture)),
+                Uri u => JsonSerializer.SerializeToElement(u.OriginalString),
+                char c => JsonSerializer.SerializeToElement(c.ToString()),
+                _ => JsonSerializer.SerializeToElement(value, value.GetType(), s_json),
+            };
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or JsonException)
+        {
+            // The contract is "false for unsupported values"; callers (catalog API, two-way binding) must never throw.
+            element = default;
+            return false;
+        }
     }
 
     private static bool TryConvertEnum(string text, Type enumType, out object? value, out string? error)

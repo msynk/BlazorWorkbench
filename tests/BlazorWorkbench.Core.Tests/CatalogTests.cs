@@ -148,6 +148,16 @@ public class CatalogTests
         Assert.Equal(["components-plain-component--same", "components-plain-component--same-2"], catalog.Scenarios.Select(s => s.Id));
     }
 
+    [Fact]
+    public void Explicit_registration_of_a_discovered_set_does_not_duplicate_scenarios()
+    {
+        // TestButtonScenarios is public in a scanned assembly, so it is also discovered.
+        var catalog = Build(o => o.AddScenarios(new TestButtonScenarios()));
+        var button = catalog.FindComponent("inputs-test-button")!;
+        Assert.Equal(["inputs-test-button--primary", "inputs-test-button--danger", "inputs-test-button--with-items"], button.Scenarios.Select(s => s.Id));
+        Assert.DoesNotContain(catalog.Issues, i => i.Code == "WB0006");
+    }
+
     private sealed class ThrowingSet : ScenarioSet<PlainComponent>
     {
         protected override void Configure(ScenarioSetBuilder<PlainComponent> set) => throw new InvalidOperationException("boom");
@@ -232,6 +242,11 @@ public class ValidationTests
         var issues = Validate(s => s.Parameter(b => b.Label, "Save").Cascade(new Theme("light")).Culture("fa-IR"));
         Assert.DoesNotContain(issues, i => i.Severity == IssueSeverity.Error);
     }
+
+    [Fact]
+    public void Keyed_service_overrides_are_rejected() =>
+        Assert.Contains(Validate(s => s.Parameter(b => b.Label, "x").Services(services => services.AddKeyedSingleton<IGreeter, Greeter>("k"))),
+            i => i.Code == "WB1013" && i.Severity == IssueSeverity.Error && i.Message.Contains("Keyed", StringComparison.Ordinal));
 
     [Fact]
     public void Text_content_on_non_fragment_parameter_is_an_error()

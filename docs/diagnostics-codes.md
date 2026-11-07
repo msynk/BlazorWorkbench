@@ -31,7 +31,7 @@ Codes are stable. Errors fail `workbench validate` and make the scenario's rende
 | WB1010 | Error | Invalid HTTP rule (empty pattern, unsupported method, non-positive `Times`). |
 | WB1011 | Error | `ExpectCallback` names something that is not an `EventCallback` parameter. |
 | WB1012 | Error/Warning | Invalid interaction step (missing target, value or expected value), duplicate interaction name, or an empty interaction. |
-| WB1013 | Error | Open generic service types cannot be overridden. |
+| WB1013 | Error | Keyed services and open generic service types cannot be overridden. |
 | WB1014 | Error | Unknown fixture. |
 | WB1015 | Info | The component has no scenarios; a default scenario was generated. |
 | WB1019 | Warning | The scenario uses an `[Obsolete]` parameter. |

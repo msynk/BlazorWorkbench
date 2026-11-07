@@ -141,7 +141,7 @@ options.Themes.Add(new ThemeDefinition("dark", ColorScheme.Dark, CssClass: "them
 
 A theme sets `data-theme` and `color-scheme` on the preview `<html>`, adds its optional class and loads its stylesheets. Switching themes in the UI does not reload the preview. Media-query based dark mode (`prefers-color-scheme`) is emulated only in automated runs; browsers cannot emulate it inside an iframe.
 
-The viewport presets are `mobile` (375×667), `tablet` (768×1024), `laptop` (1280×800) and `desktop` (1440×900). You can add your own with `options.Viewports.Add(new ViewportPreset("wide", 1920, 1080))`.
+The viewport presets are `mobile` (375×667), `tablet` (768×1024), `laptop` (1280×800) and `desktop` (1440×900). You can add your own with `options.Viewports.Add(new ViewportPreset("wide", 1920, 1080))`. In automated runs, presets with `IsMobile` (such as `mobile`) emulate a phone: a mobile viewport and touch input, so `(hover: none)`, `(pointer: coarse)` and touch events apply. Firefox gets touch input only, because Playwright cannot emulate a mobile viewport there.
 
 ## Cleanup and isolation
 

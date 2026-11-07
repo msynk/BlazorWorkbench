@@ -144,14 +144,18 @@ public static class Commands
 
         if (prune)
         {
-            var ids = report.Scenarios.Select(x => x.ScenarioId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(report.Settings.Filter))
+            if (report.Settings.IsSubset)
             {
-                Console.Error.WriteLine("Refusing to prune: the last run was filtered, so it does not list every scenario.");
+                Console.Error.WriteLine("Refusing to prune: the last run was narrowed (--filter, --only-failed or --changed-since), so it does not list every scenario.");
                 return ExitCodes.Usage;
             }
 
-            foreach (var removed in store.Prune(ids))
+            // Prune the platform folder the report was captured for (for example 'windows-webassembly' after a WebAssembly run).
+            var pruneStore = report.Environment.Platform is { } platform && platform != store.Platform
+                ? new BaselineStore(store.Directory, platform)
+                : store;
+            var ids = report.Scenarios.Select(x => x.ScenarioId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var removed in pruneStore.Prune(ids))
                 Console.WriteLine($"{Out.Yellow("removed")} {removed}");
         }
 

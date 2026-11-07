@@ -85,8 +85,12 @@ internal sealed class HybridWebView
                 ["width"] = viewport.Width,
                 ["height"] = viewport.Height,
                 ["deviceScaleFactor"] = viewport.DeviceScaleFactor,
-                ["mobile"] = false,
+                ["mobile"] = viewport.IsMobile,
             }).ConfigureAwait(false);
+            // Mobile presets also emulate touch, so (hover: none), (pointer: coarse) and touch events behave like a phone.
+            await SendAsync("Emulation.setTouchEmulationEnabled", viewport.IsMobile
+                ? new() { ["enabled"] = true, ["maxTouchPoints"] = 5 }
+                : new() { ["enabled"] = false }).ConfigureAwait(false);
             await SendAsync("Emulation.setEmulatedMedia", new()
             {
                 ["features"] = new object[]

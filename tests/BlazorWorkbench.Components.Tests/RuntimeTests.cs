@@ -141,6 +141,49 @@ public class ServiceOverrideTests
         Assert.Contains(sources, s => s.ServiceType.Contains("IClock", StringComparison.Ordinal) && s.Source == "Scenario override" && s.Implementation.Contains("FakeClock", StringComparison.Ordinal));
         Assert.Contains(sources, s => s.ServiceType.StartsWith("HttpClient", StringComparison.Ordinal) && s.Source == "Simulated");
     }
+
+    public sealed class KeyedClockSet : ScenarioSet<Button>
+    {
+        protected override void Configure(ScenarioSetBuilder<Button> set) =>
+            set.Add("Keyed clock", s => s.Services(services => services.AddKeyedSingleton<IClock, FakeClock>("x")));
+    }
+
+    [Fact]
+    public void Keyed_registrations_never_replace_the_unkeyed_service()
+    {
+        var options = new WorkbenchOptions();
+        options.AddScenarios(new KeyedClockSet());
+        var catalog = CatalogBuilder.Build(options);
+        Assert.Contains(catalog.Issues, i => i.Code == "WB1013" && i.Message.Contains("Keyed", StringComparison.Ordinal));
+        Assert.Empty(catalog.Scenarios[0].ServiceTypes);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IClock, RealClock>();
+        services.AddSingleton(TimeProvider.System);
+        // IClock is overridable (another scenario overrides it), so the keyed registration must not hijack it.
+        var types = ServiceOverrides.CollectTypes(catalog).Append(typeof(IClock)).ToHashSet();
+        services.AddBlazorWorkbenchRuntime(options, catalog, types);
+        ServiceOverrides.Apply(services, types);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var session = scope.ServiceProvider.GetRequiredService<ScenarioSession>();
+        session.Activate(catalog.Scenarios[0]);
+
+        Assert.IsType<RealClock>(scope.ServiceProvider.GetRequiredService<IClock>());
+        Assert.Contains(session.Diagnostics.Snapshot(), d => d.Severity == Diagnostics.DiagnosticSeverity.Error && d.Message.Contains("Keyed service", StringComparison.Ordinal));
+        Assert.NotEmpty(session.DescribeServices());
+    }
+
+    [Fact]
+    public void Scenario_context_uses_the_activation_culture()
+    {
+        var (provider, catalog) = Build();
+        using var scope = provider.CreateScope();
+        var session = scope.ServiceProvider.GetRequiredService<ScenarioSession>();
+        session.Activate(catalog.Scenarios[0], new ActivationOptions(Culture: "fr-FR"));
+        Assert.Equal("fr-FR", session.Culture!.Name);
+        Assert.Equal("fr-FR", session.Context!.Culture.Name);
+    }
 }
 
 public class HttpSimulationTests

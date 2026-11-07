@@ -155,6 +155,42 @@ public class ChangeImpactTests : IDisposable
         Assert.Equal(["a.txt", "b.txt", "lib/C.razor"], changed);
     }
 
+    private void Write(string relative, string content)
+    {
+        var path = Path.Combine(_root, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+    }
+
+    [Fact]
+    public void Components_that_render_a_changed_component_are_selected_transitively()
+    {
+        Write("lib/Inputs/Button.razor", "<button>@ChildContent</button>");
+        Write("lib/Shared/Toolbar.razor", "<div class=\"toolbar\"><Button>Save</Button></div>"); // not in the catalog
+        Write("lib/Data/Table.razor", "<table><Toolbar /></table>");
+
+        var selection = Select("lib/Inputs/Button.razor");
+        Assert.False(selection.RunAll);
+        Assert.Equal(["data-table--empty", "inputs-button--danger", "inputs-button--primary"], selection.ScenarioIds!.Order());
+        Assert.Contains("render a changed component", selection.Reason);
+    }
+
+    [Fact]
+    public void Scenario_files_that_render_a_changed_component_are_selected()
+    {
+        Write("lib/Data/Table.razor", "<table></table>");
+        Write("host/Scenarios/TableScenarios.cs", "set.Add(\"Empty\", s => s.Content(b => { b.OpenComponent<Button>(0); b.CloseComponent(); }));");
+
+        Assert.Equal(["data-table--empty", "inputs-button--danger", "inputs-button--primary"], Select("lib/Inputs/Button.razor").ScenarioIds!.Order());
+    }
+
+    [Fact]
+    public void Unrelated_components_are_not_selected()
+    {
+        Write("lib/Data/Table.razor", "<table><ButtonGroup /></table>"); // ButtonGroup is not Button
+        Assert.Equal(["inputs-button--danger", "inputs-button--primary"], Select("lib/Inputs/Button.razor").ScenarioIds!.Order());
+    }
+
     [Fact]
     public void Files_outside_the_root_are_ignored() =>
         Assert.Empty(ChangeImpact.Select(Catalog(), [Path.Combine(Path.GetTempPath(), "elsewhere.cs")], _root).ScenarioIds!);

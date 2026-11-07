@@ -93,13 +93,16 @@ public static class WorkbenchBunit
         if (services.Any(d => d.ServiceType == typeof(ScenarioSession)))
             throw new InvalidOperationException("This test context already hosts a scenario. Use a new BunitContext per scenario.");
 
-        var accessor = new WorkbenchCatalogAccessor(catalog.Options, catalog);
+        // The catalog is fixed for the test, so the accessor does not follow hot reload.
+        var accessor = new WorkbenchCatalogAccessor(catalog.Options, catalog, followHotReload: false);
         var session = new ScenarioSession(accessor, []);
         session.Activate(scenario, services: services);
 
         services.AddSingleton(catalog.Options);
-        services.AddSingleton(accessor);
-        services.AddSingleton(session);
+        // Factory registrations make the test context's container own (and dispose) the accessor and the session:
+        // owned override instances and HTTP clients are disposed and held fake requests are canceled, as in the web host.
+        services.AddSingleton(_ => accessor);
+        services.AddSingleton(_ => session);
         services.AddSingleton(session.Gates);
         services.AddSingleton(session.Context!);
         // bUnit registers placeholders that throw for HttpClient and authorization; replace them with the real
@@ -124,6 +127,10 @@ public static class WorkbenchBunit
             services.RemoveAll(type);
             services.AddSingleton(type, sp => session.Resolve(type, sp)!);
         }
+
+        // Resolve both now so the container tracks them for disposal even if rendering fails.
+        services.GetRequiredService<WorkbenchCatalogAccessor>();
+        services.GetRequiredService<ScenarioSession>();
 
         return context.Render<ScenarioHost>(p => p
             .Add(h => h.Scenario, scenario)

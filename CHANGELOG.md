@@ -17,7 +17,23 @@ All notable changes are documented here. The project follows [Semantic Versionin
 - CI builds and tests the MAUI projects on Windows (`maui-windows` workload) and runs the sample scenarios in the MAUI app. Linux jobs use `BlazorWorkbench.Web.slnf`. Packing and releases run on Windows with the `maui` workload.
 - The runner uses a preset `BLAZOR_WORKBENCH_CDP_PORT` for hybrid apps instead of picking a free port. Elevated processes (GitHub-hosted Windows runners) need it: WebView2 Runtime 150 and later ignore the `WEBVIEW2_*` variables there, so the port comes from the HKLM `AdditionalBrowserArguments` policy. CI sets that policy, and the connection error explains it when the runner is elevated.
 
+- **Mobile viewports**: presets with `IsMobile` (the built-in `mobile`) now emulate a phone in automated runs, the catalog publisher and Blazor Hybrid apps: a mobile viewport and touch input, so `(hover: none)`, `(pointer: coarse)` and touch events apply. Baselines captured with these presets may need re-approval.
+- **Interaction checkpoints** are reported as visual checks of their own, so `workbench approve` can approve them. A failed or missing checkpoint fails the scenario but no longer stops the interaction.
+- **Change impact**: `--changed-since` also selects scenarios of components that render a changed component (directly or through other components) and scenario files that render it.
+- `workbench mcp`'s `run_tests` applies every `workbench.json` setting `workbench test` applies (browser, timeout, retries, filter, anti-aliasing, accessibility tags).
+- `workbench publish` refuses a non-empty output folder that is not a previous catalog, and replaces only catalog files when republishing (it used to delete the whole folder).
+
 ### Fixed
+- Parameter and fixture setup failures in a preview render an error panel with `data-workbench-error` and log an error diagnostic, so readiness, render checks and visual runs fail instead of reporting the panel as a ready scenario.
+- The test runner reports timeouts, unreadable baselines (for example Git LFS pointers or unsupported PNG formats) and file system errors as scenario errors instead of aborting the run before `report.json` and `junit.xml` are written.
+- `workbench approve --prune` refuses reports of `--only-failed` and `--changed-since` runs (recorded as `settings.partial`) and prunes the platform folder the report was captured for (for example `windows-webassembly`).
+- Redaction removes quoted secrets that contain spaces, commas, semicolons, ampersands or braces in .NET and in the preview bridge.
+- Keyed service registrations in scenarios are rejected (`WB1013`) instead of replacing the unkeyed service; the Environment panel no longer fails on them.
+- Scenario sets and providers registered explicitly are no longer also discovered when their type is public in a scanned assembly (duplicate scenarios with `-2` keys and `WB0006`).
+- `NaN` and `±Infinity` parameter values serialize as `"NaN"`/`"Infinity"`, and `IntPtr`/`UIntPtr` are no longer treated as editable, so the catalog API no longer fails on them.
+- bUnit test contexts dispose the scenario session and catalog accessor (owned services, HTTP clients, held fake requests); the accessor no longer subscribes to hot reload.
+- `AddSimulatedDevice()` geolocation timestamps follow the scenario clock.
+- `ScenarioContext.Culture` matches the culture the preview renders in, including toolbar and `?culture=` overrides.
 - The `Actions_panel_logs_callbacks_from_the_preview` end-to-end test no longer misses the Actions tab when the call count is already shown ("Actions 1").
 - `HttpSimulationTests.Latency_and_activity_tracking` allows for the Windows timer resolution, which can end a simulated 80 ms latency up to one tick early.
 

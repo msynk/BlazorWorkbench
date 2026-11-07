@@ -58,7 +58,7 @@ Steps use Playwright's user-facing locators. The Playwright runner is authoritat
 - After each action, the runner waits until Workbench-tracked work is idle and the DOM is quiet.
 - `ExpectCallback(name, times)` counts calls of the scenario's automatically instrumented `EventCallback` parameters.
 - `ExpectNoErrors()` fails if error diagnostics have been recorded so far.
-- `Checkpoint(name)` captures an extra visual baseline (`{viewport}-{theme}-{name}`) when `--visual` is set.
+- `Checkpoint(name)` captures an extra visual baseline (`{viewport}-{theme}-{name}`) when `--visual` is set. Each checkpoint is reported as its own visual check (approve it with `workbench approve` like any other screenshot); a failed or missing checkpoint fails the scenario but does not stop the interaction.
 
 The **Interactions panel** in the UI runs the same steps with a lightweight in-browser runner. That runner simulates events, approximates the role and accessible-name computation, and emulates the default actions of `Enter`, `Space` and `Tab`. Use it to check steps quickly while you write them. If the two runners disagree, the CLI result counts.
 
@@ -106,7 +106,7 @@ This surface is part of the public contract and follows the versioning policy in
 
 | Changed file | Selected scenarios |
 | --- | --- |
-| A component (`Button.razor`, `.razor.cs`, `.razor.css`, `.razor.js`) | Every scenario of that component (from PDB source paths). |
+| A component (`Button.razor`, `.razor.cs`, `.razor.css`, `.razor.js`) | Every scenario of that component (from PDB source paths), plus every scenario of components that render it, directly or through other components, and scenario files that render it (found by scanning `.razor`/`.cs` sources under the Workbench root for `<Button`, `OpenComponent<Button>` or `typeof(Button)`). |
 | A scenario set or provider file | The scenarios it declares. |
 | A baseline image (`baselines/{platform}/{scenario}/…`) | That scenario. |
 | Markdown, `docs/`, `.github/`, `LICENSE`, baseline manifests | None. |

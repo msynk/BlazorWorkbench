@@ -131,21 +131,12 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
     {
         connection.Audit("run_tests", new { filter, accessibility, visual });
         var host = await connection.GetAsync(ct);
-        var config = settings.Context.Config;
-        var report = await new WorkbenchTestRunner(host, new TestRunOptions
-        {
-            Filter = filter,
-            Accessibility = accessibility,
-            Visual = visual,
-            OutputDirectory = settings.OutputDirectory,
-            BaselineDirectory = settings.BaselineDirectory,
-            Viewports = config.Viewports,
-            Themes = config.Themes,
-            Workers = config.Workers,
-            VisualThreshold = config.Visual.Threshold,
-            MaxDiffPixelRatio = config.Visual.MaxDiffPixelRatio,
-            AccessibilityFailOn = config.Accessibility.FailOn,
-        }).RunAsync(ct);
+        // Same workbench.json settings as 'workbench test' (browser, timeout, retries, filter, anti-aliasing, axe tags).
+        var options = settings.Context.CreateTestRunOptions(settings.OutputDirectory, settings.BaselineDirectory);
+        options.Filter = filter ?? options.Filter;
+        options.Accessibility = accessibility;
+        options.Visual = visual;
+        var report = await new WorkbenchTestRunner(host, options).RunAsync(ct);
         return Summarize(report);
     }
 

@@ -41,7 +41,9 @@
     [/\b(Bearer|Basic|Digest)\s+[A-Za-z0-9\-._~+/]+=*/gi, '$1 [REDACTED]'],
     [/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g, '[REDACTED]'],
     [/([?&](?:access_token|id_token|refresh_token|token|code|key|api_key|apikey|secret|client_secret|password|pwd|sig|signature|session|sessionid|auth)=)[^&#\s]*/gi, '$1[REDACTED]'],
-    [/((?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)"?\s*[:=]\s*"?)[^\s"&;,}]+/gi, '$1[REDACTED]'],
+    // Quoted values are redacted up to the closing quote (honoring \" escapes), so values with spaces or commas never leak.
+    [/((?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)"?\s*[:=]\s*)"(?:[^"\\]|\\.)*("|$)/gi, '$1"[REDACTED]$2'],
+    [/((?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token)"?\s*[:=]\s*)(?!")[^\s"&;,}]+/gi, '$1[REDACTED]'],
   ];
   function redact(text) {
     if (typeof text !== 'string') return text;

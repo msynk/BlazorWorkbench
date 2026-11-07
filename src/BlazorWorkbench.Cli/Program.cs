@@ -167,31 +167,23 @@ namespace BlazorWorkbench.Cli
             command.SetAction((r, ct) =>
             {
                 var context = Context(r);
-                var config = context.Config;
-                var options = new TestRunOptions
-                {
-                    Filter = r.GetValue(filter) ?? config.Filter,
-                    Accessibility = a11yOnly || r.GetValue(accessibility),
-                    Visual = !a11yOnly && r.GetValue(visual),
-                    Interactions = !a11yOnly && !r.GetValue(noInteractions),
-                    Performance = !r.GetValue(noBudgets),
-                    Viewports = r.GetValue(viewport) is { Length: > 0 } v ? v : config.Viewports,
-                    Themes = r.GetValue(theme) is { Length: > 0 } t ? t : config.Themes,
-                    Workers = r.GetValue(workers) ?? config.Workers,
-                    Retries = r.GetValue(retries) ?? config.Retries,
-                    OutputDirectory = context.OutputDirectory(r.GetValue(output)),
-                    BaselineDirectory = context.BaselineDirectory(r.GetValue(baselines)),
-                    Browser = r.GetValue(browser) ?? config.Browser,
-                    Headed = r.GetValue(headed),
-                    AccessibilityFailOn = r.GetValue(failOn) ?? config.Accessibility.FailOn,
-                    AccessibilityTags = config.Accessibility.Tags,
-                    TraceOnFailure = !r.GetValue(noTrace),
-                    FailOnMissingBaseline = !r.GetValue(allowMissing),
-                    VisualThreshold = config.Visual.Threshold,
-                    MaxDiffPixelRatio = config.Visual.MaxDiffPixelRatio,
-                    IgnoreAntiAliasing = config.Visual.IgnoreAntiAliasing && !r.GetValue(includeAntiAliasing),
-                    ReadyTimeout = TimeSpan.FromSeconds(r.GetValue(timeout) ?? config.TimeoutSeconds),
-                };
+                var options = context.CreateTestRunOptions(r.GetValue(output), r.GetValue(baselines));
+                options.Filter = r.GetValue(filter) ?? options.Filter;
+                options.Accessibility = a11yOnly || r.GetValue(accessibility);
+                options.Visual = !a11yOnly && r.GetValue(visual);
+                options.Interactions = !a11yOnly && !r.GetValue(noInteractions);
+                options.Performance = !r.GetValue(noBudgets);
+                if (r.GetValue(viewport) is { Length: > 0 } v) options.Viewports = v;
+                if (r.GetValue(theme) is { Length: > 0 } t) options.Themes = t;
+                options.Workers = r.GetValue(workers) ?? options.Workers;
+                options.Retries = r.GetValue(retries) ?? options.Retries;
+                options.Browser = r.GetValue(browser) ?? options.Browser;
+                options.Headed = r.GetValue(headed);
+                options.AccessibilityFailOn = r.GetValue(failOn) ?? options.AccessibilityFailOn;
+                options.TraceOnFailure = !r.GetValue(noTrace);
+                options.FailOnMissingBaseline = !r.GetValue(allowMissing);
+                options.IgnoreAntiAliasing = options.IgnoreAntiAliasing && !r.GetValue(includeAntiAliasing);
+                if (r.GetValue(timeout) is { } seconds) options.ReadyTimeout = TimeSpan.FromSeconds(seconds);
                 return Commands.TestAsync(context, options, r.GetValue(onlyFailed), r.GetValue(changedSince), ct);
             });
             return command;

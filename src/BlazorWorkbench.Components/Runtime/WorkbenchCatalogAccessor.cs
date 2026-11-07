@@ -17,12 +17,20 @@ public sealed class WorkbenchCatalogAccessor : IDisposable
     private readonly IServiceProviderIsService? _isService;
     private WorkbenchCatalog? _catalog;
 
-    public WorkbenchCatalogAccessor(WorkbenchOptions options, WorkbenchCatalog? initial = null, IServiceProviderIsService? isService = null)
+    /// <param name="options">Discovery and preview options.</param>
+    /// <param name="initial">The catalog built at startup; null builds it lazily.</param>
+    /// <param name="isService">Reports missing component dependencies (WB1005) when supplied.</param>
+    /// <param name="followHotReload">
+    /// Rebuild the catalog after hot reload. Short-lived accessors over a fixed catalog (bUnit) pass false so they never
+    /// subscribe to the static hot reload event and cannot be kept alive by it.
+    /// </param>
+    public WorkbenchCatalogAccessor(WorkbenchOptions options, WorkbenchCatalog? initial = null, IServiceProviderIsService? isService = null, bool followHotReload = true)
     {
         _options = options;
         _isService = isService;
         _catalog = initial is null ? null : WithDependencies(initial);
-        WorkbenchHotReload.Updated += OnHotReload;
+        if (followHotReload)
+            WorkbenchHotReload.Updated += OnHotReload;
     }
 
     /// <summary>Raised after hot reload invalidates the catalog.</summary>

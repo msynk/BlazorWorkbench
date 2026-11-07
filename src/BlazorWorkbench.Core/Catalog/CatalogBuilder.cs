@@ -27,24 +27,30 @@ public static class CatalogBuilder
         var allAssemblies = componentAssemblies.Concat(options.ScenarioAssemblies).Distinct().OrderBy(a => a.FullName, StringComparer.Ordinal).ToArray();
         var typesByAssembly = allAssemblies.ToDictionary(a => a, a => GetLoadableTypes(a, issues));
 
-        // 1. Scenario sets (discovered + explicit) and providers.
+        // 1. Scenario sets (discovered + explicit) and providers. A type registered explicitly is not also discovered:
+        // the registered instance wins, so scenarios are never declared twice (which would yield '-2' keys and WB0006).
+        var explicitSets = options.ScenarioSets.Distinct().ToList();
+        var explicitSetTypes = explicitSets.Select(s => s.GetType()).ToHashSet();
         var sets = new List<ScenarioSetDefinition>();
-        foreach (var type in typesByAssembly.Values.SelectMany(t => t).Where(IsScenarioSetType).OrderBy(t => t.FullName, StringComparer.Ordinal))
+        foreach (var type in typesByAssembly.Values.SelectMany(t => t).Where(t => IsScenarioSetType(t) && !explicitSetTypes.Contains(t)).OrderBy(t => t.FullName, StringComparer.Ordinal))
         {
             if (TryCreate<IScenarioSet>(type, issues) is { } set)
                 TryBuildSet(set, type, sets, issues);
         }
 
-        foreach (var set in options.ScenarioSets)
+        foreach (var set in explicitSets)
             TryBuildSet(set, set.GetType(), sets, issues);
 
+        var explicitProviders = options.ScenarioProviders.Distinct().ToList();
+        var explicitProviderTypes = explicitProviders.Select(p => p.GetType()).ToHashSet();
         var providers = typesByAssembly.Values.SelectMany(t => t)
             .Where(t => t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && (t.IsPublic || t.IsNestedPublic) &&
-                        typeof(IScenarioProvider).IsAssignableFrom(t) && !t.IsDefined(typeof(WorkbenchIgnoreAttribute)))
+                        typeof(IScenarioProvider).IsAssignableFrom(t) && !t.IsDefined(typeof(WorkbenchIgnoreAttribute)) &&
+                        !explicitProviderTypes.Contains(t))
             .OrderBy(t => t.FullName, StringComparer.Ordinal)
             .Select(t => TryCreate<IScenarioProvider>(t, issues))
             .OfType<IScenarioProvider>()
-            .Concat(options.ScenarioProviders);
+            .Concat(explicitProviders);
         foreach (var provider in providers)
         {
             try

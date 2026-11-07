@@ -252,4 +252,39 @@ public class ScenarioHostTests : BunitContext
         protected override void Configure(ScenarioSetBuilder<SampleComponents.Data.WeatherForecast> set) =>
             set.Add("No rules", s => s.Parameter(w => w.City, "Nowhere"));
     }
+
+    [Fact]
+    public void Parameter_setup_failures_are_flagged_and_logged_once()
+    {
+        var options = new WorkbenchOptions();
+        options.AddScenarios(new BrokenFactorySet());
+        var catalog = Catalog.CatalogBuilder.Build(options);
+        var cut = this.RenderScenario(catalog, catalog.Scenarios[0]);
+
+        // The readiness bridge and AssertNoScenarioErrors both look for the error marker.
+        Assert.Contains("Scenario setup failed", cut.Find("[data-workbench-error]").TextContent);
+        Assert.Throws<ScenarioAssertionException>(() => cut.AssertNoScenarioErrors());
+        cut.Render();
+        var error = Assert.Single(cut.Session().Diagnostics.Snapshot(), d => d.Severity == DiagnosticSeverity.Error);
+        Assert.Contains("factory failed", error.Message);
+    }
+
+    public sealed class BrokenFactorySet : ScenarioSet<TextField>
+    {
+        protected override void Configure(ScenarioSetBuilder<TextField> set) =>
+            set.Add("Broken", s => s.ParameterFrom(t => t.Label, _ => throw new InvalidOperationException("factory failed")));
+    }
+
+    [Fact]
+    public async Task Disposing_the_test_context_disposes_the_session()
+    {
+        var context = new BunitContext();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = context.RenderScenario<WeatherScenarios>("loading");
+        var session = cut.Session();
+        cut.WaitForAssertion(() => Assert.Single(session.Gates.Snapshot(), g => g.Waiters == 1));
+
+        await context.DisposeAsync();
+        Assert.True(session.Disposed.IsCancellationRequested);
+    }
 }

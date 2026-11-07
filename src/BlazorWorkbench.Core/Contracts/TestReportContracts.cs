@@ -83,6 +83,17 @@ public sealed class RunEnvironment
 public sealed class RunSettings
 {
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// True when the run was narrowed to an explicit scenario subset (<c>--only-failed</c>, <c>--changed-since</c> or
+    /// <c>TestRunOptions.OnlyScenarios</c>), so the report does not list every scenario of the catalog.
+    /// </summary>
+    public bool Partial { get; init; }
+
+    /// <summary>True when <see cref="Filter"/> or <see cref="Partial"/> narrowed the run.</summary>
+    [JsonIgnore]
+    public bool IsSubset => !string.IsNullOrEmpty(Filter) || Partial;
+
     public bool Interactions { get; init; } = true;
     public bool Accessibility { get; init; }
     public bool Visual { get; init; }
