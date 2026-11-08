@@ -1,0 +1,162 @@
+@namespace SampleComponents.Account
+@implements IDisposable
+@inject TimeProvider Time
+
+@* Warns before an idle session expires and signs the user out at the deadline. All timing goes through TimeProvider and
+   its timers, so a fake clock can fast-forward fifteen minutes of inactivity in one step. *@
+<div class="session">
+    @switch (Phase)
+    {
+        case SessionPhase.Active:
+            <p class="session-status" role="status"><span class="session-dot" aria-hidden="true"></span> Session active · signs out at @Deadline.ToString("t", CultureInfo.CurrentCulture) if idle</p>
+            break;
+        case SessionPhase.Warning:
+            <div class="dialog-backdrop"></div>
+            <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="session-title" aria-describedby="session-text" tabindex="-1" @ref="_dialog">
+                <h2 id="session-title" class="dialog-title">Your session is about to expire</h2>
+                <p id="session-text">For your security, you will be signed out in <strong data-testid="countdown">@Countdown</strong> because you have been inactive.</p>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-secondary btn-medium" @onclick="SignOutNow">Sign out now</button>
+                    <button type="button" class="btn btn-primary btn-medium" @onclick="StaySignedInAsync">Stay signed in</button>
+                </div>
+            </div>
+            break;
+        default:
+            <div class="dialog-backdrop"></div>
+            <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="session-title" aria-describedby="session-text" tabindex="-1" @ref="_dialog">
+                <h2 id="session-title" class="dialog-title">You have been signed out</h2>
+                <p id="session-text">Your session ended after @IdleTimeout.TotalMinutes.ToString("0", CultureInfo.CurrentCulture) minutes of inactivity. Sign in again to continue where you left off.</p>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-primary btn-medium" @onclick="() => OnSignIn.InvokeAsync()">Sign in again</button>
+                </div>
+            </div>
+            break;
+    }
+</div>
+
+@code {
+    private ITimer? _timer;
+    private ElementReference _dialog;
+    private DateTimeOffset _lastActivity;
+    private DateTimeOffset? _appliedLastActivity;
+    private bool _initialized, _signedOut, _signOutReported;
+    private SessionPhase _renderedPhase = SessionPhase.Active;
+    private int _renderQueued;
+
+    /// <summary>Inactivity after which the user is signed out.</summary>
+    [Parameter] public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>How long before the deadline the warning appears.</summary>
+    [Parameter] public TimeSpan WarningBefore { get; set; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>Time of the user's last activity. Defaults to the moment the component starts.</summary>
+    [Parameter] public DateTimeOffset? LastActivity { get; set; }
+
+    /// <summary>Raised when the user chooses to stay signed in.</summary>
+    [Parameter] public EventCallback OnExtended { get; set; }
+
+    /// <summary>Raised once when the session ends (timeout or "Sign out now").</summary>
+    [Parameter] public EventCallback OnSignedOut { get; set; }
+
+    /// <summary>Raised when the user chooses to sign in again.</summary>
+    [Parameter] public EventCallback OnSignIn { get; set; }
+
+    private DateTimeOffset Deadline => _lastActivity + IdleTimeout;
+
+    private SessionPhase Phase
+    {
+        get
+        {
+            var now = Time.GetUtcNow();
+            return _signedOut || now >= Deadline ? SessionPhase.SignedOut
+                : now >= Deadline - WarningBefore ? SessionPhase.Warning
+                : SessionPhase.Active;
+        }
+    }
+
+    private string Countdown
+    {
+        get
+        {
+            var left = Deadline - Time.GetUtcNow();
+            return string.Create(CultureInfo.CurrentCulture, $"{(int)left.TotalMinutes}:{left.Seconds:00}");
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!_initialized || _appliedLastActivity != LastActivity)
+        {
+            _initialized = true;
+            _appliedLastActivity = LastActivity;
+            _lastActivity = LastActivity ?? Time.GetUtcNow();
+            _signedOut = false;
+        }
+
+        Schedule();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var phase = Phase;
+        if (phase != SessionPhase.Active && phase != _renderedPhase)
+            await _dialog.FocusAsync();
+        _renderedPhase = phase;
+
+        if (phase == SessionPhase.SignedOut && !_signOutReported)
+        {
+            _signOutReported = true;
+            await OnSignedOut.InvokeAsync();
+        }
+    }
+
+    // A one-shot timer aimed at the next moment that changes the display: the warning, then every second of the countdown.
+    private void Schedule()
+    {
+        var now = Time.GetUtcNow();
+        var due = Phase switch
+        {
+            SessionPhase.Active => Deadline - WarningBefore - now,
+            SessionPhase.Warning => TimeSpan.FromSeconds(1),
+            _ => Timeout.InfiniteTimeSpan,
+        };
+        if (due != Timeout.InfiniteTimeSpan && due < TimeSpan.Zero)
+            due = TimeSpan.Zero;
+
+        if (_timer is null)
+            _timer = Time.CreateTimer(_ => Tick(), null, due, Timeout.InfiniteTimeSpan);
+        else
+            _timer.Change(due, Timeout.InfiniteTimeSpan);
+    }
+
+    private void Tick()
+    {
+        if (Interlocked.Exchange(ref _renderQueued, 1) == 0)
+        {
+            _ = InvokeAsync(() =>
+            {
+                Volatile.Write(ref _renderQueued, 0);
+                StateHasChanged();
+            });
+        }
+
+        Schedule();
+    }
+
+    private async Task StaySignedInAsync()
+    {
+        _lastActivity = Time.GetUtcNow();
+        Schedule();
+        await OnExtended.InvokeAsync();
+    }
+
+    private void SignOutNow()
+    {
+        _signedOut = true;
+        Schedule();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+
+    private enum SessionPhase { Active, Warning, SignedOut }
+}

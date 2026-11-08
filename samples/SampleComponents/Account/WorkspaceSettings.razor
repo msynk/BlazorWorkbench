@@ -1,0 +1,111 @@
+@namespace SampleComponents.Account
+
+@* Workspace settings whose sections depend on who is signed in: roles, claims and the plan, evaluated through the named
+   authorization policies in WorkspacePolicies. *@
+<section class="settings" aria-labelledby="settings-title">
+    <h2 id="settings-title" class="settings-title">@WorkspaceName settings</h2>
+    <AuthorizeView>
+        <NotAuthorized>
+            <p class="settings-locked">Sign in to manage <strong>@WorkspaceName</strong>.</p>
+            <button type="button" class="btn btn-primary btn-small" @onclick="() => OnSignIn.InvokeAsync()">Sign in</button>
+        </NotAuthorized>
+        <Authorized>
+            <p class="field-help">Signed in as @context.User.Identity?.Name · <span data-testid="role">@RoleOf(context.User)</span></p>
+
+            <div class="settings-section">
+                <h3 class="settings-heading">General</h3>
+                <AuthorizeView Policy="@WorkspacePolicies.Edit" Context="edit">
+                    <Authorized>
+                        <div class="settings-row">
+                            <div class="field settings-grow">
+                                <label for="workspace-name">Workspace name</label>
+                                <input id="workspace-name" @bind="_name" @bind:event="oninput" />
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-medium" disabled="@(string.IsNullOrWhiteSpace(_name) || _name == WorkspaceName)"
+                                    @onclick="() => OnRename.InvokeAsync(_name)">Save</button>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <p>@WorkspaceName <span class="badge">Read only</span></p>
+                        <p class="field-help">Ask an editor or admin to change these settings.</p>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="settings-heading">Members</h3>
+                <div class="settings-row">
+                    <p class="settings-grow">@MemberCount.ToString(CultureInfo.CurrentCulture) members</p>
+                    <AuthorizeView Policy="@WorkspacePolicies.ManageMembers" Context="members">
+                        <button type="button" class="btn btn-secondary btn-small" @onclick="() => OnInvite.InvokeAsync()">Invite people</button>
+                    </AuthorizeView>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3 class="settings-heading">Plan and billing</h3>
+                <div class="settings-row">
+                    <AuthorizeView Policy="@WorkspacePolicies.ProFeatures" Context="pro">
+                        <Authorized>
+                            <p class="settings-grow"><span class="badge badge-success">Pro</span> Unlimited projects, single sign-on and audit log.</p>
+                        </Authorized>
+                        <NotAuthorized>
+                            <p class="settings-grow"><span class="badge">Free</span> Up to 3 projects. <button type="button" class="btn btn-ghost btn-small" @onclick="() => OnUpgrade.InvokeAsync()">Upgrade to Pro</button></p>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                    <AuthorizeView Policy="@WorkspacePolicies.ManageBilling" Context="billing">
+                        <button type="button" class="btn btn-secondary btn-small" @onclick="() => OnManageBilling.InvokeAsync()">Manage billing</button>
+                    </AuthorizeView>
+                </div>
+            </div>
+
+            <AuthorizeView Roles="Owner" Context="owner">
+                <div class="settings-section settings-danger">
+                    <h3 class="settings-heading">Danger zone</h3>
+                    <div class="settings-row">
+                        <p class="settings-grow">Deleting the workspace removes all of its projects for every member.</p>
+                        <button type="button" class="btn btn-danger btn-small" @onclick="() => OnDelete.InvokeAsync()">Delete workspace</button>
+                    </div>
+                </div>
+            </AuthorizeView>
+        </Authorized>
+    </AuthorizeView>
+</section>
+
+@code {
+    private string _name = "";
+    private string? _appliedName;
+
+    /// <summary>Name of the workspace.</summary>
+    [Parameter, EditorRequired] public string WorkspaceName { get; set; } = "";
+
+    /// <summary>Number of members.</summary>
+    [Parameter] public int MemberCount { get; set; }
+
+    /// <summary>Raised with the new name when an editor saves it.</summary>
+    [Parameter] public EventCallback<string> OnRename { get; set; }
+
+    /// <summary>Raised when an admin invites people.</summary>
+    [Parameter] public EventCallback OnInvite { get; set; }
+
+    /// <summary>Raised when a free workspace chooses to upgrade.</summary>
+    [Parameter] public EventCallback OnUpgrade { get; set; }
+
+    /// <summary>Raised when an owner or billing contact opens billing.</summary>
+    [Parameter] public EventCallback OnManageBilling { get; set; }
+
+    /// <summary>Raised when the owner deletes the workspace.</summary>
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    /// <summary>Raised when a signed-out visitor chooses to sign in.</summary>
+    [Parameter] public EventCallback OnSignIn { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (_appliedName != WorkspaceName)
+            _name = _appliedName = WorkspaceName;
+    }
+
+    private static string RoleOf(System.Security.Claims.ClaimsPrincipal user) =>
+        new[] { "Owner", "Admin", "Editor" }.FirstOrDefault(user.IsInRole) ?? "Viewer";
+}

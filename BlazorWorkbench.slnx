@@ -18,6 +18,7 @@
     <Project Path="samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj" />
     <Project Path="samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj" />
     <Project Path="samples/SampleWorkbench.Wasm.Client/SampleWorkbench.Wasm.Client.csproj" />
+    <Project Path="samples/SampleComponents.Tests/SampleComponents.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlazorWorkbench.Core.Tests/BlazorWorkbench.Core.Tests.csproj" />

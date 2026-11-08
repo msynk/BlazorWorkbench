@@ -556,10 +556,13 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
             Bridge("BlazorWorkbenchPreview.gates", Session.Gates.Snapshot());
     }
 
-    private void OnActivityChanged(int pending)
+    private void OnActivityChanged(int _)
     {
+        // Activity changes are raised on the threads of concurrent requests, so their dispatches can run in a different
+        // order than the values were produced (3, 2, 0, 1), leaving the preview with a stale non-zero count that blocks
+        // readiness. Read the count when the message goes out instead: the last message always carries the latest value.
         if (_bridgeAttached)
-            Bridge("BlazorWorkbenchPreview.setPending", pending);
+            BridgeCurrent("BlazorWorkbenchPreview.setPending", () => Session.Activity.Pending);
     }
 
     private void NotifyArgsChanged()
@@ -568,7 +571,10 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
             Bridge("BlazorWorkbenchPreview.argsChanged", ArgsCodec.Encode(_overrides.Where(o => !_rawValues.ContainsKey(o.Key)).ToDictionary()));
     }
 
-    private void Bridge(string identifier, object? payload)
+    private void Bridge(string identifier, object? payload) => BridgeCurrent(identifier, () => payload);
+
+    /// <summary>Sends a message to the preview script; <paramref name="payload"/> is evaluated on the renderer's thread right before sending.</summary>
+    private void BridgeCurrent(string identifier, Func<object?> payload)
     {
         if (_disposed)
             return;
@@ -576,7 +582,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         {
             try
             {
-                await JS.InvokeVoidAsync(identifier, payload);
+                await JS.InvokeVoidAsync(identifier, payload());
             }
             catch (Exception ex) when (ex is JSDisconnectedException or JSException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
             {

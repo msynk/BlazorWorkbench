@@ -1,0 +1,179 @@
+@namespace SampleComponents.Analytics
+@using SampleComponents.Data
+@using SampleComponents.Display
+@implements IDisposable
+@inject HttpClient Http
+@inject TimeProvider Time
+
+@* A dashboard page composed of library components. Each widget loads from its own endpoint (api/dashboard/kpis,
+   api/dashboard/revenue?range=..., api/orders/recent), so a slow or failing service affects only its own widget. *@
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div>
+            <h2 class="dashboard-title">@_greeting</h2>
+            <p class="field-help">Store performance · data as of @Time.GetUtcNow().ToString("t", CultureInfo.CurrentCulture)</p>
+        </div>
+        <div class="field dashboard-period">
+            <label for="dashboard-period">Period</label>
+            <select id="dashboard-period" value="@_range" @onchange="OnRangeChangedAsync">
+                <option value="6m">Last 6 months</option>
+                <option value="12m">Last 12 months</option>
+            </select>
+        </div>
+    </header>
+
+    <section class="dashboard-kpis" aria-label="Key metrics">
+        @if (_kpis.State == WidgetState.Error)
+        {
+            @ErrorBox("Key metrics could not be loaded.", _kpis.Error, LoadKpisAsync)
+        }
+        else if (_kpis.Value is { } kpis)
+        {
+            @foreach (var kpi in kpis)
+            {
+                <KpiCard Label="@kpi.Label" Value="kpi.Value" Format="@kpi.Format" Change="kpi.Change" HigherIsBetter="kpi.HigherIsBetter" Trend="kpi.Trend" />
+            }
+        }
+        else
+        {
+            @foreach (var label in PlaceholderLabels)
+            {
+                <KpiCard Label="@label" Loading="true" />
+            }
+        }
+    </section>
+
+    <div class="dashboard-grid">
+        <section class="dashboard-panel" aria-label="Revenue">
+            @if (_revenue.State == WidgetState.Error)
+            {
+                @ErrorBox("Revenue could not be loaded.", _revenue.Error, LoadRevenueAsync)
+            }
+            else if (_revenue.Value is { } points && _revenue.State == WidgetState.Loaded)
+            {
+                <RevenueChart Title="@(_range == "6m" ? "Revenue, last 6 months" : "Revenue, last 12 months")" Points="points" />
+            }
+            else
+            {
+                <div class="skeleton skeleton-chart" aria-hidden="true"></div>
+                <span class="visually-hidden">Loading revenue…</span>
+            }
+        </section>
+
+        <section class="dashboard-panel" aria-labelledby="dashboard-orders">
+            <h3 id="dashboard-orders" class="dashboard-panel-title">Recent orders</h3>
+            @if (_orders.State == WidgetState.Error)
+            {
+                @ErrorBox("Recent orders could not be loaded.", _orders.Error, LoadOrdersAsync)
+            }
+            else if (_orders.Value is { } orders)
+            {
+                <DataTable TItem="RecentOrder" Items="orders" EmptyText="No orders yet.">
+                    <HeaderTemplate><th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Placed</th></HeaderTemplate>
+                    <RowTemplate Context="order">
+                        <td>@order.Number</td>
+                        <td>@order.Customer</td>
+                        <td class="dashboard-money">@order.Total.ToString("C", CultureInfo.CurrentCulture)</td>
+                        <td><Badge Text="@order.Status.ToString()" Tone="@ToneOf(order.Status)" /></td>
+                        <td><DateLabel Value="order.PlacedAt" Format="t" /></td>
+                    </RowTemplate>
+                </DataTable>
+            }
+            else
+            {
+                <div class="skeleton skeleton-rows" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+                <span class="visually-hidden">Loading orders…</span>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] PlaceholderLabels = ["Revenue", "Orders", "Conversion rate", "Refund rate"];
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Widget<IReadOnlyList<KpiSnapshot>> _kpis = new();
+    private readonly Widget<IReadOnlyList<RevenuePoint>> _revenue = new();
+    private readonly Widget<IReadOnlyList<RecentOrder>> _orders = new();
+    private string _range = "12m";
+    private string _greeting = "Welcome";
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = AuthState is null ? null : (await AuthState).User;
+        var name = user?.Identity?.IsAuthenticated == true ? user.Identity.Name?.Split(' ')[0] : null;
+        var hour = TimeZoneInfo.ConvertTime(Time.GetUtcNow(), Time.LocalTimeZone).Hour;
+        var part = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+        _greeting = name is null ? part : $"{part}, {name}";
+
+        await Task.WhenAll(LoadKpisAsync(), LoadRevenueAsync(), LoadOrdersAsync());
+    }
+
+    private Task LoadKpisAsync() => LoadAsync(_kpis, "api/dashboard/kpis");
+    private Task LoadRevenueAsync() => LoadAsync(_revenue, $"api/dashboard/revenue?range={_range}");
+    private Task LoadOrdersAsync() => LoadAsync(_orders, "api/orders/recent");
+
+    private async Task OnRangeChangedAsync(ChangeEventArgs e)
+    {
+        _range = e.Value?.ToString() ?? "12m";
+        await LoadRevenueAsync();
+    }
+
+    private async Task LoadAsync<T>(Widget<T> widget, string url) where T : class
+    {
+        widget.State = WidgetState.Loading;
+        widget.Error = null;
+        try
+        {
+            widget.Value = await Http.GetFromJsonAsync<T>(url, _cts.Token);
+            widget.State = WidgetState.Loaded;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            widget.State = WidgetState.Error;
+            widget.Error = ex switch
+            {
+                HttpRequestException { StatusCode: { } status } => $"The server answered {(int)status}.",
+                HttpRequestException => "No connection.",
+                TaskCanceledException => "The request timed out.",
+                _ => "The response could not be read.",
+            };
+        }
+
+        StateHasChanged();
+    }
+
+    private RenderFragment ErrorBox(string message, string? detail, Func<Task> retry) =>
+        @<div class="alert alert-error dashboard-error" role="alert">
+            <span class="alert-message">@message <span class="field-help">@detail</span></span>
+            <button type="button" class="btn btn-secondary btn-small" @onclick="retry">Retry</button>
+        </div>;
+
+    private static Tone ToneOf(OrderStatus status) => status switch
+    {
+        OrderStatus.Paid => Tone.Success,
+        OrderStatus.Shipped => Tone.Info,
+        OrderStatus.Refunded => Tone.Warning,
+        _ => Tone.Neutral,
+    };
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private enum WidgetState { Loading, Loaded, Error }
+
+    private sealed class Widget<T>
+    {
+        public WidgetState State { get; set; }
+        public T? Value { get; set; }
+        public string? Error { get; set; }
+    }
+}

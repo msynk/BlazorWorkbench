@@ -30,7 +30,7 @@ public sealed class SignupFormScenarios : ScenarioSet<SignupForm>
 {
     protected override void Configure(ScenarioSetBuilder<SignupForm> set)
     {
-        set.Title("Forms/Signup form").Tags("forms", "validation");
+        set.Title("Forms/Signup form").Description("A sign-up form with data annotation validation.").Tags("forms", "validation");
         set.Fixture<SignupModel>("Prefilled", _ => new SignupModel { Name = "Ada", Email = "ada@example.com", AcceptTerms = true });
 
         set.Add("Empty", s => s
@@ -55,7 +55,7 @@ public sealed class DialogScenarios : ScenarioSet<Dialog>
 {
     protected override void Configure(ScenarioSetBuilder<Dialog> set)
     {
-        set.Title("Overlays/Dialog").Tags("focus", "keyboard");
+        set.Title("Overlays/Dialog").Description("A modal dialog that moves focus into itself when it opens and closes on Escape.").Tags("focus", "keyboard");
         set.Setup(s => s
             .Parameter(d => d.Title, "Discard draft?")
             .ChildContent("Your unsaved changes will be lost.")
@@ -84,7 +84,7 @@ public sealed class AvatarUploadScenarios : ScenarioSet<AvatarUpload>
 
     protected override void Configure(ScenarioSetBuilder<AvatarUpload> set)
     {
-        set.Title("Forms/Avatar upload").Tags("forms", "files");
+        set.Title("Forms/Avatar upload").Description("Picks an image with InputFile, shows its name and size, and rejects files above a size limit.").Tags("forms", "files");
         set.Add("Default", s => s
             .Interaction("selecting a file shows its name", i => i
                 .Upload(By.Label("Profile picture"), "me.png", Pixel, "image/png")

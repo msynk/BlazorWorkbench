@@ -1,0 +1,143 @@
+@namespace SampleComponents.Forms
+
+@* A three-step onboarding wizard: per-step validation, a progress indicator, keyboard support (Enter continues) and focus
+   moved to each new step's heading so screen reader users know where they are. *@
+<section class="wizard" aria-labelledby="wizard-title">
+    <h2 id="wizard-title" class="wizard-title">Set up your account</h2>
+    @if (_completed)
+    {
+        <div class="wizard-done" role="status">
+            <h3 class="wizard-heading">You're all set, @FirstName!</h3>
+            <p>We'll show distances in @(_units == MeasurementUnits.Metric ? "kilometers" : "miles") and suggest @_activity.ToLowerInvariant() routes first.</p>
+        </div>
+    }
+    else
+    {
+        <ol class="wizard-steps">
+            @for (var i = 0; i < Steps.Length; i++)
+            {
+                <li class="wizard-step @(i < _step ? "wizard-step-done" : i == _step ? "wizard-step-current" : "")" aria-current="@(i == _step ? "step" : null)">
+                    <span class="wizard-step-number" aria-hidden="true">@(i + 1)</span>@Steps[i]
+                </li>
+            }
+        </ol>
+        <form class="wizard-body" @onsubmit="NextAsync">
+            <h3 class="wizard-heading" tabindex="-1" @ref="_heading">@Steps[_step]</h3>
+            @switch (_step)
+            {
+                case 0:
+                    <div class="field">
+                        <label for="wizard-name">Full name</label>
+                        <input id="wizard-name" @bind="_name" @bind:event="oninput" autocomplete="name" aria-describedby="wizard-name-help" />
+                        <div id="wizard-name-help" class="field-help">Shown on your public trail reviews.</div>
+                    </div>
+                    <div class="field">
+                        <label for="wizard-activity">Favorite activity</label>
+                        <select id="wizard-activity" @bind="_activity">
+                            @foreach (var activity in Activities)
+                            {
+                                <option value="@activity">@activity</option>
+                            }
+                        </select>
+                    </div>
+                    break;
+                case 1:
+                    <fieldset class="wizard-fieldset">
+                        <legend>Units</legend>
+                        <label class="wizard-choice"><input type="radio" name="wizard-units" checked="@(_units == MeasurementUnits.Metric)" @onchange="() => _units = MeasurementUnits.Metric" /> Metric (km, °C)</label>
+                        <label class="wizard-choice"><input type="radio" name="wizard-units" checked="@(_units == MeasurementUnits.Imperial)" @onchange="() => _units = MeasurementUnits.Imperial" /> Imperial (mi, °F)</label>
+                    </fieldset>
+                    <div class="field field-inline">
+                        <input id="wizard-news" type="checkbox" @bind="_newsletter" />
+                        <label for="wizard-news">Email me trail news and offers</label>
+                    </div>
+                    break;
+                default:
+                    <dl class="wizard-review" data-testid="review">
+                        <dt>Name</dt><dd>@_name</dd>
+                        <dt>Favorite activity</dt><dd>@_activity</dd>
+                        <dt>Units</dt><dd>@_units</dd>
+                        <dt>Newsletter</dt><dd>@(_newsletter ? "Yes" : "No")</dd>
+                    </dl>
+                    break;
+            }
+            <div class="wizard-actions">
+                @if (_step > 0)
+                {
+                    <button type="button" class="btn btn-secondary btn-medium" @onclick="Back">Back</button>
+                }
+                <button type="submit" class="btn btn-primary btn-medium" disabled="@(!CanContinue)">@(_step == Steps.Length - 1 ? "Finish" : "Next")</button>
+            </div>
+        </form>
+    }
+</section>
+
+@code {
+    private static readonly string[] Steps = ["Your profile", "Preferences", "Review"];
+    private static readonly string[] Activities = ["Hiking", "Trail running", "Climbing", "Camping"];
+    private ElementReference _heading;
+    private int _step;
+    private bool _focusPending, _completed, _newsletter = true;
+    private string _name = "", _activity = Activities[0];
+    private MeasurementUnits _units;
+    private OnboardingProfile? _appliedInitial;
+    private int? _appliedStart;
+
+    /// <summary>Answers to start from, for example from an existing profile.</summary>
+    [Parameter] public OnboardingProfile? Initial { get; set; }
+
+    /// <summary>Step to open first (1 to 3). Later steps need a name.</summary>
+    [Parameter] public int StartStep { get; set; } = 1;
+
+    /// <summary>Raised with the answers when the user finishes.</summary>
+    [Parameter] public EventCallback<OnboardingProfile> OnCompleted { get; set; }
+
+    private bool CanContinue => !string.IsNullOrWhiteSpace(_name);
+    private string FirstName => _name.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? _name;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_appliedInitial, Initial) && Initial is not null)
+        {
+            (_name, _activity, _units, _newsletter) = (Initial.Name, Initial.Activity, Initial.Units, Initial.Newsletter);
+        }
+
+        _appliedInitial = Initial;
+        if (_appliedStart != StartStep)
+        {
+            _appliedStart = StartStep;
+            _step = CanContinue ? Math.Clamp(StartStep - 1, 0, Steps.Length - 1) : 0;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusPending && !_completed)
+        {
+            _focusPending = false;
+            await _heading.FocusAsync();
+        }
+    }
+
+    private async Task NextAsync()
+    {
+        if (!CanContinue)
+            return;
+
+        if (_step < Steps.Length - 1)
+        {
+            _step++;
+            _focusPending = true;
+            return;
+        }
+
+        _completed = true;
+        await OnCompleted.InvokeAsync(new OnboardingProfile(_name.Trim(), _activity, _units, _newsletter));
+    }
+
+    private void Back()
+    {
+        _step--;
+        _focusPending = true;
+    }
+}

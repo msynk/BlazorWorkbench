@@ -75,7 +75,7 @@
                 @if (scenario.Description is { } description) { <p class="wb-muted">@description</p> }
                 @if (index < MaxLivePreviews)
                 {
-                    <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@($"_workbench/preview/{scenario.Id}")"></iframe>
+                    <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@PreviewSource(scenario)"></iframe>
                 }
                 <pre class="wb-pre"><code>@RazorSnippetGenerator.Generate(scenario, Component.Metadata)</code></pre>
             </section>
@@ -93,4 +93,11 @@
 
     [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
     [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+
+    /// <summary>Theme for scenarios that do not declare one (the shell passes the theme matching its own).</summary>
+    [Parameter] public string? PreviewTheme { get; set; }
+
+    private string PreviewSource(ScenarioDefinition scenario) =>
+        $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" +
+        (scenario.Environment.Theme is null && !string.IsNullOrEmpty(PreviewTheme) ? $"?theme={Uri.EscapeDataString(PreviewTheme)}" : "");
 }

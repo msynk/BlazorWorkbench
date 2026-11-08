@@ -77,13 +77,13 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 
 | Measurement | Value |
 | --- | --- |
-| Sample catalog (21 components, 76 scenarios) | built at startup in well under 1 s |
+| Sample catalog (32 components, 144 scenarios, 76 interaction tests) | built at startup in well under 1 s |
 | Synthetic catalog, 1,000 components × 10 parameters | build ≈ 0.75 s, filter ≈ 1 ms, catalog JSON ≈ 3 MB serialized in ≈ 0.25 s |
 | Explorer with 1,000 components (bUnit) | 25 collapsed groups; children render only when opened |
-| `workbench test --a11y --visual`, Interactive Server (76 scenarios, 4 workers) | ≈ 18 s after host start |
-| Same, Interactive WebAssembly | ≈ 60 s (each preview boots the runtime) |
-| Same, .NET MAUI Blazor Hybrid (WebView2 157, one page) | ≈ 41 s after the app starts |
-| Automated tests | Core 96 · Components 114 · Hybrid 27 · Testing 39 · CLI 10 · E2E 34 (incl. WebAssembly and MAUI), all passing |
+| `workbench test --a11y --visual`, Interactive Server (144 scenarios, 4 workers) | ≈ 36 s after host start |
+| Same, Interactive WebAssembly | ≈ 105 s (each preview boots the runtime) |
+| Same, .NET MAUI Blazor Hybrid (WebView2 157, one page) | ≈ 98 s after the app starts |
+| Automated tests | Core 101 · Components 186 · Hybrid 28 · Testing 45 · CLI 12 · E2E 34 (incl. WebAssembly and MAUI) · Samples 156, all passing |
 | CI (GitHub Actions, first push) | Build/test on Ubuntu and Windows, Windows visual job and pack: all green |
 
 These numbers come from one workstation, and results on other hardware differ. Each report records the environment of its run.
@@ -98,6 +98,8 @@ Workbench found real defects in the sample library, which shows it works as inte
 - Blazor Hybrid: a BlazorWebView cannot host the iframe-based shell, MAUI did not apply WebView2 options from `BlazorWebViewInitializing`, and MAUI global usings clash with common component names (`Button`, `Size`). These led to the native picker, environment-variable activation of the DevTools port, and the documented `<Using Remove>` fix.
 - Readiness race: a fake response was counted as done before the component had consumed it. Fixed by tracking the response body.
 - Packaging: hosts without `.razor` files lacked `blazor.web.js` ([ADR 0004](adr/0004-blazor-framework-assets.md)), and the WebAssembly server package had vulnerable 10.0.x versions (pinned to 10.0.14).
+- Sample overhaul (feature-level components): `AppHeader` named its cart "Cart, 128 items" while the badge showed "99+" (axe `label-content-name-mismatch` in the *Busy cart* scenario).
+- Pending-count race: when several fake requests finished at once (a dashboard releasing three requests from one gate), the preview could receive the activity counts out of order and keep a stale non-zero value. Interaction steps then waited for their 5 s idle limit, and a Blazor Hybrid run timed out waiting for readiness. Fixed by sending the current count when the message goes out.
 
 ## Remaining gaps
 

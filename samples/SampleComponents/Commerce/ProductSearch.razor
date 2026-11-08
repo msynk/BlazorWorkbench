@@ -1,0 +1,162 @@
+@namespace SampleComponents.Commerce
+@implements IDisposable
+@inject IHttpClientFactory HttpClients
+
+@* Searches the catalog as you type with GET api/products/search?q=...&sort=..., through the named HttpClient "catalog".
+   A newer query cancels the request of the previous one. *@
+<section class="search" aria-labelledby="@(_id)-title">
+    <h2 id="@(_id)-title" class="search-title">@Title</h2>
+    <div class="search-controls">
+        <div class="field search-field">
+            <label for="@(_id)-q">Search products</label>
+            <input id="@(_id)-q" type="search" value="@_query" placeholder="Try tent, jacket or headlamp" autocomplete="off"
+                   @oninput="OnQueryChangedAsync" @onkeydown="OnKeyDownAsync" />
+        </div>
+        <div class="field search-sort">
+            <label for="@(_id)-sort">Sort by</label>
+            <select id="@(_id)-sort" value="@_sort" @onchange="OnSortChangedAsync">
+                <option value="relevance">Relevance</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+            </select>
+        </div>
+    </div>
+
+    <p class="search-summary" role="status" data-testid="summary">@Summary</p>
+
+    @if (_state == SearchState.Error)
+    {
+        <div class="alert alert-error" role="alert">
+            <span class="alert-message">Search is unavailable right now.</span>
+            <button type="button" class="btn btn-secondary btn-small" @onclick="SearchAsync">Retry</button>
+        </div>
+    }
+    else if (_results is { Items.Count: > 0 } results)
+    {
+        <ul class="search-hits" aria-busy="@(_state == SearchState.Searching ? "true" : "false")">
+            @foreach (var hit in results.Items)
+            {
+                <li class="search-hit" @key="hit.Sku">
+                    <span class="search-thumb search-thumb-@hit.Category.ToLowerInvariant()" aria-hidden="true">@hit.Category[..1]</span>
+                    <span class="search-hit-body">
+                        <span class="search-hit-name">@hit.Name</span>
+                        <span class="search-hit-meta">@hit.Category · rated @hit.Rating.ToString("0.0", CultureInfo.CurrentCulture) of 5</span>
+                    </span>
+                    @if (!hit.InStock)
+                    {
+                        <span class="badge badge-warning">Sold out</span>
+                    }
+                    <span class="search-hit-price">@hit.Price.ToString("C", CultureInfo.CurrentCulture)</span>
+                    <button type="button" class="btn btn-secondary btn-small" aria-label="@($"View {hit.Name}")" @onclick="() => OnSelect.InvokeAsync(hit)">View</button>
+                </li>
+            }
+        </ul>
+    }
+    else if (_state == SearchState.Loaded)
+    {
+        <p class="search-empty">Nothing matches “@_results?.Query”. Check the spelling or try a broader term such as “jacket”.</p>
+    }
+</section>
+
+@code {
+    private readonly string _id = "search-" + Guid.NewGuid().ToString("N")[..8];
+    private CancellationTokenSource? _cts;
+    private string _query = "";
+    private string? _appliedQuery;
+    private string _sort = "relevance";
+    private SearchState _state;
+    private SearchResults? _results;
+
+    /// <summary>Heading of the search panel.</summary>
+    [Parameter] public string Title { get; set; } = "Find gear";
+
+    /// <summary>Initial search text; a search runs immediately when it is long enough.</summary>
+    [Parameter] public string? Query { get; set; }
+
+    /// <summary>Fewest characters that start a search.</summary>
+    [Parameter] public int MinLength { get; set; } = 2;
+
+    /// <summary>Raised when the user opens a product.</summary>
+    [Parameter] public EventCallback<ProductHit> OnSelect { get; set; }
+
+    private string Summary => _state switch
+    {
+        SearchState.Searching => "Searching…",
+        SearchState.Error => "",
+        SearchState.Loaded when _results is { Total: 0 } => $"No results for “{_results.Query}”",
+        SearchState.Loaded when _results is { } r => r.Total == 1 ? $"1 result for “{r.Query}”" : $"{r.Total.ToString(CultureInfo.CurrentCulture)} results for “{r.Query}”",
+        _ => $"Type at least {MinLength.ToString(CultureInfo.CurrentCulture)} characters to search.",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_appliedQuery != Query)
+        {
+            _appliedQuery = Query;
+            _query = Query ?? "";
+            await SearchAsync();
+        }
+    }
+
+    private async Task OnQueryChangedAsync(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        await SearchAsync();
+    }
+
+    private async Task OnSortChangedAsync(ChangeEventArgs e)
+    {
+        _sort = e.Value?.ToString() ?? "relevance";
+        await SearchAsync();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _query.Length > 0)
+        {
+            _query = "";
+            await SearchAsync();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+
+        var query = _query.Trim();
+        if (query.Length < MinLength)
+        {
+            _state = SearchState.Idle;
+            _results = null;
+            return;
+        }
+
+        var cts = _cts = new CancellationTokenSource();
+        _state = SearchState.Searching;
+        try
+        {
+            var client = HttpClients.CreateClient("catalog");
+            var results = await client.GetFromJsonAsync<SearchResults>($"api/products/search?q={Uri.EscapeDataString(query)}&sort={_sort}", cts.Token);
+            _results = results ?? new SearchResults(query, 0, []);
+            _state = SearchState.Loaded;
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            // A newer query replaced this one.
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _state = SearchState.Error;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private enum SearchState { Idle, Searching, Loaded, Error }
+}

@@ -1,0 +1,71 @@
+@namespace SampleComponents.Layout
+@inject IFeatureFlags Features
+
+@* The app's top bar: brand, main navigation, cart and account. Below 720 px wide the navigation collapses behind a Menu
+   button. Feature-flagged links come from IFeatureFlags. *@
+<header class="app-header @(_menuOpen ? "app-header-open" : "")">
+    <a class="app-brand" href="/">
+        <svg class="app-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 20 9 7l4 7 2-3 7 9z" /></svg>
+        <span>@Brand</span>
+    </a>
+    <button type="button" class="btn btn-secondary btn-small app-menu-button" aria-expanded="@(_menuOpen ? "true" : "false")" aria-controls="@_navId"
+            @onclick="() => _menuOpen = !_menuOpen">Menu</button>
+    <nav id="@_navId" class="app-nav" aria-label="Main">
+        <ul>
+            @foreach (var link in Links)
+            {
+                <li><a href="@link.Href" aria-current="@(link.Text == Active ? "page" : null)">@link.Text</a></li>
+            }
+            @if (Features.IsEnabled(SampleFeatures.Rewards))
+            {
+                <li><a href="/rewards">Rewards <span class="badge badge-success">New</span></a></li>
+            }
+        </ul>
+    </nav>
+    <div class="app-actions">
+        <a class="app-cart" href="/cart" aria-label="@CartLabel">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6.2" /><circle cx="10" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></svg>
+            @if (CartCount > 0)
+            {
+                <span class="app-cart-count" aria-hidden="true">@CartBadge</span>
+            }
+        </a>
+        <AuthorizeView>
+            <Authorized>
+                <span class="app-avatar" aria-hidden="true">@Initials(context.User.Identity?.Name)</span>
+                <span class="app-user">@context.User.Identity?.Name</span>
+            </Authorized>
+            <NotAuthorized>
+                <button type="button" class="btn btn-primary btn-small" @onclick="() => OnSignIn.InvokeAsync()">Sign in</button>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</header>
+
+@code {
+    private readonly string _navId = "nav-" + Guid.NewGuid().ToString("N")[..8];
+    private bool _menuOpen;
+
+    /// <summary>Product name shown next to the logo.</summary>
+    [Parameter] public string Brand { get; set; } = "Trailhead";
+
+    /// <summary>Main navigation links.</summary>
+    [Parameter] public IReadOnlyList<NavLinkItem> Links { get; set; } = NavLinkItem.Defaults;
+
+    /// <summary>Text of the current page's link.</summary>
+    [Parameter] public string? Active { get; set; }
+
+    /// <summary>Number of items in the cart.</summary>
+    [Parameter] public int CartCount { get; set; }
+
+    /// <summary>Raised when a signed-out visitor chooses to sign in.</summary>
+    [Parameter] public EventCallback OnSignIn { get; set; }
+
+    private string CartBadge => CartCount > 99 ? "99+" : CartCount.ToString(CultureInfo.CurrentCulture);
+
+    // The accessible name contains the visible badge text ("99+"), as WCAG 2.5.3 (label in name) requires.
+    private string CartLabel => CartCount == 1 ? "Cart, 1 item" : $"Cart, {CartBadge} items";
+
+    private static string Initials(string? name) =>
+        string.Concat((name ?? "?").Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(part => char.ToUpperInvariant(part[0])));
+}

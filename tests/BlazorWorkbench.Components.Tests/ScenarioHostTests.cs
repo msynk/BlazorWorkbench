@@ -22,6 +22,8 @@ public class ScenarioHostTests : BunitContext
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+        // The sample library's authorization policies (used by WorkspaceSettings), registered like its hosts do.
+        Services.AddSampleComponents();
     }
 
     [Fact]

@@ -1,0 +1,124 @@
+@namespace SampleComponents.Analytics
+
+@* Revenue per period as an SVG bar chart (no JavaScript) with an optional target line. Screen readers get a summary and a
+   visually hidden data table. Period labels follow the current culture, including its calendar. *@
+<figure class="chart" aria-labelledby="@(_id)-caption">
+    <figcaption id="@(_id)-caption" class="chart-title">@Title</figcaption>
+    @if (Points.Count == 0)
+    {
+        <p class="chart-empty">No revenue was recorded in this period.</p>
+    }
+    else
+    {
+        <svg class="chart-svg" viewBox="0 0 @Width @Height" role="img" aria-label="@Summary" focusable="false">
+            @foreach (var tick in _ticks)
+            {
+                <line class="chart-grid" x1="@Left" x2="@(Width - Right)" y1="@F(Y(tick))" y2="@F(Y(tick))" />
+                <!text class="chart-axis" x="@(Left - 8)" y="@F(Y(tick) + 4)" text-anchor="end">@Compact(tick)</!text>
+            }
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var point = Points[i];
+                var x = Left + i * Band + (Band - BarWidth) / 2;
+                var top = Y((double)point.Revenue);
+                <rect class="chart-bar @(i == _peak ? "chart-bar-peak" : "")" x="@F(x)" y="@F(top)" width="@F(BarWidth)" height="@F(Baseline - top)" rx="3" />
+                @if (i % _labelEvery == 0)
+                {
+                    <!text class="chart-axis" x="@F(Left + i * Band + Band / 2)" y="@(Height - 8)" text-anchor="middle">@Label(point)</!text>
+                }
+            }
+            @if (HasTargets)
+            {
+                <polyline class="chart-target" points="@TargetPoints" />
+            }
+        </svg>
+        <div class="chart-legend" aria-hidden="true">
+            <span><span class="chart-key chart-key-bar"></span>Revenue</span>
+            @if (HasTargets)
+            {
+                <span><span class="chart-key chart-key-target"></span>Target</span>
+            }
+        </div>
+        <table class="visually-hidden">
+            <caption>@Title</caption>
+            <thead><tr><th scope="col">Period</th><th scope="col">Revenue</th>@if (HasTargets) { <th scope="col">Target</th> }</tr></thead>
+            <tbody>
+                @foreach (var point in Points)
+                {
+                    <tr><td>@Label(point)</td><td>@Money(point.Revenue)</td>@if (HasTargets) { <td>@(point.Target is { } t ? Money(t) : "—")</td> }</tr>
+                }
+            </tbody>
+        </table>
+    }
+</figure>
+
+@code {
+    private const int Width = 640, Height = 260, Left = 56, Right = 12, Top = 14, Bottom = 30;
+    private const double Baseline = Height - Bottom;
+    private readonly string _id = "chart-" + Guid.NewGuid().ToString("N")[..8];
+    private double[] _ticks = [];
+    private double _scaleMax = 1;
+    private int _peak, _labelEvery = 1;
+
+    /// <summary>Chart caption.</summary>
+    [Parameter] public string Title { get; set; } = "Revenue";
+
+    /// <summary>Values to plot, oldest first.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RevenuePoint> Points { get; set; } = [];
+
+    /// <summary>Date format of the period labels (formatted with the current culture).</summary>
+    [Parameter] public string LabelFormat { get; set; } = "MMM";
+
+    private bool HasTargets => Points.Any(p => p.Target is not null);
+    private double Band => (double)(Width - Left - Right) / Points.Count;
+    private double BarWidth => Band * 0.62;
+
+    protected override void OnParametersSet()
+    {
+        if (Points.Count == 0)
+            return;
+
+        var max = (double)Points.Max(p => Math.Max(p.Revenue, p.Target ?? 0));
+        var step = NiceStep(max / 4);
+        _scaleMax = step * 4;
+        _ticks = Enumerable.Range(0, 5).Select(i => i * step).ToArray();
+        _peak = Points.Select((p, i) => (p.Revenue, i)).MaxBy(x => x.Revenue).i;
+        _labelEvery = (int)Math.Ceiling(Points.Count / 12.0);
+    }
+
+    private static double NiceStep(double raw)
+    {
+        if (raw <= 0)
+            return 1;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        var normalized = raw / magnitude;
+        return magnitude * (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10);
+    }
+
+    private double Y(double value) => Baseline - value / _scaleMax * (Baseline - Top);
+
+    private string TargetPoints => string.Join(' ', Points.Select((p, i) => (p, i)).Where(x => x.p.Target is not null)
+        .Select(x => $"{F(Left + x.i * Band + Band / 2)},{F(Y((double)x.p.Target!.Value))}"));
+
+    private string Summary
+    {
+        get
+        {
+            var high = Points.MaxBy(p => p.Revenue)!;
+            var low = Points.MinBy(p => p.Revenue)!;
+            return $"{Title}, {Label(Points[0])} to {Label(Points[^1])}. Highest {Label(high)} at {Money(high.Revenue)}; lowest {Label(low)} at {Money(low.Revenue)}.";
+        }
+    }
+
+    private string Label(RevenuePoint point) => point.Period.ToString(LabelFormat, CultureInfo.CurrentCulture);
+
+    private static string Money(decimal value) => value.ToString("C0", CultureInfo.CurrentCulture);
+
+    private static string Compact(double value) =>
+        value >= 1_000_000 ? (value / 1_000_000).ToString("0.#", CultureInfo.CurrentCulture) + "M"
+        : value >= 1_000 ? (value / 1_000).ToString("0.#", CultureInfo.CurrentCulture) + "K"
+        : value.ToString("0", CultureInfo.CurrentCulture);
+
+    // SVG coordinates must not use the current culture's decimal separator.
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+}

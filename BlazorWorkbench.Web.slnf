@@ -16,6 +16,7 @@
       "samples\\SampleWorkbench\\SampleWorkbench.csproj",
       "samples\\SampleWorkbench.Wasm\\SampleWorkbench.Wasm.csproj",
       "samples\\SampleWorkbench.Wasm.Client\\SampleWorkbench.Wasm.Client.csproj",
+      "samples\\SampleComponents.Tests\\SampleComponents.Tests.csproj",
       "tests\\BlazorWorkbench.Core.Tests\\BlazorWorkbench.Core.Tests.csproj",
       "tests\\BlazorWorkbench.Components.Tests\\BlazorWorkbench.Components.Tests.csproj",
       "tests\\BlazorWorkbench.Hybrid.Tests\\BlazorWorkbench.Hybrid.Tests.csproj",

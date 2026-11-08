@@ -1,7 +1,5 @@
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Inputs;
-using SampleWorkbench.Editors;
+using SampleWorkbench;
 
 namespace SampleWorkbench.Wasm.Client;
 
@@ -11,8 +9,8 @@ public static class SampleSetup
     public static void Configure(WorkbenchOptions options)
     {
         options.Title = "Sample Components (WebAssembly)";
-        options.AddAssemblyOf<Button>();
+        SampleCatalog.Configure(options);
+        // The scenarios are compiled into this client (linked from the Interactive Server sample).
         options.ScenarioAssemblies.Add(typeof(SampleSetup).Assembly);
-        options.AddParameterEditor<HexColor, HexColorEditor>();
     }
 }

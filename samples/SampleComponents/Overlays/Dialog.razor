@@ -21,13 +21,17 @@
     /// <summary>Whether the dialog is open. Use <c>@bind-Open</c>.</summary>
     [Parameter] public bool Open { get; set; }
 
+    /// <summary>Raised with false when the dialog closes (Escape, Cancel, Confirm or the backdrop).</summary>
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
 
     /// <summary>Dialog heading (also its accessible name).</summary>
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
+    /// <summary>Dialog body.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
+    /// <summary>Label of the confirm button.</summary>
     [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    /// <summary>Label of the cancel button.</summary>
     [Parameter] public string CancelText { get; set; } = "Cancel";
 
     /// <summary>Raised when the user confirms.</summary>

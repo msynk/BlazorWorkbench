@@ -1,0 +1,106 @@
+@namespace SampleComponents.Commerce
+@implements IDisposable
+@inject TimeProvider Time
+
+@* A time-limited promotion with a live countdown. Time comes from TimeProvider (also its timers), so a fake clock can show
+   any moment of the sale: upcoming, live, the last minutes, or ended. *@
+<section class="sale sale-@Phase.ToString().ToLowerInvariant()" aria-labelledby="@_id">
+    <div class="sale-text">
+        <p class="sale-eyebrow">@Eyebrow</p>
+        <h2 id="@_id" class="sale-title">@Title</h2>
+        <p class="sale-offer">@Offer</p>
+    </div>
+    <div class="sale-side">
+        @switch (Phase)
+        {
+            case SalePhase.Upcoming:
+                <p class="sale-when">Starts @StartsAt.ToString("f", CultureInfo.CurrentCulture)</p>
+                <p class="sale-note">in @Describe(StartsAt - Now)</p>
+                break;
+            case SalePhase.Ended:
+                <p class="sale-when">This sale ended @EndsAt.ToString("f", CultureInfo.CurrentCulture).</p>
+                break;
+            default:
+                var left = EndsAt - Now;
+                <div class="sale-countdown" role="timer" aria-label="@($"Ends in {Describe(left)}")" data-testid="countdown">
+                    @if (left.TotalDays >= 1)
+                    {
+                        <span class="sale-unit"><span class="sale-num">@((int)left.TotalDays)</span><span class="sale-label">days</span></span>
+                    }
+                    <span class="sale-unit"><span class="sale-num">@left.Hours.ToString("00", CultureInfo.CurrentCulture)</span><span class="sale-label">hours</span></span>
+                    <span class="sale-unit"><span class="sale-num">@left.Minutes.ToString("00", CultureInfo.CurrentCulture)</span><span class="sale-label">min</span></span>
+                    <span class="sale-unit"><span class="sale-num">@left.Seconds.ToString("00", CultureInfo.CurrentCulture)</span><span class="sale-label">sec</span></span>
+                </div>
+                <button type="button" class="btn btn-primary btn-medium" @onclick="() => OnShop.InvokeAsync()">Shop the sale</button>
+                break;
+        }
+    </div>
+</section>
+
+@code {
+    private readonly string _id = "sale-" + Guid.NewGuid().ToString("N")[..8];
+    private ITimer? _timer;
+    private int _renderQueued;
+
+    /// <summary>Headline of the promotion.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>What the customer gets.</summary>
+    [Parameter] public string Offer { get; set; } = "";
+
+    /// <summary>When the sale opens.</summary>
+    [Parameter] public DateTimeOffset StartsAt { get; set; }
+
+    /// <summary>When the sale closes.</summary>
+    [Parameter, EditorRequired] public DateTimeOffset EndsAt { get; set; }
+
+    /// <summary>Remaining time below which the banner switches to its urgent style.</summary>
+    [Parameter] public TimeSpan EndingSoon { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>Raised when the customer opens the sale.</summary>
+    [Parameter] public EventCallback OnShop { get; set; }
+
+    private DateTimeOffset Now => Time.GetUtcNow();
+
+    private SalePhase Phase =>
+        Now < StartsAt ? SalePhase.Upcoming
+        : Now >= EndsAt ? SalePhase.Ended
+        : EndsAt - Now <= EndingSoon ? SalePhase.Urgent
+        : SalePhase.Live;
+
+    private string Eyebrow => Phase switch
+    {
+        SalePhase.Upcoming => "Coming soon",
+        SalePhase.Urgent => "Ending soon",
+        SalePhase.Ended => "Sale over",
+        _ => "Flash sale",
+    };
+
+    // One-shot timer re-armed after every tick: when a fake clock jumps ahead by hours, the banner renders once
+    // instead of replaying every elapsed second.
+    protected override void OnInitialized() => _timer = Time.CreateTimer(_ => Tick(), null, TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+
+    private void Tick()
+    {
+        if (Interlocked.Exchange(ref _renderQueued, 1) == 0)
+        {
+            _ = InvokeAsync(() =>
+            {
+                Volatile.Write(ref _renderQueued, 0);
+                StateHasChanged();
+            });
+        }
+
+        _timer?.Change(Phase == SalePhase.Ended ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+    }
+
+    private static string Describe(TimeSpan span) =>
+        span.TotalDays >= 1 ? $"{(int)span.TotalDays} d {span.Hours} h"
+        : span.TotalHours >= 1 ? $"{(int)span.TotalHours} h {span.Minutes} min"
+        : span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes} min {span.Seconds} s"
+        : $"{Math.Max(0, (int)span.TotalSeconds)} s";
+
+    public void Dispose() => _timer?.Dispose();
+
+    private enum SalePhase { Upcoming, Live, Urgent, Ended }
+}

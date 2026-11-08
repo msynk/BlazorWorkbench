@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <!-- One set of scenario sources for both hosting models. -->
+    <Compile Include="..\SampleWorkbench\SampleCatalog.cs" Link="SampleCatalog.cs" />
     <Compile Include="..\SampleWorkbench\Scenarios\*.cs" Link="Scenarios\%(Filename)%(Extension)" />
     <Compile Include="..\SampleWorkbench\Fakes\*.cs" Link="Fakes\%(Filename)%(Extension)" />
     <Compile Include="..\SampleWorkbench\Providers\*.cs" Link="Providers\%(Filename)%(Extension)" />

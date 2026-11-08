@@ -12,7 +12,7 @@ public sealed class BadgeScenarios : ScenarioSet<Badge>
 {
     protected override void Configure(ScenarioSetBuilder<Badge> set)
     {
-        set.Title("Display/Badge");
+        set.Title("Display/Badge").Description("A small status label. Pair the tone with text: color alone never carries meaning.");
         set.Add("Neutral", s => s.Parameter(b => b.Text, "Draft"));
         set.Add("Success", s => s.Parameter(b => b.Text, "Published").Parameter(b => b.Tone, Tone.Success));
         set.Add("With count", s => s.Parameter(b => b.Text, "Inbox").Parameter(b => b.Tone, Tone.Info).Parameter(b => b.Count, 7));
@@ -28,7 +28,7 @@ public sealed class CardScenarios : ScenarioSet<Card>
 {
     protected override void Configure(ScenarioSetBuilder<Card> set)
     {
-        set.Title("Display/Card").Tags("layout");
+        set.Title("Display/Card").Description("A surface that groups related content, with an optional heading and footer.").Tags("layout");
         set.Add("Text content", s => s.Parameter(c => c.Title, "Project Apollo").ChildContent("Launch window opens in three days. All systems nominal."));
         set.Add("With footer", s => s
             .Parameter(c => c.Title, "Delete project?")
@@ -70,7 +70,7 @@ public sealed class AlertScenarios : ScenarioSet<Alert>
 {
     protected override void Configure(ScenarioSetBuilder<Alert> set)
     {
-        set.Title("Feedback/Alert").Tags("feedback", "live-region");
+        set.Title("Feedback/Alert").Description("An inline message. Errors and warnings are announced immediately, other messages politely.").Tags("feedback", "live-region");
         set.Add("Info", s => s.Parameter(a => a.Message, "A new version is available."));
         set.Add("Success", s => s.Parameter(a => a.Severity, AlertSeverity.Success).Parameter(a => a.Message, "Your changes were saved."));
         set.Add("Error dismissible", s => s
@@ -103,7 +103,7 @@ public sealed class ToolbarScenarios : ScenarioSet<Toolbar>
 {
     protected override void Configure(ScenarioSetBuilder<Toolbar> set)
     {
-        set.Title("Layout/Toolbar").Tags("rtl", "navigation");
+        set.Title("Layout/Toolbar").Description("A horizontal toolbar that mirrors correctly in right-to-left layouts.").Tags("rtl", "navigation");
         set.Setup(s => s
             .Parameter(t => t.Items, (IReadOnlyList<string>)["Overview", "Activity", "Settings"])
             .Parameter(t => t.Active, "Activity")
@@ -127,7 +127,7 @@ public sealed class SortableListScenarios : ScenarioSet<SortableList>
 
     protected override void Configure(ScenarioSetBuilder<SortableList> set)
     {
-        set.Title("Layout/Sortable list").Tags("drag-and-drop", "keyboard");
+        set.Title("Layout/Sortable list").Description("A list the user reorders with drag and drop or with Alt+Arrow keys.").Tags("drag-and-drop", "keyboard");
         set.Add("Default", s => s
             .Parameter(l => l.Items, Tasks)
             .Interaction("drag to reorder", i => i

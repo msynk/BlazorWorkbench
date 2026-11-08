@@ -189,6 +189,48 @@ public class ShellTests(WorkbenchFixture fixture)
     }
 
     [Fact]
+    public async Task Preview_follows_the_workbench_theme_until_a_theme_is_chosen()
+    {
+        // A dark operating system theme makes the Workbench dark, and the preview follows it.
+        var context = await fixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            BaseURL = fixture.Host.BaseAddress.ToString(),
+            ViewportSize = new ViewportSize { Width = 1440, Height = 900 },
+            ColorScheme = Microsoft.Playwright.ColorScheme.Dark,
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync("scenario/display-card--text-content");
+        await WaitReadyAsync(page);
+        await Expect(page.Locator(".wb-shell")).ToHaveAttributeAsync("data-shell-theme", "dark");
+        await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
+
+        // Toggling the Workbench theme switches the preview live.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
+        await Expect(page.Locator(".wb-shell")).ToHaveAttributeAsync("data-shell-theme", "light");
+        await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "light");
+
+        // An explicit choice sticks, and the deep link records it.
+        await page.Locator("#wb-theme").SelectOptionAsync("dark");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
+        await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
+        await Expect(page).ToHaveURLAsync(new Regex("theme=dark"));
+        await context.CloseAsync();
+    }
+
+    [Fact]
+    public async Task Shell_fills_the_window_without_gutters_or_page_scrolling()
+    {
+        var page = await OpenAsync("");
+        var box = await page.Locator(".wb-shell").BoundingBoxAsync();
+        Assert.Equal(0, box!.X);
+        Assert.Equal(0, box.Y);
+        Assert.Equal(1440, box.Width, 1);
+        Assert.Equal(900, box.Height, 1);
+        Assert.False(await page.EvaluateAsync<bool>("() => document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth"));
+    }
+
+    [Fact]
     public async Task Code_panel_exports_razor_and_scenario_code()
     {
         var page = await OpenAsync("scenario/inputs-button--danger?panel=code");

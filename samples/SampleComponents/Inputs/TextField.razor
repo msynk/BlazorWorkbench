@@ -24,12 +24,15 @@
     /// <summary>Raised on every keystroke.</summary>
     [Parameter] public EventCallback<string?> ValueChanged { get; set; }
 
+    /// <summary>Hint shown while the field is empty (never a replacement for the label).</summary>
     [Parameter] public string? Placeholder { get; set; }
 
     /// <summary>Help or error text shown below the input.</summary>
     [Parameter] public string? HelperText { get; set; }
 
+    /// <summary>Marks the field required (adds an asterisk and the HTML required attribute).</summary>
     [Parameter] public bool Required { get; set; }
+    /// <summary>Prevents editing.</summary>
     [Parameter] public bool Disabled { get; set; }
 
     /// <summary>Marks the field invalid (styles the helper text as an error).</summary>

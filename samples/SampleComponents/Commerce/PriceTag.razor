@@ -1,0 +1,40 @@
+@namespace SampleComponents.Commerce
+
+@* Shows a price for the current store (the cascading StoreSettings) in the user's culture: the culture decides separators and
+   symbol placement, the store decides the currency, its decimals and whether tax is included. *@
+<span class="price-tag price-tag-@Size.ToString().ToLowerInvariant()">
+    <span class="price-tag-amount" data-testid="price">@Money(Gross(Amount))</span>
+    @if (CompareAt is { } was && was > Amount)
+    {
+        <s class="price-tag-was"><span class="visually-hidden">Was </span>@Money(Gross(was))</s>
+        <span class="price-tag-discount">−@((1 - Amount / was).ToString("P0", CultureInfo.CurrentCulture))</span>
+    }
+    <span class="price-tag-tax">@(Settings.PricesIncludeTax ? $"incl. {Settings.TaxName}" : $"excl. {Settings.TaxName}")</span>
+</span>
+
+@code {
+    /// <summary>Net price (before tax) in the store currency.</summary>
+    [Parameter, EditorRequired] public decimal Amount { get; set; }
+
+    /// <summary>Original net price. When it is higher than <see cref="Amount"/>, the item is shown as on sale.</summary>
+    [Parameter] public decimal? CompareAt { get; set; }
+
+    /// <summary>Text size of the price.</summary>
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+
+    /// <summary>Currency and tax rules of the store, cascaded by the app shell.</summary>
+    [CascadingParameter] public StoreSettings? Store { get; set; }
+
+    private StoreSettings Settings => Store ?? StoreSettings.UnitedStates;
+
+    private decimal Gross(decimal net) =>
+        Math.Round(Settings.PricesIncludeTax ? net * (1 + Settings.TaxRate) : net, Settings.CurrencyDecimals, MidpointRounding.AwayFromZero);
+
+    private string Money(decimal value)
+    {
+        var format = (NumberFormatInfo)CultureInfo.CurrentCulture.NumberFormat.Clone();
+        format.CurrencySymbol = Settings.CurrencySymbol;
+        format.CurrencyDecimalDigits = Settings.CurrencyDecimals;
+        return value.ToString("C", format);
+    }
+}

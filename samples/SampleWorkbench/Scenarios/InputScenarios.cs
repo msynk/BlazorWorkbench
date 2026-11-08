@@ -52,7 +52,7 @@ public sealed class CounterScenarios : ScenarioSet<Counter>
 {
     protected override void Configure(ScenarioSetBuilder<Counter> set)
     {
-        set.Title("Inputs/Counter").Tags("inputs", "keyboard");
+        set.Title("Inputs/Counter").Description("A numeric stepper with optional bounds and arrow-key support.").Tags("inputs", "keyboard");
 
         set.Add("Default", s => s
             .Interaction("increment and decrement", i => i
@@ -86,7 +86,7 @@ public sealed class TextFieldScenarios : ScenarioSet<TextField>
 {
     protected override void Configure(ScenarioSetBuilder<TextField> set)
     {
-        set.Title("Inputs/Text field").Tags("inputs", "forms");
+        set.Title("Inputs/Text field").Description("A labeled text input with helper text, validation styling and two-way binding.").Tags("inputs", "forms");
         set.Setup(s => s.Parameter(t => t.Label, "Email address").Parameter(t => t.InputType, "email"));
 
         set.Add("Empty", s => s

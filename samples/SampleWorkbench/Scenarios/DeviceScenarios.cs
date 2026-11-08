@@ -31,7 +31,7 @@ public sealed class ShareCardScenarios : ScenarioSet<ShareCard>
 {
     protected override void Configure(ScenarioSetBuilder<ShareCard> set)
     {
-        set.Title("Device/Share card").Tags("device", "maui");
+        set.Title("Device/Share card").Description("A card whose Share button opens the platform share sheet (IShare from .NET MAUI Essentials).").Tags("device", "maui");
         set.Setup(s => s
             .Parameter(c => c.Title, "Lake loop trail")
             .Parameter(c => c.Text, "5.2 km around the lake, mostly flat.")
@@ -70,7 +70,7 @@ public sealed class DeviceSummaryScenarios : ScenarioSet<DeviceSummary>
 {
     protected override void Configure(ScenarioSetBuilder<DeviceSummary> set)
     {
-        set.Title("Device/Device summary").Tags("device", "maui");
+        set.Title("Device/Device summary").Description("An \"About this device\" panel built from IDeviceInfo, IBattery and IAppInfo (.NET MAUI Essentials).").Tags("device", "maui");
 
         set.Add("Android phone", s => s.Device(d => d.AndroidPhone("15.0").Battery(0.72).App("Trails", "2.4.0", "240")));
         set.Add("Low battery iPhone", s => s.Device(d => d

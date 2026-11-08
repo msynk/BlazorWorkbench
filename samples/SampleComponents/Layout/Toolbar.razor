@@ -26,6 +26,8 @@
     /// <summary>Content at the end (right in LTR, left in RTL).</summary>
     [Parameter] public RenderFragment? EndContent { get; set; }
 
+    /// <summary>Raised with the entry the user selects.</summary>
     [Parameter] public EventCallback<string> OnSelect { get; set; }
+    /// <summary>Raised when the user presses Back.</summary>
     [Parameter] public EventCallback OnBack { get; set; }
 }

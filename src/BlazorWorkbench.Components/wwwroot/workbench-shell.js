@@ -72,6 +72,11 @@ export function getPreference(key) {
   try { return localStorage.getItem('blazor-workbench:' + key); } catch { return null; }
 }
 
+// The Workbench theme when the user has not chosen one: the operating system's color scheme.
+export function getSystemTheme() {
+  try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; }
+}
+
 export function setPreference(key, value) {
   try { localStorage.setItem('blazor-workbench:' + key, value); } catch { /* storage unavailable */ }
 }

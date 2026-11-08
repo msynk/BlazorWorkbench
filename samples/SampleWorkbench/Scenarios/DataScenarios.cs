@@ -25,7 +25,7 @@ public sealed class PeopleTableScenarios : ScenarioSet<DataTable<Person>>
 
     protected override void Configure(ScenarioSetBuilder<DataTable<Person>> set)
     {
-        set.Title("Data/Data table").Tags("generic", "templates");
+        set.Title("Data/Data table").Description("A generic, templated table: header and row templates, a caption and an empty state.").Tags("generic", "templates");
         set.Fixture<IReadOnlyList<Person>>("Three people", ctx => SampleData.People(ctx.Random, 3), "Seeded, deterministic sample");
         set.Fixture<IReadOnlyList<Person>>("Fifty people", ctx => SampleData.People(ctx.Random, 50));
         set.Fixture<IReadOnlyList<Person>>("Nobody", _ => []);

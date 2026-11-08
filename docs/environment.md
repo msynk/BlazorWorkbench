@@ -47,7 +47,7 @@ Matching and responses:
 - Rules are evaluated in order. Rules of the scenario come before rules from `set.Setup(...)`.
 - `Times(n)` limits a rule to `n` matches. After that, matching continues with the next rules.
 - Faults look like real failures: `NetworkError` and `Offline()` throw `HttpRequestException` with `HttpRequestError.ConnectionError`. `Timeout()` throws `TaskCanceledException` with an inner `TimeoutException`, as `HttpClient.Timeout` does.
-- `.Handle((request, ctx) => ...)` produces a custom response in code.
+- `.Handle((request, ctx) => ...)` produces a custom response in code. The sample's [FakeBackends](../samples/SampleWorkbench/Fakes/FakeBackends.cs) filters a product catalog by query string and validates a posted order.
 - The injected `HttpClient` has the base address `https://workbench.invalid/`. The `.invalid` domain is reserved, so accidental real requests cannot resolve.
 - Every request is recorded with its redacted URL, status, duration and matched rule.
 
@@ -121,7 +121,7 @@ s.User("Grace", "Admin", "Auditor");
 s.User(u => u.Name("Grace").Role("Admin").Claim("department", "Engineering").AuthenticationType("Cookies"));
 ```
 
-`AuthorizeView`, `[CascadingParameter] Task<AuthenticationState>` and `IAuthorizationService` policies use the simulated principal. Register the policies your components use in the host with `builder.Services.AddAuthorizationCore(o => ...)`. The simulated principal exists only in the preview session and never authenticates real requests.
+`AuthorizeView`, `[CascadingParameter] Task<AuthenticationState>` and `IAuthorizationService` policies use the simulated principal. Register the policies your components use in the host with `builder.Services.AddAuthorizationCore(o => ...)`; the sample library ships them in `AddSampleComponents()`, which every sample host calls (see [WorkspaceSettingsScenarios](../samples/SampleWorkbench/Scenarios/AccountScenarios.cs)). The simulated principal exists only in the preview session and never authenticates real requests.
 
 ## Clock, randomness and culture
 
@@ -139,7 +139,7 @@ options.Themes.Add(new ThemeDefinition("light"));
 options.Themes.Add(new ThemeDefinition("dark", ColorScheme.Dark, CssClass: "theme-dark") { Stylesheets = ["css/dark.css"] });
 ```
 
-A theme sets `data-theme` and `color-scheme` on the preview `<html>`, adds its optional class and loads its stylesheets. Switching themes in the UI does not reload the preview. Media-query based dark mode (`prefers-color-scheme`) is emulated only in automated runs; browsers cannot emulate it inside an iframe.
+A theme sets `data-theme` and `color-scheme` on the preview `<html>`, adds its optional class and loads its stylesheets. Switching themes in the UI does not reload the preview. Unless the scenario, the URL or the toolbar picks a theme, the preview uses the theme matching the Workbench theme (the first theme with the same color scheme), and the Workbench theme follows the operating system until you toggle it. Media-query based dark mode (`prefers-color-scheme`) is emulated only in automated runs; browsers cannot emulate it inside an iframe.
 
 The viewport presets are `mobile` (375×667), `tablet` (768×1024), `laptop` (1280×800) and `desktop` (1440×900). You can add your own with `options.Viewports.Add(new ViewportPreset("wide", 1920, 1080))`. In automated runs, presets with `IsMobile` (such as `mobile`) emulate a phone: a mobile viewport and touch input, so `(hover: none)`, `(pointer: coarse)` and touch events apply. Firefox gets touch input only, because Playwright cannot emulate a mobile viewport there.
 

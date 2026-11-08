@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <Description>bUnit tests of the sample component library that reuse the Workbench scenarios: no browser, no duplicated setup.</Description>
+    <OutputType>Exe</OutputType>
+    <IsTestProject>true</IsTestProject>
+    <!-- xUnit1051: these samples favor readability over passing TestContext cancellation tokens everywhere. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- In your repository: <PackageReference Include="BlazorWorkbench.Testing.Bunit" />. -->
+    <ProjectReference Include="..\..\src\BlazorWorkbench.Testing.Bunit\BlazorWorkbench.Testing.Bunit.csproj" />
+    <!-- The Workbench host that declares the scenarios (it references the component library). -->
+    <ProjectReference Include="..\SampleWorkbench\SampleWorkbench.csproj" />
+  </ItemGroup>
+</Project>

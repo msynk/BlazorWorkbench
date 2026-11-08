@@ -1,0 +1,248 @@
+@namespace SampleComponents.Commerce
+@implements IDisposable
+@inject HttpClient Http
+
+@* Checkout: an order summary in the current culture, client-side validation, and POST api/orders with an answer for every
+   server outcome (created, validation problem, card declined, sold out, outage, timeout and offline). *@
+<section class="checkout" aria-labelledby="checkout-title">
+    <h2 id="checkout-title" class="checkout-title">Checkout</h2>
+    @if (_confirmation is { } confirmation)
+    {
+        <div class="checkout-done" role="status">
+            <h3 class="checkout-done-title">Order placed</h3>
+            <p>Thanks, @_details.Name! Order <strong data-testid="order-number">@confirmation.OrderNumber</strong> arrives by @confirmation.EstimatedDelivery.ToString("D", CultureInfo.CurrentCulture).</p>
+            <p class="field-help">We sent a confirmation to @_details.Email.</p>
+        </div>
+    }
+    else
+    {
+        <div class="checkout-grid">
+            <EditForm EditContext="_editContext" OnValidSubmit="PlaceOrderAsync" class="checkout-form" FormName="checkout">
+                <DataAnnotationsValidator />
+                <p class="checkout-account">
+                    @if (_signedInAs is not null)
+                    {
+                        <span>Signed in as <strong>@_signedInAs</strong></span>
+                    }
+                    else
+                    {
+                        <span>Checking out as a guest.</span>
+                        <button type="button" class="btn btn-ghost btn-small" @onclick="() => OnSignIn.InvokeAsync()">Sign in</button>
+                    }
+                </p>
+                <div class="field">
+                    <label for="checkout-name">Full name</label>
+                    <InputText id="checkout-name" @bind-Value="_details.Name" autocomplete="name" />
+                    <ValidationMessage For="() => _details.Name" />
+                </div>
+                <div class="field">
+                    <label for="checkout-email">Email</label>
+                    <InputText id="checkout-email" type="email" @bind-Value="_details.Email" autocomplete="email" />
+                    <ValidationMessage For="() => _details.Email" />
+                </div>
+                <div class="field">
+                    <label for="checkout-address">Shipping address</label>
+                    <InputText id="checkout-address" @bind-Value="_details.Address" autocomplete="street-address" />
+                    <ValidationMessage For="() => _details.Address" />
+                </div>
+                <div class="field">
+                    <label for="checkout-delivery">Delivery</label>
+                    <InputSelect id="checkout-delivery" @bind-Value="_details.Delivery">
+                        <option value="@DeliveryOption.Standard">Standard, 3–5 days (@(StandardShipping == 0 ? "free" : Money(StandardShipping)))</option>
+                        <option value="@DeliveryOption.Express">Express, 1–2 days (@Money(ExpressShipping))</option>
+                    </InputSelect>
+                </div>
+                @if (_error is not null)
+                {
+                    <div class="alert alert-error" role="alert"><span class="alert-message">@_error</span></div>
+                }
+                <button type="submit" class="btn btn-primary btn-large checkout-submit" disabled="@(_submitting || Lines.Count == 0)">
+                    @if (_submitting)
+                    {
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span>Placing your order…</span>
+                    }
+                    else
+                    {
+                        <span>Place order · @Money(Total)</span>
+                    }
+                </button>
+            </EditForm>
+
+            <div class="checkout-summary">
+                <h3 class="checkout-summary-title">Order summary</h3>
+                @if (Lines.Count == 0)
+                {
+                    <p class="field-help">Your cart is empty.</p>
+                }
+                else
+                {
+                    <ul class="checkout-lines">
+                        @foreach (var line in Lines)
+                        {
+                            <li><span>@line.Name <span class="field-help">× @line.Quantity</span></span><span>@Money(line.Total)</span></li>
+                        }
+                    </ul>
+                    <dl class="checkout-totals">
+                        <dt>Subtotal</dt>
+                        <dd>@Money(Subtotal)</dd>
+                        <dt>Shipping</dt>
+                        <dd>@(Shipping == 0 ? "Free" : Money(Shipping))</dd>
+                        <dt class="checkout-total">Total</dt>
+                        <dd class="checkout-total" data-testid="total">@Money(Total)</dd>
+                    </dl>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private CheckoutDetails _details = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _serverErrors = default!;
+    private CheckoutDetails? _appliedInitial;
+    private OrderConfirmation? _confirmation;
+    private string? _signedInAs, _error;
+    private bool _submitting;
+
+    /// <summary>Items being ordered.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<CartLine> Lines { get; set; } = [];
+
+    /// <summary>Prefilled details (copied; the form never changes the caller's instance).</summary>
+    [Parameter] public CheckoutDetails? Initial { get; set; }
+
+    /// <summary>Subtotal from which standard delivery is free.</summary>
+    [Parameter] public decimal FreeShippingFrom { get; set; } = 150m;
+
+    /// <summary>Standard delivery fee below <see cref="FreeShippingFrom"/>.</summary>
+    [Parameter] public decimal StandardFee { get; set; } = 5.99m;
+
+    /// <summary>Express delivery fee.</summary>
+    [Parameter] public decimal ExpressShipping { get; set; } = 15m;
+
+    /// <summary>Raised with the confirmation after the server accepted the order.</summary>
+    [Parameter] public EventCallback<OrderConfirmation> OnOrderPlaced { get; set; }
+
+    /// <summary>Raised when a guest chooses to sign in.</summary>
+    [Parameter] public EventCallback OnSignIn { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private decimal Subtotal => Lines.Sum(l => l.Total);
+    private decimal StandardShipping => Subtotal >= FreeShippingFrom ? 0 : StandardFee;
+    private decimal Shipping => Lines.Count == 0 ? 0 : _details.Delivery == DeliveryOption.Express ? ExpressShipping : StandardShipping;
+    private decimal Total => Subtotal + Shipping;
+
+    protected override void OnInitialized()
+    {
+        _editContext = new EditContext(_details);
+        _serverErrors = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += (_, e) => _serverErrors.Clear(e.FieldIdentifier);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!ReferenceEquals(_appliedInitial, Initial))
+        {
+            _appliedInitial = Initial;
+            if (Initial is not null)
+            {
+                _details.Name = Initial.Name;
+                _details.Email = Initial.Email;
+                _details.Address = Initial.Address;
+                _details.Delivery = Initial.Delivery;
+            }
+        }
+
+        if (AuthState is not null && _signedInAs is null)
+        {
+            var user = (await AuthState).User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                _signedInAs = user.Identity.Name;
+                _details.Name ??= user.Identity.Name;
+                _details.Email ??= user.FindFirst("email")?.Value;
+            }
+        }
+    }
+
+    private async Task PlaceOrderAsync()
+    {
+        _submitting = true;
+        _error = null;
+        _serverErrors.Clear();
+        try
+        {
+            var order = new OrderRequest(_details.Name!, _details.Email!, _details.Address!, _details.Delivery,
+                Lines.Select(l => new OrderRequestLine(l.Sku, l.Quantity)).ToArray());
+            using var response = await Http.PostAsJsonAsync("api/orders", order, _cts.Token);
+            if (response.IsSuccessStatusCode && await response.Content.ReadFromJsonAsync<OrderConfirmation>(_cts.Token) is { } confirmation)
+            {
+                _confirmation = confirmation;
+                await OnOrderPlaced.InvokeAsync(confirmation);
+                return;
+            }
+
+            var problem = await ReadProblemAsync(response);
+            _error = response.StatusCode switch
+            {
+                HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity => ShowValidationErrors(problem),
+                HttpStatusCode.PaymentRequired => "Your card was declined. Try another payment method; you have not been charged.",
+                HttpStatusCode.Conflict => problem?.Detail ?? "An item in your cart is no longer available.",
+                _ => $"We could not place your order (error {(int)response.StatusCode}). Please try again in a moment.",
+            };
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "The payment service did not answer in time. You have not been charged; please try again.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "You seem to be offline. Check your connection and try again.";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string ShowValidationErrors(ProblemDetailsResponse? problem)
+    {
+        foreach (var (field, messages) in problem?.Errors ?? [])
+        {
+            var property = typeof(CheckoutDetails).GetProperties().FirstOrDefault(p => string.Equals(p.Name, field, StringComparison.OrdinalIgnoreCase));
+            if (property is not null)
+                _serverErrors.Add(_editContext.Field(property.Name), messages);
+        }
+
+        _editContext.NotifyValidationStateChanged();
+        return problem?.Title ?? "Some details need your attention.";
+    }
+
+    private static async Task<ProblemDetailsResponse?> ReadProblemAsync(HttpResponseMessage response)
+    {
+        if (response.Content.Headers.ContentType?.MediaType?.Contains("json", StringComparison.OrdinalIgnoreCase) != true)
+            return null;
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<ProblemDetailsResponse>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string Money(decimal value) => value.ToString("C", CultureInfo.CurrentCulture);
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

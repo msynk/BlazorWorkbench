@@ -1,0 +1,77 @@
+@namespace SampleComponents.Analytics
+
+@* A key metric with its change against the previous period and an optional sparkline. Whether a change is good depends on
+   the metric: more revenue is good, more refunds are not. *@
+<article class="kpi @(Loading ? "kpi-loading" : "")" aria-busy="@(Loading ? "true" : "false")">
+    <h3 class="kpi-label">@Label</h3>
+    @if (Loading)
+    {
+        <div class="kpi-skeleton" aria-hidden="true"><span></span><span></span></div>
+        <span class="visually-hidden">Loading…</span>
+    }
+    else
+    {
+        <p class="kpi-value" data-testid="kpi-value">@Value.ToString(Format, CultureInfo.CurrentCulture)</p>
+        @if (Change is { } change)
+        {
+            <p class="kpi-change kpi-change-@Sentiment(change)">
+                <span aria-hidden="true">@(change > 0 ? "▲" : change < 0 ? "▼" : "▬")</span>
+                <span>@ChangeText(change)</span>
+                <span class="kpi-period">vs @ComparedTo</span>
+            </p>
+        }
+        @if (Trend is { Count: > 1 })
+        {
+            <svg class="kpi-spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <polyline points="@SparklinePoints" />
+            </svg>
+        }
+    }
+</article>
+
+@code {
+    /// <summary>Name of the metric.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>Current value.</summary>
+    [Parameter] public decimal Value { get; set; }
+
+    /// <summary>.NET numeric format of the value, for example <c>C0</c>, <c>N0</c> or <c>P1</c>.</summary>
+    [Parameter] public string Format { get; set; } = "N0";
+
+    /// <summary>Change relative to the previous period (0.08 is +8 %).</summary>
+    [Parameter] public double? Change { get; set; }
+
+    /// <summary>Whether an increase is good news (false for refunds, churn or latency).</summary>
+    [Parameter] public bool HigherIsBetter { get; set; } = true;
+
+    /// <summary>Recent values drawn as a sparkline.</summary>
+    [Parameter] public IReadOnlyList<double>? Trend { get; set; }
+
+    /// <summary>Name of the period the change compares to.</summary>
+    [Parameter] public string ComparedTo { get; set; } = "last month";
+
+    /// <summary>Shows a loading placeholder instead of the value.</summary>
+    [Parameter] public bool Loading { get; set; }
+
+    private static string ChangeText(double change) =>
+        (change > 0 ? "+" : change < 0 ? "−" : "") + Math.Abs(change).ToString("P1", CultureInfo.CurrentCulture);
+
+    private string Sentiment(double change) => change == 0 ? "flat" : (change > 0) == HigherIsBetter ? "good" : "bad";
+
+    private string SparklinePoints
+    {
+        get
+        {
+            var values = Trend!;
+            var (min, max) = (values.Min(), values.Max());
+            var range = max - min;
+            return string.Join(' ', values.Select((v, i) =>
+            {
+                var x = i * 120.0 / (values.Count - 1);
+                var y = range == 0 ? 16 : 30 - (v - min) / range * 28;
+                return string.Create(CultureInfo.InvariantCulture, $"{x:0.##},{y:0.##}");
+            }));
+        }
+    }
+}

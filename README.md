@@ -82,6 +82,10 @@ You can also set up a host by hand:
 
 For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.md). To run the scenarios in a .NET MAUI app, see [docs/hybrid.md](docs/hybrid.md).
 
+## See it in action
+
+The [samples](samples/README.md) are a component library for a fictional outdoor store, with 144 scenarios that run in all three hosting models. Clone the repository, run `dotnet run --project samples/SampleWorkbench` and take the [ten-minute tour](samples/README.md#a-ten-minute-tour): a checkout whose payment API declines on demand, a session timeout you fast-forward with the fake clock, one settings page seen by six simulated users, and a dashboard whose services fail one at a time.
+
 ## Packages
 
 | Package | Purpose |
@@ -100,7 +104,7 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) · [Scenario authoring](docs/scenarios.md) · [Environment simulation](docs/environment.md) · [Parameter editors](docs/parameter-editors.md)
+- [Sample tour](samples/README.md) · [Getting started](docs/getting-started.md) · [Scenario authoring](docs/scenarios.md) · [Environment simulation](docs/environment.md) · [Parameter editors](docs/parameter-editors.md)
 - [WebAssembly hosting](docs/webassembly.md) · [.NET MAUI Blazor Hybrid](docs/hybrid.md) · [Testing and Playwright](docs/testing.md) · [bUnit integration](docs/bunit.md) · [Accessibility](docs/accessibility.md) · [Visual regression](docs/visual-regression.md)
 - [CLI reference](docs/cli.md) · [CI setup](docs/ci.md) · [Publishing catalogs](docs/publishing.md) · [MCP for coding agents](docs/mcp.md)
 - [Architecture](docs/architecture.md) · [Extensibility](docs/extensibility.md) · [Security and privacy](docs/security.md) · [Compatibility](docs/compatibility.md)
@@ -110,9 +114,10 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 
 ```
 src/        Core, Components, Hosting, WebAssembly, Hybrid, Maui, Maui.Essentials, Testing, Testing.Bunit, Cli, Templates
-samples/    SampleComponents (library), SampleWorkbench (Server host, scenarios, baselines),
+samples/    SampleComponents (library), SampleWorkbench (Server host, scenarios, fake backends, baselines),
             SampleWorkbench.Wasm + .Client (WebAssembly host reusing the same scenarios),
-            SampleWorkbench.Maui (.NET MAUI Blazor Hybrid app reusing the same scenarios)
+            SampleWorkbench.Maui (.NET MAUI Blazor Hybrid app reusing the same scenarios),
+            SampleComponents.Tests (bUnit tests that reuse the scenarios); see samples/README.md
 eng/        visual-linux.sh: the Linux visual suite in the CI container
 tests/      Unit (Core, Components/bUnit, Hybrid, Testing, Cli) and end-to-end browser tests (E2E)
 docs/       Guides, reference and architecture decision records

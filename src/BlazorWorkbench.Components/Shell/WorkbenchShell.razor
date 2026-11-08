@@ -76,7 +76,7 @@
         {
             @if (Catalog.FindComponent(ComponentId) is { } docComponent)
             {
-                <ComponentDocs Component="docComponent" Catalog="Catalog" />
+                <ComponentDocs Component="docComponent" Catalog="Catalog" PreviewTheme="@ShellMatchedTheme" />
             }
             else
             {
@@ -204,6 +204,8 @@
     private string _frameSrc = "about:blank";
     private string _tab = "controls";
     private string _shellTheme = "light";
+    // True while the preview theme is not chosen by the URL, the scenario or the user: it then follows the Workbench theme.
+    private bool _themeFollowsShell = true;
     private ViewportPreset? _viewport;
     private string? _loadedScenarioId;
 
@@ -236,6 +238,10 @@
         _ => _previewState,
     };
 
+    /// <summary>The preview theme matching the Workbench theme: the first theme with the same color scheme, else the first theme.</summary>
+    private string ShellMatchedTheme =>
+        (Options.Themes.FirstOrDefault(t => t.ColorScheme == (_shellTheme == "dark" ? ColorScheme.Dark : ColorScheme.Light)) ?? Options.Themes.FirstOrDefault())?.Name ?? "";
+
     private string FrameStyle => _viewport is null ? "" : $"width:{_viewport.Width}px;height:{_viewport.Height}px;";
 
     private string FrameSource => _scenario is null ? "about:blank" : BuildPreviewUrl(includeArgs: true);
@@ -263,7 +269,7 @@
 
         ViewportName = Options.FindViewport(ViewportQuery ?? _scenario.Environment.Viewport)?.Name ?? "";
         _viewport = Options.FindViewport(ViewportName);
-        ThemeName = Options.FindTheme(ThemeQuery ?? _scenario.Environment.Theme)?.Name ?? Options.Themes.FirstOrDefault()?.Name ?? "";
+        ApplyDeclaredTheme();
         CultureName = CultureQuery ?? "";
         Direction = DirQuery is "ltr" or "rtl" ? DirQuery : "";
         if (PanelQuery is { } panel && Tabs.Any(t => t.Key == panel))
@@ -280,16 +286,34 @@
             _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
             _self = DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("init", _self);
+            // A theme the user chose earlier, otherwise the operating system's color scheme.
             var theme = await _module.InvokeAsync<string?>("getPreference", "shell-theme");
+            if (theme is not ("dark" or "light"))
+                theme = await _module.InvokeAsync<string?>("getSystemTheme");
             if (theme is "dark" or "light" && theme != _shellTheme)
             {
                 _shellTheme = theme;
+                if (_scenario is not null && _themeFollowsShell && ThemeName != ShellMatchedTheme)
+                {
+                    // The preview has only started loading and may not listen for messages yet: load it with the theme.
+                    ThemeName = ShellMatchedTheme;
+                    _frameSrc = BuildPreviewUrl(includeArgs: true);
+                }
+
                 StateHasChanged();
             }
         }
         catch (JSDisconnectedException)
         {
         }
+    }
+
+    /// <summary>Uses the theme from the URL or the scenario; without one, the preview follows the Workbench theme.</summary>
+    private void ApplyDeclaredTheme(bool useQuery = true)
+    {
+        var declared = Options.FindTheme((useQuery ? ThemeQuery : null) ?? _scenario?.Environment.Theme)?.Name;
+        _themeFollowsShell = declared is null;
+        ThemeName = declared ?? ShellMatchedTheme;
     }
 
     private void ResetLiveState()
@@ -328,7 +352,8 @@
         var query = new List<string>();
         if (_overrides.Count > 0) query.Add("args=" + Uri.EscapeDataString(ArgsCodec.Encode(_overrides)));
         if (ViewportName.Length > 0) query.Add("viewport=" + Uri.EscapeDataString(ViewportName));
-        if (ThemeName.Length > 0 && ThemeName != Options.Themes.FirstOrDefault()?.Name) query.Add("theme=" + Uri.EscapeDataString(ThemeName));
+        if (!_themeFollowsShell && ThemeName.Length > 0 && ThemeName != Options.FindTheme(_scenario.Environment.Theme)?.Name)
+            query.Add("theme=" + Uri.EscapeDataString(ThemeName));
         if (CultureName.Length > 0) query.Add("culture=" + Uri.EscapeDataString(CultureName));
         if (Direction.Length > 0) query.Add("dir=" + Direction);
         if (_tab != "controls") query.Add("panel=" + _tab);
@@ -368,6 +393,7 @@
         _argErrors = new(StringComparer.Ordinal);
         CultureName = "";
         Direction = "";
+        ApplyDeclaredTheme(useQuery: false);
         await ReloadFrame(keepArgs: false);
         UpdateAddress();
     }
@@ -394,9 +420,16 @@
 
     private async Task OnThemeChanged()
     {
-        var theme = Options.FindTheme(ThemeName);
-        await Post("theme", new { theme = theme?.Name, colorScheme = theme?.ColorScheme.ToString().ToLowerInvariant(), themeClass = theme?.CssClass, themeStylesheets = theme?.Stylesheets ?? [] });
+        // An explicit choice: the preview no longer follows the Workbench theme.
+        _themeFollowsShell = false;
+        await SendThemeAsync();
         UpdateAddress();
+    }
+
+    private Task SendThemeAsync()
+    {
+        var theme = Options.FindTheme(ThemeName);
+        return Post("theme", new { theme = theme?.Name, colorScheme = theme?.ColorScheme.ToString().ToLowerInvariant(), themeClass = theme?.CssClass, themeStylesheets = theme?.Stylesheets ?? [] });
     }
 
     private async Task OnCultureChanged()
@@ -430,6 +463,13 @@
         {
             try { await _module.InvokeVoidAsync("setPreference", "shell-theme", _shellTheme); }
             catch (JSDisconnectedException) { }
+        }
+
+        // Unless a theme was chosen explicitly, the preview switches with the Workbench, without reloading.
+        if (_scenario is not null && _themeFollowsShell && ThemeName != ShellMatchedTheme)
+        {
+            ThemeName = ShellMatchedTheme;
+            await SendThemeAsync();
         }
     }
 

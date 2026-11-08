@@ -1,11 +1,17 @@
 /* Blazor Workbench shell. All selectors are prefixed with .wb- so they never collide with component styles. */
+/* The shell document holds only the shell: no default body margin (it would add gutters and a page scrollbar around the
+   full-height grid), and a page background that matches the shell theme behind overscroll and scrollbars. */
+html, body { margin: 0; height: 100%; }
+html { background: #f7f7f8; }
+html:has(.wb-shell[data-shell-theme="dark"]) { background: #16161a; color-scheme: dark; }
+
 .wb-shell {
   --wb-bg: #f7f7f8; --wb-surface: #ffffff; --wb-border: #dcdce0; --wb-text: #1d1d22; --wb-muted: #5f5f6b;
   --wb-accent: #4f46e5; --wb-accent-text: #ffffff; --wb-accent-soft: #eef0ff; --wb-error: #b42318; --wb-warning: #8a5a00;
   --wb-success: #087443; --wb-code: #f1f1f4; --wb-focus: #4f46e5;
   color-scheme: light;
   display: grid; grid-template-columns: minmax(220px, 280px) 1fr; grid-template-rows: auto 1fr;
-  grid-template-areas: "header header" "sidebar main"; height: 100vh; overflow: hidden;
+  grid-template-areas: "header header" "sidebar main"; height: 100vh; height: 100dvh; overflow: hidden;
   background: var(--wb-bg); color: var(--wb-text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 .wb-shell[data-shell-theme="dark"] {
@@ -44,18 +50,28 @@
 .wb-explorer { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .wb-search { padding: .5rem; border-bottom: 1px solid var(--wb-border); }
 .wb-search input { width: 100%; }
-.wb-explorer nav, .wb-results { flex: 1; overflow: auto; padding: .25rem .25rem 1rem; margin: 0; }
-.wb-tree { list-style: none; margin: 0; padding-left: .75rem; }
-nav > .wb-tree { padding-left: 0; }
-.wb-tree summary { cursor: pointer; padding: .15rem .35rem; border-radius: 4px; list-style-position: outside; display: list-item; }
+.wb-explorer nav, .wb-results { flex: 1; overflow: auto; padding: .4rem .5rem 1rem; margin: 0; }
+.wb-explorer > .wb-muted { margin: .5rem .75rem 0; }
+.wb-tree { list-style: none; margin: 0; padding: 0 0 0 1.05rem; }
+nav > .wb-tree { padding-inline-start: 0; }
+.wb-tree li { margin: 0; }
+/* Custom disclosure chevron: the native marker sits outside the summary box, against the sidebar edge. */
+.wb-tree summary { cursor: pointer; display: flex; align-items: center; gap: .1rem; min-height: 1.75rem; padding: .1rem .5rem .1rem .3rem; border-radius: 4px; list-style: none; }
+.wb-tree summary::-webkit-details-marker { display: none; }
+.wb-tree summary::before { content: ""; flex: 0 0 auto; width: .38rem; height: .38rem; margin: 0 .45rem 0 .2rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; opacity: .6; transform: rotate(-45deg); transition: transform .12s ease; }
+.wb-tree details[open] > summary::before { transform: rotate(45deg) translate(-1px, -1px); }
 .wb-tree summary:hover { background: var(--wb-accent-soft); }
-.wb-node-group { font-weight: 600; color: var(--wb-muted); text-transform: uppercase; font-size: 11.5px; letter-spacing: .03em; }
+.wb-node-group { font-weight: 600; color: var(--wb-muted); text-transform: uppercase; font-size: 11.5px; letter-spacing: .04em; margin-top: .35rem; }
+nav > .wb-tree > li:first-child > details > .wb-node-group { margin-top: 0; }
+.wb-node-group .wb-small { margin-inline-start: .35rem; font-weight: 500; letter-spacing: 0; }
 .wb-node-component { font-weight: 500; }
-.wb-icon { color: var(--wb-accent); margin-inline-end: .3rem; }
-.wb-tree a, .wb-results a { display: block; padding: .15rem .5rem; border-radius: 4px; color: var(--wb-text); text-decoration: none; }
+.wb-icon { color: var(--wb-accent); margin-inline-end: .35rem; font-size: 12px; }
+.wb-tree a, .wb-results a { display: block; padding: .25rem .5rem; border-radius: 4px; color: var(--wb-text); text-decoration: none; }
+.wb-tree .wb-tree a { margin-inline-start: .45rem; }
 .wb-tree a:hover, .wb-results a:hover { background: var(--wb-accent-soft); }
 .wb-tree a.active, .wb-results a.active { background: var(--wb-accent); color: var(--wb-accent-text); }
-.wb-node-docs { color: var(--wb-muted) !important; font-size: 12.5px; }
+.wb-node-docs { font-size: 12.5px; }
+.wb-node-docs:not(.active) { color: var(--wb-muted); }
 .wb-results { list-style: none; }
 .wb-result-component { display: block; font-size: 11.5px; color: var(--wb-muted); }
 .wb-results a.active .wb-result-component { color: inherit; }
@@ -85,7 +101,7 @@ nav > .wb-tree { padding-left: 0; }
 
 .wb-frame-area { flex: 1; overflow: auto; border: 1px solid var(--wb-border); border-radius: 6px; background:
   repeating-conic-gradient(var(--wb-bg) 0% 25%, var(--wb-surface) 0% 50%) 50% / 16px 16px; display: flex; align-items: flex-start; justify-content: center; padding: .5rem; min-height: 200px; }
-.wb-frame { border: 1px solid var(--wb-border); background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.wb-frame { border: 1px solid var(--wb-border); background: var(--wb-surface); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 .wb-frame-responsive { padding: 0; }
 .wb-frame-responsive .wb-frame { width: 100%; height: 100%; min-height: 240px; border: 0; }
 
@@ -161,7 +177,7 @@ nav > .wb-tree { padding-left: 0; }
 .wb-markdown pre { background: var(--wb-code); padding: .6rem; border-radius: 6px; overflow: auto; }
 .wb-doc-scenarios { display: grid; gap: 1rem; }
 .wb-doc-scenario { border: 1px solid var(--wb-border); border-radius: 8px; padding: .5rem .9rem .9rem; background: var(--wb-surface); }
-.wb-doc-frame { width: 100%; height: 220px; border: 1px solid var(--wb-border); border-radius: 4px; background: #fff; }
+.wb-doc-frame { width: 100%; height: 220px; border: 1px solid var(--wb-border); border-radius: 4px; background: var(--wb-surface); }
 
 @media (max-width: 760px) {
   .wb-shell { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; grid-template-areas: "header" "sidebar" "main"; height: auto; min-height: 100vh; overflow: visible; }
