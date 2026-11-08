@@ -84,10 +84,10 @@ Starts the MCP server on stdio; see [MCP](mcp.md).
 
 ```jsonc
 {
-  "project": "samples/SampleWorkbench/SampleWorkbench.csproj",   // host project
-  "framework": null,                                             // e.g. "net10.0-windows10.0.19041.0" for a MAUI app
-  "baselines": "samples/SampleWorkbench/baselines",              // commit this directory
-  "output": "artifacts/workbench",                               // reports; do not commit
+  "project": "demo/BlazorWorkbench.Demo/BlazorWorkbench.Demo.csproj",   // host project
+  "framework": null,                                                    // e.g. "net10.0-windows10.0.19041.0" for a MAUI app
+  "baselines": "demo/BlazorWorkbench.Demo/baselines",                   // commit this directory
+  "output": "artifacts/workbench",                                      // reports; do not commit
   "browser": "chromium",
   "viewports": ["laptop"],
   "themes": ["light"],

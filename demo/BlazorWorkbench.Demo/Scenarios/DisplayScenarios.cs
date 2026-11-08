@@ -1,12 +1,12 @@
 using BlazorWorkbench;
 using Microsoft.AspNetCore.Components;
-using SampleComponents;
-using SampleComponents.Display;
-using SampleComponents.Feedback;
-using SampleComponents.Inputs;
-using SampleComponents.Layout;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Display;
+using BlazorWorkbench.Demo.Components.Feedback;
+using BlazorWorkbench.Demo.Components.Inputs;
+using BlazorWorkbench.Demo.Components.Layout;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class BadgeScenarios : ScenarioSet<Badge>
 {

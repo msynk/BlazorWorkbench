@@ -1,4 +1,4 @@
-namespace SampleWorkbench.Maui.WinUI;
+namespace BlazorWorkbench.Demo.Maui.WinUI;
 
 /// <summary>The WinUI application that hosts the MAUI app.</summary>
 public partial class App : MauiWinUIApplication

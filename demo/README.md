@@ -1,32 +1,32 @@
-# Blazor Workbench samples
+# Blazor Workbench demo
 
-The samples are a small component library for a fictional outdoor store, **Trailhead**, and the Workbench hosts that
-preview and test it. They are built to show what Workbench does that a demo page or a Storybook-style gallery does not:
+The demo is a small component library for a fictional outdoor store, **Trailhead**, plus the Workbench hosts that
+preview and test it. It is built to show what Workbench does that a demo page or a Storybook-style gallery does not:
 reach the states that are hard to reproduce in a running app, and turn every one of them into a test.
 
 | Project | What it is |
 | --- | --- |
-| [SampleComponents](SampleComponents) | The component library: 32 components, from a `Button` to a checkout form and a sales dashboard. It knows nothing about Workbench. |
-| [SampleWorkbench](SampleWorkbench) | The Interactive Server host. It declares every scenario ([Scenarios](SampleWorkbench/Scenarios)), the fake backends ([Fakes](SampleWorkbench/Fakes)), a custom editor and a scenario provider, and owns the visual baselines. |
-| [SampleWorkbench.Wasm](SampleWorkbench.Wasm) + [.Client](SampleWorkbench.Wasm.Client) | The same scenarios with Interactive WebAssembly. |
-| [SampleWorkbench.Maui](SampleWorkbench.Maui) | The same scenarios in a .NET MAUI Blazor Hybrid app, inside the platform WebView. |
-| [SampleComponents.Tests](SampleComponents.Tests) | bUnit tests that reuse the scenarios: a smoke test per scenario and focused tests, without a browser. |
+| [BlazorWorkbench.Demo.Components](BlazorWorkbench.Demo.Components) | The component library: 32 components, from a `Button` to a checkout form and a sales dashboard. It knows nothing about Workbench. |
+| [BlazorWorkbench.Demo](BlazorWorkbench.Demo) | The Interactive Server host. It declares every scenario ([Scenarios](BlazorWorkbench.Demo/Scenarios)), the fake backends ([Fakes](BlazorWorkbench.Demo/Fakes)), a custom editor and a scenario provider. |
+| [BlazorWorkbench.Demo.Wasm](BlazorWorkbench.Demo.Wasm) + [.Client](BlazorWorkbench.Demo.Wasm.Client) | The same scenarios with Interactive WebAssembly. |
+| [BlazorWorkbench.Demo.Maui](BlazorWorkbench.Demo.Maui) | The same scenarios in a .NET MAUI Blazor Hybrid app, inside the platform WebView. |
+| [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests) | bUnit tests that reuse the scenarios: a smoke test per scenario and focused tests, without a browser. |
 
-The three hosts compile the same scenario files and call the same [SampleCatalog.Configure](SampleWorkbench/SampleCatalog.cs),
+The three hosts compile the same scenario files and call the same [DemoCatalog.Configure](BlazorWorkbench.Demo/DemoCatalog.cs),
 so one definition runs in every hosting model.
 
 ## Run it
 
 ```bash
 # Interactive Server: http://localhost:5280
-dotnet run --project samples/SampleWorkbench
+dotnet run --project demo/BlazorWorkbench.Demo
 # Interactive WebAssembly: http://localhost:5281
-dotnet run --project samples/SampleWorkbench.Wasm
+dotnet run --project demo/BlazorWorkbench.Demo.Wasm
 # .NET MAUI Blazor Hybrid (Windows, needs the maui-windows workload)
-dotnet run --project samples/SampleWorkbench.Maui -f net10.0-windows10.0.19041.0
+dotnet run --project demo/BlazorWorkbench.Demo.Maui -f net10.0-windows10.0.19041.0
 
 # bUnit: every scenario plus focused tests, no browser
-dotnet test samples/SampleComponents.Tests
+dotnet test demo/BlazorWorkbench.Demo.Components.Tests
 
 # Render checks, interactions, axe-core and screenshots in Chromium (from the repository root)
 dotnet run --project src/BlazorWorkbench.Cli -- install-browsers
@@ -81,38 +81,38 @@ Start the Interactive Server host and follow these stops. Each link opens the sc
 
 9. **Screenshots that never flake.**
    [Revenue chart · Seeded data](http://localhost:5280/scenario/analytics-revenue-chart--seeded-data) draws random data
-   from the scenario's seeded `Random`: different per seed, identical on every run. *Light and dark* is baselined in
-   both themes. Open **Visual** to compare with the approved baseline.
+   from the scenario's seeded `Random`: different per seed, identical on every run. *Light and dark* captures it in
+   both themes. Approve a `--visual` run with `workbench approve`, then open **Visual** to compare with the baseline.
 
 10. **One definition, every test.** Run the commands under [Run it](#run-it). The same 144 scenarios become render
     checks, 76 interaction tests, axe-core scans and visual comparisons in Chromium, in WebAssembly and in the MAUI
-    WebView, and bUnit smoke tests in [SampleComponents.Tests](SampleComponents.Tests).
+    WebView, and bUnit smoke tests in [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests).
 
 ## Where each feature is shown
 
 | Feature | Where to look |
 | --- | --- |
-| Fake HTTP: status codes, problem details, latency, timeouts, offline, `Times(n)` retries | [CheckoutScenarios](SampleWorkbench/Scenarios/CommerceScenarios.cs), [WeatherScenarios](SampleWorkbench/Scenarios/DataScenarios.cs) |
-| Fake HTTP: custom handlers (`.Handle(...)`) that read the query string or the body | [FakeBackends](SampleWorkbench/Fakes/FakeBackends.cs), used by product search and checkout |
-| Fake HTTP: query matching, shared rules in `set.Setup(...)`, `IHttpClientFactory` | [SalesDashboardScenarios](SampleWorkbench/Scenarios/AnalyticsScenarios.cs), [ProductSearch](SampleComponents/Commerce/ProductSearch.razor) |
-| Gates on HTTP rules and in fake services | Checkout, product search and dashboard scenarios; [FakeProductService](SampleWorkbench/Fakes/FakeProductService.cs) |
-| Fake clock and `TimeProvider` timers | [SessionTimeout](SampleComponents/Account/SessionTimeout.razor), [FlashSaleBanner](SampleComponents/Commerce/FlashSaleBanner.razor), `DateLabel`, the dashboard greeting |
-| Simulated users: roles, claims, named policies | [WorkspaceSettingsScenarios](SampleWorkbench/Scenarios/AccountScenarios.cs), [WorkspacePolicies](SampleComponents/Account/WorkspacePolicies.cs), `UserGreeting` |
-| Service overrides: `.Service<T>(factory)`, `.Service<T, TImpl>()`, `.Services(...)` | [AppHeaderScenarios](SampleWorkbench/Scenarios/AppShellScenarios.cs), [ProductListScenarios](SampleWorkbench/Scenarios/DataScenarios.cs) |
-| Cascading values (`.Cascade(...)`, validated by `WB1004`) | [PriceTagScenarios](SampleWorkbench/Scenarios/CommerceScenarios.cs) |
+| Fake HTTP: status codes, problem details, latency, timeouts, offline, `Times(n)` retries | [CheckoutScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs), [WeatherScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs) |
+| Fake HTTP: custom handlers (`.Handle(...)`) that read the query string or the body | [FakeBackends](BlazorWorkbench.Demo/Fakes/FakeBackends.cs), used by product search and checkout |
+| Fake HTTP: query matching, shared rules in `set.Setup(...)`, `IHttpClientFactory` | [SalesDashboardScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs), [ProductSearch](BlazorWorkbench.Demo.Components/Commerce/ProductSearch.razor) |
+| Gates on HTTP rules and in fake services | Checkout, product search and dashboard scenarios; [FakeProductService](BlazorWorkbench.Demo/Fakes/FakeProductService.cs) |
+| Fake clock and `TimeProvider` timers | [SessionTimeout](BlazorWorkbench.Demo.Components/Account/SessionTimeout.razor), [FlashSaleBanner](BlazorWorkbench.Demo.Components/Commerce/FlashSaleBanner.razor), `DateLabel`, the dashboard greeting |
+| Simulated users: roles, claims, named policies | [WorkspaceSettingsScenarios](BlazorWorkbench.Demo/Scenarios/AccountScenarios.cs), [WorkspacePolicies](BlazorWorkbench.Demo.Components/Account/WorkspacePolicies.cs), `UserGreeting` |
+| Service overrides: `.Service<T>(factory)`, `.Service<T, TImpl>()`, `.Services(...)` | [AppHeaderScenarios](BlazorWorkbench.Demo/Scenarios/AppShellScenarios.cs), [ProductListScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs) |
+| Cascading values (`.Cascade(...)`, validated by `WB1004`) | [PriceTagScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs) |
 | Culture, calendars, currencies and right-to-left | Price tag, checkout, revenue chart (`fa-IR`), app header (`ar-SA`), `DateLabel`, `Toolbar` |
-| Viewports, mobile emulation, themes, a custom theme | App header, dashboard *Phone* and *Evening, dark theme*, [SampleCatalog](SampleWorkbench/SampleCatalog.cs) |
-| Seeded data and fixtures | Revenue chart (`.Seed(7)`), [PeopleTableScenarios](SampleWorkbench/Scenarios/DataScenarios.cs), checkout cart fixtures |
+| Viewports, mobile emulation, themes, a custom theme | App header, dashboard *Phone* and *Evening, dark theme*, [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
+| Seeded data and fixtures | Revenue chart (`.Seed(7)`), [PeopleTableScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs), checkout cart fixtures |
 | Interaction tests: forms, keyboard, focus, drag and drop, upload, checkpoints | Onboarding wizard, checkout, `SortableList`, `AvatarUpload`, `Dialog`, `Counter` |
-| Device simulation (.NET MAUI Essentials) | [DeviceScenarios](SampleWorkbench/Scenarios/DeviceScenarios.cs) |
+| Device simulation (.NET MAUI Essentials) | [DeviceScenarios](BlazorWorkbench.Demo/Scenarios/DeviceScenarios.cs) |
 | Diagnostics: exceptions, failed requests, intercepted navigation | `FlakyWidget`, the app header's links, any scenario's **Diagnostics** panel |
 | Performance budgets | `Button · Primary`, `Sales dashboard · Loaded` |
-| Custom parameter editor and scenario provider | [HexColorEditor](SampleWorkbench/Editors/HexColorEditor.razor), [ToneMatrixProvider](SampleWorkbench/Providers/ToneMatrixProvider.cs) |
-| bUnit: smoke test every scenario, gates, fake clock, policies | [SampleComponents.Tests](SampleComponents.Tests) |
+| Custom parameter editor and scenario provider | [HexColorEditor](BlazorWorkbench.Demo/Editors/HexColorEditor.razor), [ToneMatrixProvider](BlazorWorkbench.Demo/Providers/ToneMatrixProvider.cs) |
+| bUnit: smoke test every scenario, gates, fake clock, policies | [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests) |
 
 ## What Workbench found in this library
 
-Running the scenarios found real defects while the samples were written, which is the point of the exercise:
+Running the scenarios found real defects while the demo was written, which is the point of the exercise:
 
 - `AppHeader` labeled the cart "Cart, 128 items" while its badge showed "99+". axe-core reported
   `label-content-name-mismatch` (WCAG 2.5.3) in the *Busy cart* scenario; the accessible name now contains the badge text.
@@ -124,7 +124,7 @@ keep a stale pending count and wait for readiness until a timeout. The dashboard
 
 ## Add your own
 
-Copy a scenario set next to the existing ones and run `dotnet watch --project samples/SampleWorkbench`: the catalog
+Copy a scenario set next to the existing ones and run `dotnet watch --project demo/BlazorWorkbench.Demo`: the catalog
 reloads on save. `workbench validate` checks parameters, services, cultures, viewports and interaction steps without
 rendering, and `workbench approve` turns reviewed screenshots into baselines. The guides in [docs](../docs) explain each
 API used here.

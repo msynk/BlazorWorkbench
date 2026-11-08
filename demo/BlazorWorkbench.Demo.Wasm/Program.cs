@@ -1,13 +1,13 @@
 using BlazorWorkbench.Hosting;
-using SampleWorkbench.Wasm.Client;
+using BlazorWorkbench.Demo.Wasm.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddBlazorWorkbench(options =>
 {
     options.Interactivity = WorkbenchInteractivity.WebAssembly;
-    SampleSetup.Configure(options);
-    options.PreviewStylesheets.Add("_content/SampleComponents/sample.css");
+    DemoSetup.Configure(options);
+    options.PreviewStylesheets.Add("_content/BlazorWorkbench.Demo.Components/demo.css");
 });
 
 var app = builder.Build();

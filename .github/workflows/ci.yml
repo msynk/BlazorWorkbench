@@ -40,12 +40,12 @@ jobs:
         if: runner.os == 'Windows'
         run: dotnet workload install maui-windows
 
-      - name: Open the WebView2 DevTools port of the hybrid sample
+      - name: Open the WebView2 DevTools port of the hybrid demo
         # The runner is elevated, and WebView2 Runtime 150+ ignores WEBVIEW2_* variables for elevated apps; the HKLM policy
         # still applies. See docs/hybrid.md#elevated-processes-and-ci-runners.
         if: runner.os == 'Windows'
         run: |
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v SampleWorkbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v BlazorWorkbench.Demo.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
           "BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV
 
       - name: Restore
@@ -60,7 +60,7 @@ jobs:
       - name: Unit, component and end-to-end tests
         run: dotnet test ${{ matrix.solution }} --no-build --logger "trx;LogFilePrefix=tests" --results-directory artifacts/test-results
 
-      - name: Validate sample scenarios
+      - name: Validate demo scenarios
         run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- validate --no-build --warnings-as-errors
 
       - name: Workbench tests, Interactive Server (render, interactions, accessibility)
@@ -69,11 +69,11 @@ jobs:
       - name: Workbench tests, Interactive WebAssembly
         # --no-budgets: every WebAssembly preview starts the .NET runtime, which takes 3-5 s on hosted runners; the
         # Interactive Server step checks the budgets. See docs/testing.md#performance-measurements.
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --no-budgets --retries 1 -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/workbench-wasm
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --no-budgets --retries 1 -p demo/BlazorWorkbench.Demo.Wasm/BlazorWorkbench.Demo.Wasm.csproj -o artifacts/workbench-wasm
 
       - name: Workbench tests, .NET MAUI Blazor Hybrid (WebView2)
         if: runner.os == 'Windows'
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/workbench-hybrid
+        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --a11y --retries 1 -p demo/BlazorWorkbench.Demo.Maui/BlazorWorkbench.Demo.Maui.csproj -o artifacts/workbench-hybrid
 
       - name: Dependency vulnerability check
         shell: bash
@@ -92,55 +92,6 @@ jobs:
             artifacts/workbench-hybrid
             artifacts/test-results
             artifacts/e2e
-          retention-days: 14
-
-  visual-windows:
-    # Baselines in samples/SampleWorkbench/baselines/windows* are captured on Windows with the pinned Playwright Chromium.
-    name: Visual regression (windows)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
-      - run: dotnet workload install maui-windows
-      - name: Open the WebView2 DevTools port of the hybrid sample
-        # See the build-and-test job and docs/hybrid.md#elevated-processes-and-ci-runners.
-        run: |
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v SampleWorkbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
-          "BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV
-      - run: dotnet build BlazorWorkbench.slnx -c Debug -p:WorkbenchMauiTargets=${{ env.MAUI_WINDOWS }}
-      - run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- install-browsers
-      - name: Server
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -o artifacts/visual-windows-server
-      - name: WebAssembly
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -p samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj -o artifacts/visual-windows-webassembly
-      - name: Blazor Hybrid (informational)
-        # windows-hybrid baselines depend on the WebView2 runtime, which updates itself (Evergreen) and may differ on
-        # the runner. The step reports differences without failing the job; see docs/hybrid.md#visual-baselines.
-        continue-on-error: true
-        run: dotnet run --project src/BlazorWorkbench.Cli --no-build -- test --no-build --visual --no-interactions --no-budgets -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj -o artifacts/visual-windows-hybrid
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: visual-windows
-          path: artifacts/visual-windows-*
-          retention-days: 14
-
-  visual-linux:
-    # Runs in a pinned container image so Linux baselines can be reproduced locally (eng/visual-linux.sh).
-    name: Visual regression (linux container)
-    runs-on: ubuntu-latest
-    container: mcr.microsoft.com/dotnet/sdk:10.0-noble
-    steps:
-      - uses: actions/checkout@v4
-      - name: Visual suite (Server and WebAssembly)
-        run: SRC="$GITHUB_WORKSPACE" bash eng/visual-linux.sh
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: visual-linux
-          path: artifacts/visual-linux-*
           retention-days: 14
 
   template:

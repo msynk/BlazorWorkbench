@@ -1,10 +1,10 @@
 using System.Net;
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Commerce;
-using SampleWorkbench.Fakes;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Commerce;
+using BlazorWorkbench.Demo.Fakes;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 // Feature-level components of a store. Each one depends on things that are hard to reproduce in a running app (a payment
 // API that declines, a sale that ends in 45 seconds, a store in another currency), which is where scenarios pay off.

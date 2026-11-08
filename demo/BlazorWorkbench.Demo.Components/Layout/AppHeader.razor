@@ -1,4 +1,4 @@
-@namespace SampleComponents.Layout
+@namespace BlazorWorkbench.Demo.Components.Layout
 @inject IFeatureFlags Features
 
 @* The app's top bar: brand, main navigation, cart and account. Below 720 px wide the navigation collapses behind a Menu
@@ -16,7 +16,7 @@
             {
                 <li><a href="@link.Href" aria-current="@(link.Text == Active ? "page" : null)">@link.Text</a></li>
             }
-            @if (Features.IsEnabled(SampleFeatures.Rewards))
+            @if (Features.IsEnabled(DemoFeatures.Rewards))
             {
                 <li><a href="/rewards">Rewards <span class="badge badge-success">New</span></a></li>
             }

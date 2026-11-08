@@ -1,8 +1,8 @@
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Display;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Display;
 
-namespace SampleWorkbench.Providers;
+namespace BlazorWorkbench.Demo.Providers;
 
 /// <summary>
 /// A custom scenario provider: generates one Badge scenario per <see cref="Tone"/> value, so new tones are covered

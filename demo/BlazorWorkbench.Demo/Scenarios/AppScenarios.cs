@@ -1,10 +1,10 @@
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Account;
-using SampleComponents.Forms;
-using SampleComponents.Overlays;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Account;
+using BlazorWorkbench.Demo.Components.Forms;
+using BlazorWorkbench.Demo.Components.Overlays;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class UserGreetingScenarios : ScenarioSet<UserGreeting>
 {

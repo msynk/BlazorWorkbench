@@ -73,7 +73,7 @@ public static MauiApp CreateMauiApp()
 - registers the platform implementations of common MAUI Essentials interfaces (`IConnectivity`, `IDeviceInfo`, `IGeolocation`, `IShare`, `ILauncher`, `IPreferences`, ...), unless your app already registered them. Pass `registerEssentials: false` to skip this;
 - rewrites overridable registrations when the container is built, the same way the web hosts do ([ADR 0003](adr/0003-scenario-service-overrides.md)).
 
-The repository sample is [samples/SampleWorkbench.Maui](../samples/SampleWorkbench.Maui). It reuses every scenario of the Interactive Server sample.
+The repository demo is [demo/BlazorWorkbench.Demo.Maui](../demo/BlazorWorkbench.Demo.Maui). It reuses every scenario of the Interactive Server demo.
 
 ## Simulate the device in scenarios
 
@@ -183,7 +183,7 @@ Hybrid screenshots are stored under `{baselines}/windows-hybrid/`. Approve them 
 WebView2 updates itself (the Evergreen runtime), and a new version can change text rendering. Web host baselines do not have this problem, because Playwright pins its Chromium. To keep hybrid baselines stable:
 
 - use a [Fixed Version WebView2 runtime](https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution#the-fixed-version-runtime-distribution-mode) on the machines that run visual checks, and set `WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` to it; or
-- treat hybrid visual checks as informational in CI (the repository does this) and run the gating visual checks on the web hosts.
+- treat hybrid visual checks as informational in CI and run the gating visual checks on the web hosts.
 
 Reports record the WebView2 version (`environment.browserVersion`) of every run.
 

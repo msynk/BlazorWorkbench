@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Web;
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Commerce;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Commerce;
 
-namespace SampleWorkbench.Fakes;
+namespace BlazorWorkbench.Demo.Fakes;
 
 /// <summary>
 /// Custom fake HTTP handlers (<c>.Http(h => h.Get(...).Handle(...))</c>). Use them when a canned response is not enough:

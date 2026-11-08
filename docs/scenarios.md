@@ -64,7 +64,7 @@ set.Add("Examples", s => s
 Fixtures are named factories for complex types. They can be selected in the Controls panel:
 
 ```csharp
-set.Fixture<IReadOnlyList<Person>>("Three people", ctx => SampleData.People(ctx.Random, 3), "Seeded sample");
+set.Fixture<IReadOnlyList<Person>>("Three people", ctx => DemoData.People(ctx.Random, 3), "Seeded sample");
 set.Fixture<IReadOnlyList<Person>>("Nobody", _ => []);
 set.Add("Few rows", s => s.Fixture(t => t.Items, "Three people"));
 ```
@@ -85,7 +85,7 @@ Factories receive a `ScenarioContext` that is created for each activation:
 ## Services and cascading values
 
 ```csharp
-s.Service<IProductService>(ctx => new FakeProductService(SampleData.Products))  // instance per activation
+s.Service<IProductService>(ctx => new FakeProductService(DemoData.Products))  // instance per activation
  .Service<IClock, FakeClock>()                                                   // type activation (with DI)
  .Services((services, ctx) => services.AddScoped<ICart, MemoryCart>())          // full control
  .Cascade(new ThemeInfo("dark"))                                                 // immutable value
@@ -134,7 +134,7 @@ s.Interaction("submits valid data", i => i
 
 Locators are strict: an action fails when a locator matches more than one element. Each interaction test starts from a freshly activated scenario.
 
-`Upload` works with `InputFile` and embeds the file content in the step. `DragTo` performs HTML drag and drop (`dragstart`, `dragover`, `drop`). The sample's [AvatarUpload](../samples/SampleComponents/Forms/AvatarUpload.razor) and [SortableList](../samples/SampleComponents/Layout/SortableList.razor) scenarios use both.
+`Upload` works with `InputFile` and embeds the file content in the step. `DragTo` performs HTML drag and drop (`dragstart`, `dragover`, `drop`). The demo's [AvatarUpload](../demo/BlazorWorkbench.Demo.Components/Forms/AvatarUpload.razor) and [SortableList](../demo/BlazorWorkbench.Demo.Components/Layout/SortableList.razor) scenarios use both.
 
 ## Test options
 

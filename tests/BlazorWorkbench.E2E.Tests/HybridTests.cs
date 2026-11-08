@@ -5,7 +5,7 @@ using static Microsoft.Playwright.Assertions;
 
 namespace BlazorWorkbench.E2E.Tests;
 
-/// <summary>Starts the .NET MAUI Blazor Hybrid sample (Windows only: the runner drives WebView2 over the DevTools Protocol).</summary>
+/// <summary>Starts the .NET MAUI Blazor Hybrid demo (Windows only: the runner drives WebView2 over the DevTools Protocol).</summary>
 public sealed class HybridFixture : IAsyncLifetime
 {
     public WorkbenchHost? Host { get; private set; }
@@ -14,7 +14,7 @@ public sealed class HybridFixture : IAsyncLifetime
     {
         if (!OperatingSystem.IsWindows())
             return;
-        var project = Path.Combine(WorkbenchFixture.RepositoryRoot, "samples", "SampleWorkbench.Maui", "SampleWorkbench.Maui.csproj");
+        var project = Path.Combine(WorkbenchFixture.RepositoryRoot, "demo", "BlazorWorkbench.Demo.Maui", "BlazorWorkbench.Demo.Maui.csproj");
 #if DEBUG
         Host = await WorkbenchHost.StartAsync(project, noBuild: true, configuration: "Debug");
 #else
@@ -55,7 +55,7 @@ public class HybridTests(HybridFixture hybrid) : IClassFixture<HybridFixture>, I
 
         var catalog = await host.GetCatalogAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Hybrid", catalog.HostingModel);
-        Assert.Equal("Sample Components (MAUI Blazor Hybrid)", catalog.Title);
+        Assert.Equal("Demo Components (MAUI Blazor Hybrid)", catalog.Title);
         Assert.Contains(catalog.Components, c => c.Title == "Device/Share card");
         Assert.Equal(0, (await host.ValidateAsync(TestContext.Current.CancellationToken)).Errors);
     }

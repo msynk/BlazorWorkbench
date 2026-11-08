@@ -5,7 +5,7 @@ using BlazorWorkbench.Testing;
 
 namespace BlazorWorkbench.E2E.Tests;
 
-/// <summary>Exercises the automation engine used by <c>workbench test</c> against the sample host.</summary>
+/// <summary>Exercises the automation engine used by <c>workbench test</c> against the demo host.</summary>
 public class RunnerTests(WorkbenchFixture fixture) : IDisposable
 {
     private readonly DirectoryInfo _temp = Directory.CreateTempSubdirectory("wb-e2e");

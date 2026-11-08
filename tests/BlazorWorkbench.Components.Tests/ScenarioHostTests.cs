@@ -7,13 +7,13 @@ using BlazorWorkbench.Diagnostics;
 using BlazorWorkbench.Testing.Bunit;
 using BlazorWorkbench.Values;
 using Bunit;
-using SampleComponents;
-using SampleComponents.Inputs;
-using SampleWorkbench.Scenarios;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Inputs;
+using BlazorWorkbench.Demo.Scenarios;
 
 namespace BlazorWorkbench.Components.Tests;
 
-/// <summary>Renders sample scenarios with bUnit (no browser) through the same ScenarioHost used by previews.</summary>
+/// <summary>Renders demo scenarios with bUnit (no browser) through the same ScenarioHost used by previews.</summary>
 public class ScenarioHostTests : BunitContext
 {
     private static readonly System.Reflection.Assembly[] Assemblies = [typeof(ButtonScenarios).Assembly, typeof(Button).Assembly];
@@ -22,8 +22,8 @@ public class ScenarioHostTests : BunitContext
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         CultureInfo.CurrentCulture = CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-        // The sample library's authorization policies (used by WorkspaceSettings), registered like its hosts do.
-        Services.AddSampleComponents();
+        // The demo library's authorization policies (used by WorkspaceSettings), registered like its hosts do.
+        Services.AddDemoComponents();
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public class ScenarioHostTests : BunitContext
 
     [Theory]
     [MemberData(nameof(AllScenarios))]
-    public void Every_sample_scenario_renders_without_errors(string scenarioId)
+    public void Every_demo_scenario_renders_without_errors(string scenarioId)
     {
         var cut = this.RenderScenario(scenarioId, Assemblies);
         cut.WaitForScenarioIdle();
@@ -249,9 +249,9 @@ public class ScenarioHostTests : BunitContext
         Assert.Equal((int)HttpStatusCode.NotFound, cut.Session().Http.Exchanges.Single().Status);
     }
 
-    public sealed class UnmatchedSet : ScenarioSet<SampleComponents.Data.WeatherForecast>
+    public sealed class UnmatchedSet : ScenarioSet<BlazorWorkbench.Demo.Components.Data.WeatherForecast>
     {
-        protected override void Configure(ScenarioSetBuilder<SampleComponents.Data.WeatherForecast> set) =>
+        protected override void Configure(ScenarioSetBuilder<BlazorWorkbench.Demo.Components.Data.WeatherForecast> set) =>
             set.Add("No rules", s => s.Parameter(w => w.City, "Nowhere"));
     }
 

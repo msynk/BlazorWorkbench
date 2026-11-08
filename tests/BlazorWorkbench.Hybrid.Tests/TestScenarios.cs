@@ -1,6 +1,6 @@
 using BlazorWorkbench;
 using BlazorWorkbench.Maui.Essentials;
-using SampleComponents.Device;
+using BlazorWorkbench.Demo.Components.Device;
 
 // Hybrid hosts make the scenario session and culture process-wide, so these tests must not run in parallel.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]

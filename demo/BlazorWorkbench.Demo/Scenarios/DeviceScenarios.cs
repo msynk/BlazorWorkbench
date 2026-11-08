@@ -2,9 +2,9 @@ using BlazorWorkbench;
 using BlazorWorkbench.Maui.Essentials;
 using Microsoft.Maui.Devices;
 using Microsoft.Maui.Networking;
-using SampleComponents.Device;
+using BlazorWorkbench.Demo.Components.Device;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 // Components that use .NET MAUI Essentials. The same scenarios run in the Interactive Server, WebAssembly and
 // MAUI Blazor Hybrid hosts: .Device(...) replaces the platform services with simulations.

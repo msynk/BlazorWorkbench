@@ -8,7 +8,7 @@
 workbench test --visual                # 1. capture; new screenshots are reported as "missing"
 open artifacts/workbench/index.html    # 2. review current and difference images
 workbench approve                      # 3. approve failed or missing screenshots as baselines
-git add samples/MyWorkbench/baselines  # 4. commit them with the change that caused them
+git add demo/MyWorkbench/baselines  # 4. commit them with the change that caused them
 ```
 
 - Normal test runs **never** write baselines. Approval is explicit, can be filtered (`approve -f "inputs-*"`), and is recorded in `manifest.json` with the SHA-256, size, browser and version, OS, viewport, theme and approval time. Baseline changes are reviewed in pull requests like any other diff.
@@ -64,15 +64,9 @@ Configure them globally in `workbench.json` (`visual.threshold`, `visual.maxDiff
 
 ## Linux baselines
 
-CI checks Linux screenshots inside the `mcr.microsoft.com/dotnet/sdk:10.0-noble` container, so they are reproducible on any machine with Docker (and network access):
+Linux text rendering depends on the installed fonts and libraries. Run the Linux visual suite inside a pinned container image (for example `mcr.microsoft.com/dotnet/sdk:10.0-noble`) both in CI and locally, so screenshots are reproducible on any machine with Docker (and network access). Inside the container, run `workbench install-browsers --with-deps` and `workbench test --visual`, then approve the report with `workbench approve -o <report dir>`.
 
-```bash
-docker run --rm -v "$PWD:/src" mcr.microsoft.com/dotnet/sdk:10.0-noble bash /src/eng/visual-linux.sh
-workbench approve -o artifacts/visual-linux-server
-workbench approve -o artifacts/visual-linux-webassembly
-```
-
-Until a platform folder exists (for example `baselines/linux`), the script reports screenshots as missing without failing. The CI artifact `visual-linux` then holds them for review. Download it, approve with `workbench approve -o <artifact dir>`, and commit. From then on the job is strict.
+Until a platform folder exists (for example `baselines/linux`), pass `--allow-missing-baselines` so the first run reports screenshots as missing without failing. Review the report, approve it, and commit. From then on, run the check without the flag so every difference fails.
 
 ## Missing assets and incomplete rendering
 

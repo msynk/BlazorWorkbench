@@ -69,7 +69,7 @@ Assemblies that declare scenario sets or providers are scanned only for scenario
 
 ## A complete example
 
-[samples/SampleComponents.Tests](../samples/SampleComponents.Tests) tests the sample library this way: a smoke test for every scenario, plus focused tests that submit a checkout against the scenario's fake backend, release a gate, evaluate authorization policies for each simulated user, and fast-forward a session timeout with the scenario clock:
+[demo/BlazorWorkbench.Demo.Components.Tests](../demo/BlazorWorkbench.Demo.Components.Tests) tests the demo library this way: a smoke test for every scenario, plus focused tests that submit a checkout against the scenario's fake backend, release a gate, evaluate authorization policies for each simulated user, and fast-forward a session timeout with the scenario clock:
 
 ```csharp
 var cut = this.RenderScenario<SessionTimeoutScenarios>("active");
@@ -77,7 +77,7 @@ cut.Session().Clock!.Advance(TimeSpan.FromMinutes(8));
 cut.WaitForAssertion(() => Assert.Equal("2:00", cut.Find("[data-testid=countdown]").TextContent));
 ```
 
-Services a component needs in every app, such as authorization policies, are registered in the test context the same way the host registers them (`Services.AddSampleComponents()` in the sample).
+Services a component needs in every app, such as authorization policies, are registered in the test context the same way the host registers them (`Services.AddDemoComponents()` in the demo).
 
 ## Notes
 

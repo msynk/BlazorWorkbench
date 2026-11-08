@@ -1,4 +1,4 @@
-namespace SampleComponents.Analytics;
+namespace BlazorWorkbench.Demo.Components.Analytics;
 
 /// <summary>Revenue of one period (a month) and an optional target.</summary>
 public sealed record RevenuePoint(DateOnly Period, decimal Revenue, decimal? Target = null);

@@ -1,4 +1,4 @@
-namespace SampleComponents;
+namespace BlazorWorkbench.Demo.Components;
 
 /// <summary>Answers whether a feature is switched on. Apps back it with configuration or a flag service.</summary>
 public interface IFeatureFlags
@@ -6,8 +6,8 @@ public interface IFeatureFlags
     bool IsEnabled(string feature);
 }
 
-/// <summary>Names of the features the sample components check.</summary>
-public static class SampleFeatures
+/// <summary>Names of the features the demo components check.</summary>
+public static class DemoFeatures
 {
     /// <summary>Shows the Rewards link in <see cref="Layout.AppHeader"/>.</summary>
     public const string Rewards = "rewards";

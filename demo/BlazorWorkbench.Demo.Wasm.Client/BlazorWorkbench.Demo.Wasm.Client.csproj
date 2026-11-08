@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   <PropertyGroup>
-    <Description>WebAssembly client of the sample Workbench host. Reuses the scenarios of the Interactive Server sample.</Description>
+    <Description>WebAssembly client of the demo Workbench host. Reuses the scenarios of the Interactive Server demo.</Description>
     <!-- Discovery uses reflection over components and scenarios; trimming would remove them. -->
     <PublishTrimmed>false</PublishTrimmed>
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
@@ -8,14 +8,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.WebAssembly\BlazorWorkbench.WebAssembly.csproj" />
     <ProjectReference Include="..\..\src\BlazorWorkbench.Maui.Essentials\BlazorWorkbench.Maui.Essentials.csproj" />
-    <ProjectReference Include="..\SampleComponents\SampleComponents.csproj" />
+    <ProjectReference Include="..\BlazorWorkbench.Demo.Components\BlazorWorkbench.Demo.Components.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- One set of scenario sources for both hosting models. -->
-    <Compile Include="..\SampleWorkbench\SampleCatalog.cs" Link="SampleCatalog.cs" />
-    <Compile Include="..\SampleWorkbench\Scenarios\*.cs" Link="Scenarios\%(Filename)%(Extension)" />
-    <Compile Include="..\SampleWorkbench\Fakes\*.cs" Link="Fakes\%(Filename)%(Extension)" />
-    <Compile Include="..\SampleWorkbench\Providers\*.cs" Link="Providers\%(Filename)%(Extension)" />
-    <RazorComponent Include="..\SampleWorkbench\Editors\HexColorEditor.razor" Link="Editors\HexColorEditor.razor" />
+    <Compile Include="..\BlazorWorkbench.Demo\DemoCatalog.cs" Link="DemoCatalog.cs" />
+    <Compile Include="..\BlazorWorkbench.Demo\Scenarios\*.cs" Link="Scenarios\%(Filename)%(Extension)" />
+    <Compile Include="..\BlazorWorkbench.Demo\Fakes\*.cs" Link="Fakes\%(Filename)%(Extension)" />
+    <Compile Include="..\BlazorWorkbench.Demo\Providers\*.cs" Link="Providers\%(Filename)%(Extension)" />
+    <RazorComponent Include="..\BlazorWorkbench.Demo\Editors\HexColorEditor.razor" Link="Editors\HexColorEditor.razor" />
   </ItemGroup>
 </Project>

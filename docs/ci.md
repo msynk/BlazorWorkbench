@@ -68,7 +68,7 @@ Baselines are stored per platform (`baselines/linux`, `baselines/windows`, …).
 3. Run `workbench approve -o <downloaded report dir>`. Screenshots go to the platform folder that captured them, even when you approve on another OS.
 4. Commit the new baselines.
 
-Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. Blazor Hybrid baselines (`windows-hybrid`) depend on the WebView2 runtime of the runner instead; this repository runs them as an informational step (see [Blazor Hybrid](hybrid.md#visual-baselines)). For Linux, the repository runs the visual suite in a container image (`eng/visual-linux.sh`), so you can reproduce and approve Linux baselines locally with Docker; see [visual regression](visual-regression.md#linux-baselines). The report records the browser version and OS of every run.
+Pin the browser through the `Microsoft.Playwright` version and the runner image so that baselines stay stable. Blazor Hybrid baselines (`windows-hybrid`) depend on the WebView2 runtime of the runner instead; run them as an informational step or pin the runtime (see [Blazor Hybrid](hybrid.md#visual-baselines)). For Linux, run the visual suite in a pinned container image, so you can reproduce and approve Linux baselines locally with Docker; see [visual regression](visual-regression.md#linux-baselines). The report records the browser version and OS of every run.
 
 ## Distinguishing failures
 

@@ -1,7 +1,7 @@
-using SampleComponents.Analytics;
-using SampleComponents.Commerce;
+using BlazorWorkbench.Demo.Components.Analytics;
+using BlazorWorkbench.Demo.Components.Commerce;
 
-namespace SampleWorkbench.Fakes;
+namespace BlazorWorkbench.Demo.Fakes;
 
 /// <summary>
 /// Deterministic data for the store scenarios. Everything is fixed (or derived from the scenario's seeded random source),

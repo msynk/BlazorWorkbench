@@ -67,7 +67,7 @@ The **Interactions panel** in the UI runs the same steps with a lightweight in-b
 `BlazorWorkbench.Testing` can be used from any .NET test project:
 
 ```csharp
-await using var host = await WorkbenchHost.StartAsync("samples/SampleWorkbench/SampleWorkbench.csproj");
+await using var host = await WorkbenchHost.StartAsync("demo/BlazorWorkbench.Demo/BlazorWorkbench.Demo.csproj");
 var report = await new WorkbenchTestRunner(host, new TestRunOptions
 {
     Filter = "inputs-*",

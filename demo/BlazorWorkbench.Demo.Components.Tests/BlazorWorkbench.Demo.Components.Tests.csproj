@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
   <PropertyGroup>
-    <Description>bUnit tests of the sample component library that reuse the Workbench scenarios: no browser, no duplicated setup.</Description>
+    <Description>bUnit tests of the demo component library that reuse the Workbench scenarios: no browser, no duplicated setup.</Description>
     <OutputType>Exe</OutputType>
     <IsTestProject>true</IsTestProject>
-    <!-- xUnit1051: these samples favor readability over passing TestContext cancellation tokens everywhere. -->
+    <!-- xUnit1051: these demo tests favor readability over passing TestContext cancellation tokens everywhere. -->
     <NoWarn>$(NoWarn);xUnit1051</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -16,6 +16,6 @@
     <!-- In your repository: <PackageReference Include="BlazorWorkbench.Testing.Bunit" />. -->
     <ProjectReference Include="..\..\src\BlazorWorkbench.Testing.Bunit\BlazorWorkbench.Testing.Bunit.csproj" />
     <!-- The Workbench host that declares the scenarios (it references the component library). -->
-    <ProjectReference Include="..\SampleWorkbench\SampleWorkbench.csproj" />
+    <ProjectReference Include="..\BlazorWorkbench.Demo\BlazorWorkbench.Demo.csproj" />
   </ItemGroup>
 </Project>

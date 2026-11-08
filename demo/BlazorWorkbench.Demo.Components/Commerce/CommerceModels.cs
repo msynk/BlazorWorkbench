@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace SampleComponents.Commerce;
+namespace BlazorWorkbench.Demo.Components.Commerce;
 
 /// <summary>A line in the shopping cart.</summary>
 public sealed record CartLine(string Sku, string Name, int Quantity, decimal UnitPrice)

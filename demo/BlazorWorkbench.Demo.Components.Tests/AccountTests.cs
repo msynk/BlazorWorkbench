@@ -1,11 +1,11 @@
 using Bunit;
 using BlazorWorkbench.Testing.Bunit;
-using SampleWorkbench.Scenarios;
+using BlazorWorkbench.Demo.Scenarios;
 
-namespace SampleComponents.Tests;
+namespace BlazorWorkbench.Demo.Components.Tests;
 
 /// <summary>Simulated users against real authorization policies, and time travel with the scenario's fake clock.</summary>
-public class AccountTests : SampleTestContext
+public class AccountTests : DemoTestContext
 {
     [Theory]
     [InlineData("viewer", false, false, false)]

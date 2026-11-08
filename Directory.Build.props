@@ -42,8 +42,8 @@
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
-  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests')) Or $(MSBuildProjectDirectory.Contains('samples'))">
-    <!-- Tests and samples favor readability over analyzer strictness. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('tests')) Or $(MSBuildProjectDirectory.Contains('demo'))">
+    <!-- Tests and demo projects favor readability over analyzer strictness. -->
     <NoWarn>$(NoWarn);CA1707;CA1515;CA1861;CA2007;CA1822;CA1859;CA1304;CA1305;CA1307;CA1310;CA1311;CA1852;CA1062</NoWarn>
   </PropertyGroup>
 </Project>

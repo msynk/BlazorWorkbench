@@ -1,11 +1,11 @@
 using System.Net;
 using BlazorWorkbench;
 using Microsoft.AspNetCore.Components;
-using SampleComponents;
-using SampleComponents.Data;
-using SampleWorkbench.Fakes;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Data;
+using BlazorWorkbench.Demo.Fakes;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 /// <summary>A closed generic component: <c>DataTable&lt;Person&gt;</c> with templates and fixtures.</summary>
 public sealed class PeopleTableScenarios : ScenarioSet<DataTable<Person>>
@@ -26,8 +26,8 @@ public sealed class PeopleTableScenarios : ScenarioSet<DataTable<Person>>
     protected override void Configure(ScenarioSetBuilder<DataTable<Person>> set)
     {
         set.Title("Data/Data table").Description("A generic, templated table: header and row templates, a caption and an empty state.").Tags("generic", "templates");
-        set.Fixture<IReadOnlyList<Person>>("Three people", ctx => SampleData.People(ctx.Random, 3), "Seeded, deterministic sample");
-        set.Fixture<IReadOnlyList<Person>>("Fifty people", ctx => SampleData.People(ctx.Random, 50));
+        set.Fixture<IReadOnlyList<Person>>("Three people", ctx => DemoData.People(ctx.Random, 3), "Seeded, deterministic sample");
+        set.Fixture<IReadOnlyList<Person>>("Fifty people", ctx => DemoData.People(ctx.Random, 50));
         set.Fixture<IReadOnlyList<Person>>("Nobody", _ => []);
         set.Setup(s => s
             .Fragment(t => t.HeaderTemplate, Header, "Name/Email/Age/Country headers")
@@ -108,7 +108,7 @@ public sealed class ProductListScenarios : ScenarioSet<ProductList>
         set.Documentation("Replaces `IProductService` per scenario. Each activation gets a fresh fake, so state never leaks between scenarios.");
 
         set.Add("In stock", s => s
-            .Service<IProductService>(_ => new FakeProductService(SampleData.Products))
+            .Service<IProductService>(_ => new FakeProductService(DemoData.Products))
             .Interaction("adding a product raises OnAdd", i => i
                 .Click(By.Role("button", "Add Mechanical keyboard to cart"))
                 .ExpectCallback("OnAdd", times: 1)));
@@ -116,12 +116,12 @@ public sealed class ProductListScenarios : ScenarioSet<ProductList>
         set.Add("Empty", s => s.Service<IProductService>(_ => new FakeProductService([])));
 
         set.Add("Loading (gated)", s => s
-            .Service<IProductService>(ctx => new FakeProductService(SampleData.Products, ctx.Gates, "products"))
+            .Service<IProductService>(ctx => new FakeProductService(DemoData.Products, ctx.Gates, "products"))
             .Interaction("loads after the gate opens", i => i
                 .ExpectVisible(By.Text("Loading products"))
                 .ReleaseGate("products")
                 .ExpectCount(By.Css(".product"), 3)));
 
-        set.Add("Euro prices", s => s.Culture("fr-FR").Service<IProductService>(_ => new FakeProductService(SampleData.Products)));
+        set.Add("Euro prices", s => s.Culture("fr-FR").Service<IProductService>(_ => new FakeProductService(DemoData.Products)));
     }
 }

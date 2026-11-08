@@ -3,6 +3,6 @@
     <ProjectReference Include="..\..\src\BlazorWorkbench.Hybrid\BlazorWorkbench.Hybrid.csproj" />
     <ProjectReference Include="..\..\src\BlazorWorkbench.Maui.Essentials\BlazorWorkbench.Maui.Essentials.csproj" />
     <ProjectReference Include="..\..\src\BlazorWorkbench.Testing.Bunit\BlazorWorkbench.Testing.Bunit.csproj" />
-    <ProjectReference Include="..\..\samples\SampleComponents\SampleComponents.csproj" />
+    <ProjectReference Include="..\..\demo\BlazorWorkbench.Demo.Components\BlazorWorkbench.Demo.Components.csproj" />
   </ItemGroup>
 </Project>

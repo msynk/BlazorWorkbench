@@ -27,7 +27,7 @@ public class ShellTests(WorkbenchFixture fixture)
     public async Task Overview_lists_catalog_and_explorer()
     {
         var page = await OpenAsync("");
-        await Expect(page.Locator(".wb-overview h1")).ToHaveTextAsync("Sample Components");
+        await Expect(page.Locator(".wb-overview h1")).ToHaveTextAsync("Demo Components");
         var catalog = await fixture.Host.GetCatalogAsync();
         await Expect(page.Locator(".wb-explorer-footer")).ToContainTextAsync($"{catalog.Components.Count} components · {catalog.Scenarios.Count()} scenarios");
         await Expect(page.Locator(".wb-node-component", new() { HasText = "Button" })).ToBeVisibleAsync();
@@ -299,6 +299,6 @@ public class HostSecurityTests(WorkbenchFixture fixture)
     {
         var catalog = await fixture.Host.GetCatalogAsync();
         Assert.All(catalog.Components.Where(c => c.SourcePath is not null), c => Assert.False(Path.IsPathRooted(c.SourcePath!), c.SourcePath));
-        Assert.Contains(catalog.Components, c => c.SourcePath == "samples/SampleComponents/Inputs/Button.razor");
+        Assert.Contains(catalog.Components, c => c.SourcePath == "demo/BlazorWorkbench.Demo.Components/Inputs/Button.razor");
     }
 }

@@ -1,4 +1,4 @@
-namespace SampleComponents.Forms;
+namespace BlazorWorkbench.Demo.Components.Forms;
 
 /// <summary>Answers collected by <see cref="OnboardingWizard"/>.</summary>
 public sealed record OnboardingProfile(string Name, string Activity = "Hiking", MeasurementUnits Units = MeasurementUnits.Metric, bool Newsletter = true);

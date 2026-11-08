@@ -47,7 +47,7 @@ Matching and responses:
 - Rules are evaluated in order. Rules of the scenario come before rules from `set.Setup(...)`.
 - `Times(n)` limits a rule to `n` matches. After that, matching continues with the next rules.
 - Faults look like real failures: `NetworkError` and `Offline()` throw `HttpRequestException` with `HttpRequestError.ConnectionError`. `Timeout()` throws `TaskCanceledException` with an inner `TimeoutException`, as `HttpClient.Timeout` does.
-- `.Handle((request, ctx) => ...)` produces a custom response in code. The sample's [FakeBackends](../samples/SampleWorkbench/Fakes/FakeBackends.cs) filters a product catalog by query string and validates a posted order.
+- `.Handle((request, ctx) => ...)` produces a custom response in code. The demo's [FakeBackends](../demo/BlazorWorkbench.Demo/Fakes/FakeBackends.cs) filters a product catalog by query string and validates a posted order.
 - The injected `HttpClient` has the base address `https://workbench.invalid/`. The `.invalid` domain is reserved, so accidental real requests cannot resolve.
 - Every request is recorded with its redacted URL, status, duration and matched rule.
 
@@ -87,7 +87,7 @@ The state appears on `<html data-workbench-state="loading|ready|error">` and on 
 ## Services
 
 ```csharp
-s.Service<IProductService>(ctx => new FakeProductService(SampleData.Products))
+s.Service<IProductService>(ctx => new FakeProductService(DemoData.Products))
  .Services((services, ctx) => services.AddScoped<ICart, MemoryCart>());
 ```
 
@@ -121,7 +121,7 @@ s.User("Grace", "Admin", "Auditor");
 s.User(u => u.Name("Grace").Role("Admin").Claim("department", "Engineering").AuthenticationType("Cookies"));
 ```
 
-`AuthorizeView`, `[CascadingParameter] Task<AuthenticationState>` and `IAuthorizationService` policies use the simulated principal. Register the policies your components use in the host with `builder.Services.AddAuthorizationCore(o => ...)`; the sample library ships them in `AddSampleComponents()`, which every sample host calls (see [WorkspaceSettingsScenarios](../samples/SampleWorkbench/Scenarios/AccountScenarios.cs)). The simulated principal exists only in the preview session and never authenticates real requests.
+`AuthorizeView`, `[CascadingParameter] Task<AuthenticationState>` and `IAuthorizationService` policies use the simulated principal. Register the policies your components use in the host with `builder.Services.AddAuthorizationCore(o => ...)`; the demo library ships them in `AddDemoComponents()`, which every demo host calls (see [WorkspaceSettingsScenarios](../demo/BlazorWorkbench.Demo/Scenarios/AccountScenarios.cs)). The simulated principal exists only in the preview session and never authenticates real requests.
 
 ## Clock, randomness and culture
 

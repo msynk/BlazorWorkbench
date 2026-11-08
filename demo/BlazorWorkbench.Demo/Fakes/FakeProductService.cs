@@ -1,7 +1,7 @@
 using BlazorWorkbench;
-using SampleComponents;
+using BlazorWorkbench.Demo.Components;
 
-namespace SampleWorkbench.Fakes;
+namespace BlazorWorkbench.Demo.Fakes;
 
 /// <summary>In-memory product service. Optionally waits at a gate so loading states can be inspected and tested.</summary>
 public sealed class FakeProductService(IReadOnlyList<Product> products, ScenarioGates? gates = null, string? gate = null) : IProductService
@@ -14,7 +14,7 @@ public sealed class FakeProductService(IReadOnlyList<Product> products, Scenario
     }
 }
 
-public static class SampleData
+public static class DemoData
 {
     public static IReadOnlyList<Product> Products { get; } =
     [

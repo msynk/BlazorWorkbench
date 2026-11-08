@@ -1,12 +1,12 @@
 using BlazorWorkbench;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using SampleComponents;
-using SampleComponents.Forms;
-using SampleComponents.Layout;
-using SampleWorkbench.Fakes;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Forms;
+using BlazorWorkbench.Demo.Components.Layout;
+using BlazorWorkbench.Demo.Fakes;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
 {
@@ -63,7 +63,7 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
                 .ExpectCallback("OnSignIn", times: 1)));
 
         set.Add("Rewards enabled", s => s
-            .Service<IFeatureFlags>(_ => new StaticFeatureFlags(SampleFeatures.Rewards))
+            .Service<IFeatureFlags>(_ => new StaticFeatureFlags(DemoFeatures.Rewards))
             .Interaction("shows the flagged link", i => i.ExpectVisible(By.Role("link", "Rewards"))));
 
         set.Add("Every feature on", s => s
@@ -71,7 +71,7 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
             .Description("Uses .Service<IFeatureFlags, AllFeaturesEnabled>(): the implementation is created by dependency injection."));
 
         set.Add("Busy cart (full control)", s => s
-            .Services(services => services.Replace(ServiceDescriptor.Scoped<IFeatureFlags>(_ => new StaticFeatureFlags(SampleFeatures.Rewards))))
+            .Services(services => services.Replace(ServiceDescriptor.Scoped<IFeatureFlags>(_ => new StaticFeatureFlags(DemoFeatures.Rewards))))
             .Parameter(h => h.CartCount, 128)
             .Description("Registers the flags with .Services(...), which gives full control over the scenario's service collection."));
 

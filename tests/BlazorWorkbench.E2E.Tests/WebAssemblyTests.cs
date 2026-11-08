@@ -5,14 +5,14 @@ using static Microsoft.Playwright.Assertions;
 
 namespace BlazorWorkbench.E2E.Tests;
 
-/// <summary>Starts the Interactive WebAssembly sample host (same scenarios as the Server sample).</summary>
+/// <summary>Starts the Interactive WebAssembly demo host (same scenarios as the Server demo).</summary>
 public sealed class WebAssemblyFixture : IAsyncLifetime
 {
     public WorkbenchHost Host { get; private set; } = default!;
 
     public async ValueTask InitializeAsync()
     {
-        var project = Path.Combine(WorkbenchFixture.RepositoryRoot, "samples", "SampleWorkbench.Wasm", "SampleWorkbench.Wasm.csproj");
+        var project = Path.Combine(WorkbenchFixture.RepositoryRoot, "demo", "BlazorWorkbench.Demo.Wasm", "BlazorWorkbench.Demo.Wasm.csproj");
 #if DEBUG
         Host = await WorkbenchHost.StartAsync(project, noBuild: true, configuration: "Debug");
 #else
@@ -38,7 +38,7 @@ public class WebAssemblyTests(WorkbenchFixture browser, WebAssemblyFixture wasm)
     {
         var catalog = await wasm.Host.GetCatalogAsync();
         Assert.Equal("WebAssembly", catalog.HostingModel);
-        Assert.Equal("Sample Components (WebAssembly)", catalog.Title);
+        Assert.Equal("Demo Components (WebAssembly)", catalog.Title);
         Assert.True(catalog.Scenarios.Count() >= 60);
     }
 

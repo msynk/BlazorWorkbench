@@ -4,6 +4,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.Testing.Bunit\BlazorWorkbench.Testing.Bunit.csproj" />
-    <ProjectReference Include="..\..\samples\SampleWorkbench\SampleWorkbench.csproj" />
+    <ProjectReference Include="..\..\demo\BlazorWorkbench.Demo\BlazorWorkbench.Demo.csproj" />
   </ItemGroup>
 </Project>

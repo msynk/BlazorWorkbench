@@ -38,11 +38,11 @@ jobs:
       - name: Install the .NET MAUI workload
         run: dotnet workload install maui
 
-      - name: Open the WebView2 DevTools port of the hybrid sample
+      - name: Open the WebView2 DevTools port of the hybrid demo
         # The runner is elevated, and WebView2 Runtime 150+ ignores WEBVIEW2_* variables for elevated apps; the HKLM policy
         # still applies. See docs/hybrid.md#elevated-processes-and-ci-runners.
         run: |
-          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v SampleWorkbench.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
+          reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v BlazorWorkbench.Demo.Maui.exe /t REG_SZ /d "--remote-debugging-port=9333" /f
           "BLAZOR_WORKBENCH_CDP_PORT=9333" >> $env:GITHUB_ENV
 
       - name: Determine version

@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 
-namespace SampleComponents.Account;
+namespace BlazorWorkbench.Demo.Components.Account;
 
 /// <summary>
 /// Named authorization policies used by <see cref="WorkspaceSettings"/>. Apps register them with
-/// <see cref="SampleComponentsServiceCollectionExtensions.AddSampleComponents"/>; so does every Workbench host, which is
+/// <see cref="DemoComponentsServiceCollectionExtensions.AddDemoComponents"/>; so does every Workbench host, which is
 /// how simulated users (<c>.User(...)</c> in scenarios) are evaluated against the same rules as production.
 /// </summary>
 public static class WorkspacePolicies

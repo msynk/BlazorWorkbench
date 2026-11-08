@@ -84,7 +84,7 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 
 ## See it in action
 
-The [samples](samples/README.md) are a component library for a fictional outdoor store, with 144 scenarios that run in all three hosting models. Clone the repository, run `dotnet run --project samples/SampleWorkbench` and take the [ten-minute tour](samples/README.md#a-ten-minute-tour): a checkout whose payment API declines on demand, a session timeout you fast-forward with the fake clock, one settings page seen by six simulated users, and a dashboard whose services fail one at a time.
+The [demo](demo/README.md) is a component library for a fictional outdoor store, with 144 scenarios that run in all three hosting models. Clone the repository, run `dotnet run --project demo/BlazorWorkbench.Demo` and take the [ten-minute tour](demo/README.md#a-ten-minute-tour): a checkout whose payment API declines on demand, a session timeout you fast-forward with the fake clock, one settings page seen by six simulated users, and a dashboard whose services fail one at a time.
 
 ## Packages
 
@@ -104,7 +104,7 @@ The [samples](samples/README.md) are a component library for a fictional outdoor
 
 ## Documentation
 
-- [Sample tour](samples/README.md) · [Getting started](docs/getting-started.md) · [Scenario authoring](docs/scenarios.md) · [Environment simulation](docs/environment.md) · [Parameter editors](docs/parameter-editors.md)
+- [Demo tour](demo/README.md) · [Getting started](docs/getting-started.md) · [Scenario authoring](docs/scenarios.md) · [Environment simulation](docs/environment.md) · [Parameter editors](docs/parameter-editors.md)
 - [WebAssembly hosting](docs/webassembly.md) · [.NET MAUI Blazor Hybrid](docs/hybrid.md) · [Testing and Playwright](docs/testing.md) · [bUnit integration](docs/bunit.md) · [Accessibility](docs/accessibility.md) · [Visual regression](docs/visual-regression.md)
 - [CLI reference](docs/cli.md) · [CI setup](docs/ci.md) · [Publishing catalogs](docs/publishing.md) · [MCP for coding agents](docs/mcp.md)
 - [Architecture](docs/architecture.md) · [Extensibility](docs/extensibility.md) · [Security and privacy](docs/security.md) · [Compatibility](docs/compatibility.md)
@@ -114,11 +114,10 @@ The [samples](samples/README.md) are a component library for a fictional outdoor
 
 ```
 src/        Core, Components, Hosting, WebAssembly, Hybrid, Maui, Maui.Essentials, Testing, Testing.Bunit, Cli, Templates
-samples/    SampleComponents (library), SampleWorkbench (Server host, scenarios, fake backends, baselines),
-            SampleWorkbench.Wasm + .Client (WebAssembly host reusing the same scenarios),
-            SampleWorkbench.Maui (.NET MAUI Blazor Hybrid app reusing the same scenarios),
-            SampleComponents.Tests (bUnit tests that reuse the scenarios); see samples/README.md
-eng/        visual-linux.sh: the Linux visual suite in the CI container
+demo/       BlazorWorkbench.Demo.Components (library), BlazorWorkbench.Demo (Server host, scenarios, fake backends),
+            BlazorWorkbench.Demo.Wasm + .Client (WebAssembly host reusing the same scenarios),
+            BlazorWorkbench.Demo.Maui (.NET MAUI Blazor Hybrid app reusing the same scenarios),
+            BlazorWorkbench.Demo.Components.Tests (bUnit tests that reuse the scenarios); see demo/README.md
 tests/      Unit (Core, Components/bUnit, Hybrid, Testing, Cli) and end-to-end browser tests (E2E)
 docs/       Guides, reference and architecture decision records
 ```
@@ -129,8 +128,8 @@ To build and test the repository (the MAUI projects need Windows and `dotnet wor
 dotnet build BlazorWorkbench.slnx
 dotnet run --project src/BlazorWorkbench.Cli -- install-browsers                       # once
 dotnet test BlazorWorkbench.slnx
-dotnet run --project src/BlazorWorkbench.Cli -- test --a11y --visual                  # sample scenarios
-dotnet run --project src/BlazorWorkbench.Cli -- test --a11y -p samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj   # in the MAUI app
+dotnet run --project src/BlazorWorkbench.Cli -- test --a11y --visual                  # demo scenarios
+dotnet run --project src/BlazorWorkbench.Cli -- test --a11y -p demo/BlazorWorkbench.Demo.Maui/BlazorWorkbench.Demo.Maui.csproj   # in the MAUI app
 ```
 
 ## Status and limitations

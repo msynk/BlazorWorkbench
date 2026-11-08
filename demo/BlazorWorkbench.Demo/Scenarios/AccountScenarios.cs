@@ -1,7 +1,7 @@
 using BlazorWorkbench;
-using SampleComponents.Account;
+using BlazorWorkbench.Demo.Components.Account;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 {
@@ -12,7 +12,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
            .Documentation("""
                One component, six people, no test accounts. Each scenario signs in a simulated user with `.User(...)`, and the
                component's `AuthorizeView Policy="..."` blocks evaluate the **real** policies from `WorkspacePolicies`, which
-               the host registers with `services.AddSampleComponents()`.
+               the host registers with `services.AddDemoComponents()`.
 
                | Scenario | Roles and claims | Sees |
                | --- | --- | --- |
@@ -92,7 +92,7 @@ public sealed class SessionTimeoutScenarios : ScenarioSet<SessionTimeout>
                  **+1 s** to watch the countdown. **+1 h** jumps straight to *signed out*.
                - In *Expiry warning*, focus moves into the dialog (an accessibility requirement), and **Stay signed in** restarts
                  the timer: check **Actions** for `OnExtended`.
-               - The bUnit tests in `samples/SampleComponents.Tests` advance the same fake clock in code.
+               - The bUnit tests in `demo/BlazorWorkbench.Demo.Components.Tests` advance the same fake clock in code.
                """);
 
         set.Setup(s => s.Clock(Now).Layout(ScenarioLayout.Fullscreen));

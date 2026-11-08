@@ -1,9 +1,9 @@
 using System.Net;
 using BlazorWorkbench;
-using SampleComponents.Analytics;
-using SampleWorkbench.Fakes;
+using BlazorWorkbench.Demo.Components.Analytics;
+using BlazorWorkbench.Demo.Fakes;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class KpiCardScenarios : ScenarioSet<KpiCard>
 {

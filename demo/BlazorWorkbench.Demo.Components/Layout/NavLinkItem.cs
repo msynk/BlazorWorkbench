@@ -1,4 +1,4 @@
-namespace SampleComponents.Layout;
+namespace BlazorWorkbench.Demo.Components.Layout;
 
 /// <summary>A link in <see cref="AppHeader"/>.</summary>
 public sealed record NavLinkItem(string Text, string Href)

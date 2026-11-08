@@ -35,7 +35,7 @@ builder.Services.AddSingleton<IDiagnosticCollector, LoggingCollector>();
 
 ## Example: data-driven provider
 
-The sample's [ToneMatrixProvider](../samples/SampleWorkbench/Providers/ToneMatrixProvider.cs) creates one scenario per enum value, so new tones are previewed, accessibility-scanned and baselined automatically.
+The demo's [ToneMatrixProvider](../demo/BlazorWorkbench.Demo/Providers/ToneMatrixProvider.cs) creates one scenario per enum value, so new tones are previewed, accessibility-scanned and baselined automatically.
 
 ## Third-party component libraries
 

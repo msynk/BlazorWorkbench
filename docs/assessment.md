@@ -54,7 +54,7 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | Model | Assessment |
 | --- | --- |
 | Blazor Web App, Interactive Server | Primary: one circuit per preview gives natural session isolation, and server-side diagnostics are simple. **Implemented.** |
-| Interactive WebAssembly | Implemented: `BlazorWorkbench.WebAssembly` plus `Interactivity = WebAssembly`. All sample scenarios pass on both models; baselines are stored per hosting model ([ADR 0008](adr/0008-webassembly-hosting.md)). |
+| Interactive WebAssembly | Implemented: `BlazorWorkbench.WebAssembly` plus `Interactivity = WebAssembly`. All demo scenarios pass on both models; baselines are stored per hosting model ([ADR 0008](adr/0008-webassembly-hosting.md)). |
 | Interactive Auto | Not offered as a Workbench mode: previews must be deterministic, and Auto switches models between loads. Use Server or WebAssembly explicitly. |
 | .NET MAUI Blazor Hybrid | Implemented: `BlazorWorkbench.Maui` runs scenarios in the platform WebView with a native picker; `workbench test` drives WebView2 on Windows over the DevTools Protocol; `BlazorWorkbench.Maui.Essentials` simulates device services in every hosting model ([ADR 0009](adr/0009-blazor-hybrid.md)). |
 
@@ -63,7 +63,7 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | Phase | Status | Evidence |
 | --- | --- | --- |
 | 0 Assessment | Done | This document, [ADRs](adr/) |
-| 1 Vertical slice | Done | Sample hosts; discovery, scenarios, preview, inspector, template |
+| 1 Vertical slice | Done | Demo hosts; discovery, scenarios, preview, inspector, template |
 | 2 Scenario and environment engine | Done | Fixtures, setup, overrides, cascading values, gates, clock, auth, culture, isolation tests |
 | 3 Developer experience and diagnostics | Done | Search and keyboard, viewport/theme/culture/direction, diagnostics capture, hot reload, error recovery, lazy explorer for large catalogs |
 | 4 Automated testing and CLI | Done | Playwright runner, bUnit package, CLI, JSON/JUnit/HTML, exit codes, change impact, CI on Windows and Linux |
@@ -77,20 +77,20 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 
 | Measurement | Value |
 | --- | --- |
-| Sample catalog (32 components, 144 scenarios, 76 interaction tests) | built at startup in well under 1 s |
+| Demo catalog (32 components, 144 scenarios, 76 interaction tests) | built at startup in well under 1 s |
 | Synthetic catalog, 1,000 components × 10 parameters | build ≈ 0.75 s, filter ≈ 1 ms, catalog JSON ≈ 3 MB serialized in ≈ 0.25 s |
 | Explorer with 1,000 components (bUnit) | 25 collapsed groups; children render only when opened |
 | `workbench test --a11y --visual`, Interactive Server (144 scenarios, 4 workers) | ≈ 36 s after host start |
 | Same, Interactive WebAssembly | ≈ 105 s (each preview boots the runtime) |
 | Same, .NET MAUI Blazor Hybrid (WebView2 157, one page) | ≈ 98 s after the app starts |
-| Automated tests | Core 101 · Components 186 · Hybrid 28 · Testing 45 · CLI 12 · E2E 34 (incl. WebAssembly and MAUI) · Samples 156, all passing |
+| Automated tests | Core 101 · Components 186 · Hybrid 28 · Testing 45 · CLI 12 · E2E 34 (incl. WebAssembly and MAUI) · Demo 156, all passing |
 | CI (GitHub Actions, first push) | Build/test on Ubuntu and Windows, Windows visual job and pack: all green |
 
 These numbers come from one workstation, and results on other hardware differ. Each report records the environment of its run.
 
 ## Findings from running the suite
 
-Workbench found real defects in the sample library, which shows it works as intended:
+Workbench found real defects in the demo library, which shows it works as intended:
 
 - `Counter` and `SortableList` discarded user state when the parent re-rendered (render check and interaction tests).
 - `ProductList` had an accessible name that did not contain the visible text (axe `label-content-name-mismatch`, WCAG 2.5.3).
@@ -98,16 +98,16 @@ Workbench found real defects in the sample library, which shows it works as inte
 - Blazor Hybrid: a BlazorWebView cannot host the iframe-based shell, MAUI did not apply WebView2 options from `BlazorWebViewInitializing`, and MAUI global usings clash with common component names (`Button`, `Size`). These led to the native picker, environment-variable activation of the DevTools port, and the documented `<Using Remove>` fix.
 - Readiness race: a fake response was counted as done before the component had consumed it. Fixed by tracking the response body.
 - Packaging: hosts without `.razor` files lacked `blazor.web.js` ([ADR 0004](adr/0004-blazor-framework-assets.md)), and the WebAssembly server package had vulnerable 10.0.x versions (pinned to 10.0.14).
-- Sample overhaul (feature-level components): `AppHeader` named its cart "Cart, 128 items" while the badge showed "99+" (axe `label-content-name-mismatch` in the *Busy cart* scenario).
+- Demo overhaul (feature-level components): `AppHeader` named its cart "Cart, 128 items" while the badge showed "99+" (axe `label-content-name-mismatch` in the *Busy cart* scenario).
 - Pending-count race: when several fake requests finished at once (a dashboard releasing three requests from one gate), the preview could receive the activity counts out of order and keep a stale non-zero value. Interaction steps then waited for their 5 s idle limit, and a Blazor Hybrid run timed out waiting for readiness. Fixed by sending the current count when the message goes out.
 
 ## Remaining gaps
 
 | Gap | Why it remains | Next step |
 | --- | --- | --- |
-| Linux visual baselines | This machine has no network inside Docker or WSL, so the CI container image cannot be built here. | The `visual-linux` CI job runs in bootstrap mode until baselines exist. Approve the first run's artifact (`workbench approve -o <artifact>`) and commit. |
+| Visual regression in CI | The demo's baselines are not committed, so CI runs no visual comparison. | Commit per-platform baselines (pinned Chromium; a pinned container image for Linux) and add a visual job. |
 | Package publishing | Needs a version tag and the `NUGET_API_KEY` secret (and optionally a signing certificate). | Push tag `v0.1.0` after review. The release workflow has not run yet. |
 | Automated Blazor Hybrid runs on Android, iOS and Mac Catalyst | Playwright has no supported API for Android WebView or WKWebView. | Manual review in the MAUI app; automated runs on Windows. |
-| Gating hybrid visual checks in CI | WebView2 updates itself, so `windows-hybrid` baselines can drift on hosted runners. | Informational CI step; pin a Fixed Version WebView2 runtime to gate. |
+| Gating hybrid visual checks in CI | WebView2 updates itself, so `windows-hybrid` baselines can drift on hosted runners. | Run them as an informational step; pin a Fixed Version WebView2 runtime to gate. |
 | Clipboard and drag between frames | Browser permission models differ across engines. | Add to the DSL when Playwright support is uniform. |
 | Screen reader verification | No automation can replace it. | Manual checklist in [accessibility](accessibility.md). |

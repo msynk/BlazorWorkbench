@@ -48,4 +48,4 @@ builder.AddBlazorWorkbench(o => o.AddParameterEditor<HexColor, HexColorEditor>()
 - Editors are not discovered as previewable components.
 - Workbench Core needs no change. The editor lives in your host project.
 
-The sample's [HexColorEditor](../samples/SampleWorkbench/Editors/HexColorEditor.razor) is a complete example.
+The demo's [HexColorEditor](../demo/BlazorWorkbench.Demo/Editors/HexColorEditor.razor) is a complete example.

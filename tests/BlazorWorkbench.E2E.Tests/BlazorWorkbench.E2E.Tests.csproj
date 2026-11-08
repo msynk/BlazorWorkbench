@@ -2,10 +2,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.Testing\BlazorWorkbench.Testing.csproj" />
     <!-- Built so the fixture can start it; not referenced as an assembly. -->
-    <ProjectReference Include="..\..\samples\SampleWorkbench\SampleWorkbench.csproj" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\samples\SampleWorkbench.Wasm\SampleWorkbench.Wasm.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\demo\BlazorWorkbench.Demo\BlazorWorkbench.Demo.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\demo\BlazorWorkbench.Demo.Wasm\BlazorWorkbench.Demo.Wasm.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\BlazorWorkbench.Cli\BlazorWorkbench.Cli.csproj" ReferenceOutputAssembly="false" />
-    <!-- The .NET MAUI sample targets Windows; on other systems the hybrid tests are skipped. -->
-    <ProjectReference Include="..\..\samples\SampleWorkbench.Maui\SampleWorkbench.Maui.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Condition="$([MSBuild]::IsOSPlatform('windows'))" />
+    <!-- The .NET MAUI demo targets Windows; on other systems the hybrid tests are skipped. -->
+    <ProjectReference Include="..\..\demo\BlazorWorkbench.Demo.Maui\BlazorWorkbench.Demo.Maui.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Condition="$([MSBuild]::IsOSPlatform('windows'))" />
   </ItemGroup>
 </Project>

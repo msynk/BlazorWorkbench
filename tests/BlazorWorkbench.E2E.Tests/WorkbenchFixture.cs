@@ -5,7 +5,7 @@ using Microsoft.Playwright;
 
 namespace BlazorWorkbench.E2E.Tests;
 
-/// <summary>Starts the sample Workbench host and one browser for all end-to-end tests.</summary>
+/// <summary>Starts the demo Workbench host and one browser for all end-to-end tests.</summary>
 public sealed class WorkbenchFixture : IAsyncLifetime
 {
     public static string RepositoryRoot { get; } = FindRoot();
@@ -18,7 +18,7 @@ public sealed class WorkbenchFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var project = Path.Combine(RepositoryRoot, "samples", "SampleWorkbench", "SampleWorkbench.csproj");
+        var project = Path.Combine(RepositoryRoot, "demo", "BlazorWorkbench.Demo", "BlazorWorkbench.Demo.csproj");
         Host = await WorkbenchHost.StartAsync(project, noBuild: true, configuration: Configuration);
         Playwright = await Microsoft.Playwright.Playwright.CreateAsync();
         // Generous timeouts: the suite runs many browser contexts in parallel against one host.

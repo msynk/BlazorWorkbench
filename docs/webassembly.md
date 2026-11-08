@@ -61,7 +61,7 @@ app.Run();
 
 To debug the WebAssembly code, reference `Microsoft.AspNetCore.Components.WebAssembly.Server` in the host and call `app.UseWebAssemblyDebugging()`.
 
-The repository contains a complete example: [SampleWorkbench.Wasm](../samples/SampleWorkbench.Wasm) and [SampleWorkbench.Wasm.Client](../samples/SampleWorkbench.Wasm.Client). It reuses every scenario of the Interactive Server sample.
+The repository contains a complete example: [BlazorWorkbench.Demo.Wasm](../demo/BlazorWorkbench.Demo.Wasm) and [BlazorWorkbench.Demo.Wasm.Client](../demo/BlazorWorkbench.Demo.Wasm.Client). It reuses every scenario of the Interactive Server demo.
 
 ## What runs where
 
@@ -77,7 +77,7 @@ The repository contains a complete example: [SampleWorkbench.Wasm](../samples/Sa
 
 ## Differences to expect
 
-Running the same 63 sample scenarios on both hosting models found three visual differences. All three are real platform behavior:
+Running the same 63 demo scenarios on both hosting models found three visual differences. All three are real platform behavior:
 
 - **Exception messages.** The WebAssembly runtime can use resource keys instead of full messages, so error texts that show `ex.Message` differ.
 - **Globalization data.** WebAssembly ships reduced ICU data, so some cultures (for example `fa-IR` dates) format differently.

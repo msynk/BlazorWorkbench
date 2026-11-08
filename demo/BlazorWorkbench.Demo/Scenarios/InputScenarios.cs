@@ -1,8 +1,8 @@
 using BlazorWorkbench;
-using SampleComponents;
-using SampleComponents.Inputs;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Inputs;
 
-namespace SampleWorkbench.Scenarios;
+namespace BlazorWorkbench.Demo.Scenarios;
 
 public sealed class ButtonScenarios : ScenarioSet<Button>
 {

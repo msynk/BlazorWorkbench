@@ -5,8 +5,8 @@ using BlazorWorkbench.Components.Shell;
 using BlazorWorkbench.Testing.Bunit;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
-using SampleComponents.Inputs;
-using SampleWorkbench.Scenarios;
+using BlazorWorkbench.Demo.Components.Inputs;
+using BlazorWorkbench.Demo.Scenarios;
 
 namespace BlazorWorkbench.Components.Tests;
 

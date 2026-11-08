@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <Description>Blazor Workbench host for the sample component library.</Description>
+    <Description>Blazor Workbench host for the demo component library.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlazorWorkbench.Hosting\BlazorWorkbench.Hosting.csproj" />
     <ProjectReference Include="..\..\src\BlazorWorkbench.Maui.Essentials\BlazorWorkbench.Maui.Essentials.csproj" />
-    <ProjectReference Include="..\SampleComponents\SampleComponents.csproj" />
+    <ProjectReference Include="..\BlazorWorkbench.Demo.Components\BlazorWorkbench.Demo.Components.csproj" />
   </ItemGroup>
 </Project>

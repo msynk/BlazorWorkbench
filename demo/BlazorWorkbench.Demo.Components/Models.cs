@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace SampleComponents;
+namespace BlazorWorkbench.Demo.Components;
 
 public enum ButtonVariant { Primary, Secondary, Danger, Ghost }
 
@@ -16,7 +16,7 @@ public readonly record struct HexColor(string Value)
     public override string ToString() => Value;
 }
 
-/// <summary>A row in <see cref="Data.DataTable{TItem}"/> samples.</summary>
+/// <summary>A row in <see cref="Data.DataTable{TItem}"/> scenarios.</summary>
 public sealed record Person(string Name, string Email, int Age, string Country);
 
 /// <summary>Weather data returned by <c>GET /api/weather</c>.</summary>

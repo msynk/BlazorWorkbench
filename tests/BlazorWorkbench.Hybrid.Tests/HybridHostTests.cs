@@ -5,7 +5,7 @@ using BlazorWorkbench.Components.Runtime;
 using BlazorWorkbench.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
-using SampleComponents.Device;
+using BlazorWorkbench.Demo.Components.Device;
 
 namespace BlazorWorkbench.Hybrid.Tests;
 

@@ -1,4 +1,4 @@
-/* Sample component library styles. Themes are selected with [data-theme] on <html>; layout uses logical properties for RTL. */
+/* Demo component library styles. Themes are selected with [data-theme] on <html>; layout uses logical properties for RTL. */
 :root {
   --c-bg: #ffffff; --c-text: #1b1b1f; --c-muted: #5b5b66; --c-border: #d4d4dc; --c-surface: #f6f6f8;
   --c-primary: #3f37c9; --c-primary-text: #ffffff; --c-danger: #b42318; --c-success: #067647; --c-warning: #8a5300; --c-info: #175cd3;
@@ -107,7 +107,7 @@ body { background: var(--c-bg); color: var(--c-text); }
 
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
-/* ---------- Custom Workbench theme (registered by the sample hosts with options.Themes.Add) ---------- */
+/* ---------- Custom Workbench theme (registered by the demo hosts with options.Themes.Add) ---------- */
 [data-theme="high-contrast"] {
   --c-bg: #000000; --c-text: #ffffff; --c-muted: #e6e6e6; --c-border: #ffffff; --c-surface: #1a1a1a;
   --c-primary: #ffd60a; --c-primary-text: #000000; --c-danger: #ff7b7b; --c-success: #5ee39a; --c-warning: #ffd60a; --c-info: #8fd3ff;

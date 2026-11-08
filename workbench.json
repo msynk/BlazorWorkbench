@@ -1,6 +1,6 @@
 {
-  "project": "samples/SampleWorkbench/SampleWorkbench.csproj",
-  "baselines": "samples/SampleWorkbench/baselines",
+  "project": "demo/BlazorWorkbench.Demo/BlazorWorkbench.Demo.csproj",
+  "baselines": "demo/BlazorWorkbench.Demo/baselines",
   "output": "artifacts/workbench",
   "browser": "chromium",
   "viewports": ["laptop"],

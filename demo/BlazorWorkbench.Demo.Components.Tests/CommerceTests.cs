@@ -1,11 +1,11 @@
 using Bunit;
 using BlazorWorkbench.Testing.Bunit;
-using SampleWorkbench.Scenarios;
+using BlazorWorkbench.Demo.Scenarios;
 
-namespace SampleComponents.Tests;
+namespace BlazorWorkbench.Demo.Components.Tests;
 
 /// <summary>Store components tested through their scenarios: the fake backend, gates and culture come from the scenario.</summary>
-public class CommerceTests : SampleTestContext
+public class CommerceTests : DemoTestContext
 {
     [Fact]
     public void A_declined_card_is_explained_and_nothing_is_ordered()

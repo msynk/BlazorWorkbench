@@ -49,6 +49,6 @@ s.Interaction("dialog traps and restores focus", i => i
 
 Workbench does not run a screen reader. You can still assert the markup that makes announcements work, for example `ExpectAttribute(By.TestId("count"), "aria-live", "polite")` or `ExpectVisible(By.Role("status"))`. Then verify the actual announcements manually with NVDA, JAWS or VoiceOver.
 
-## Example from the sample
+## Example from the demo
 
-The sample `ProductList` gave a sold-out button the accessible name "Add 4K monitor to cart" while its visible text was "Sold out". axe-core flagged this as `label-content-name-mismatch` (WCAG 2.5.3, *Label in Name*). The fix is in [ProductList.razor](../samples/SampleComponents/Data/ProductList.razor).
+The demo `ProductList` gave a sold-out button the accessible name "Add 4K monitor to cart" while its visible text was "Sold out". axe-core flagged this as `label-content-name-mismatch` (WCAG 2.5.3, *Label in Name*). The fix is in [ProductList.razor](../demo/BlazorWorkbench.Demo.Components/Data/ProductList.razor).

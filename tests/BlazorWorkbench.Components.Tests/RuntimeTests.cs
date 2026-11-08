@@ -6,10 +6,10 @@ using BlazorWorkbench.Values;
 using Bunit;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
-using SampleComponents;
-using SampleComponents.Inputs;
-using SampleWorkbench.Fakes;
-using SampleWorkbench.Scenarios;
+using BlazorWorkbench.Demo.Components;
+using BlazorWorkbench.Demo.Components.Inputs;
+using BlazorWorkbench.Demo.Fakes;
+using BlazorWorkbench.Demo.Scenarios;
 
 namespace BlazorWorkbench.Components.Tests;
 
@@ -336,7 +336,7 @@ public class InspectorTests : BunitContext
         var options2 = cut.FindAll("#wb-param-Items option").Select(o => o.TextContent).ToList();
         Assert.Contains("Fifty people", options2);
         Assert.Contains("Nobody", options2);
-        _ = SampleData.Products;
+        _ = DemoData.Products;
         _ = typeof(Person);
     }
 }

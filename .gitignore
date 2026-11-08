@@ -10,9 +10,10 @@ obj/
 *.binlog
 TestResults/
 
-## Workbench outputs (baselines are committed; run artifacts are not)
+## Workbench outputs (run artifacts and the demo's visual baselines are not committed)
 artifacts/
 .workbench/
+demo/BlazorWorkbench.Demo/baselines/
 
 ## Node / misc
 node_modules/

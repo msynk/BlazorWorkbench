@@ -12,13 +12,13 @@
     <Project Path="src/BlazorWorkbench.Maui/BlazorWorkbench.Maui.csproj" />
     <Project Path="src/BlazorWorkbench.Templates/BlazorWorkbench.Templates.csproj" />
   </Folder>
-  <Folder Name="/samples/">
-    <Project Path="samples/SampleComponents/SampleComponents.csproj" />
-    <Project Path="samples/SampleWorkbench/SampleWorkbench.csproj" />
-    <Project Path="samples/SampleWorkbench.Wasm/SampleWorkbench.Wasm.csproj" />
-    <Project Path="samples/SampleWorkbench.Maui/SampleWorkbench.Maui.csproj" />
-    <Project Path="samples/SampleWorkbench.Wasm.Client/SampleWorkbench.Wasm.Client.csproj" />
-    <Project Path="samples/SampleComponents.Tests/SampleComponents.Tests.csproj" />
+  <Folder Name="/demo/">
+    <Project Path="demo/BlazorWorkbench.Demo.Components/BlazorWorkbench.Demo.Components.csproj" />
+    <Project Path="demo/BlazorWorkbench.Demo/BlazorWorkbench.Demo.csproj" />
+    <Project Path="demo/BlazorWorkbench.Demo.Wasm/BlazorWorkbench.Demo.Wasm.csproj" />
+    <Project Path="demo/BlazorWorkbench.Demo.Maui/BlazorWorkbench.Demo.Maui.csproj" />
+    <Project Path="demo/BlazorWorkbench.Demo.Wasm.Client/BlazorWorkbench.Demo.Wasm.Client.csproj" />
+    <Project Path="demo/BlazorWorkbench.Demo.Components.Tests/BlazorWorkbench.Demo.Components.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlazorWorkbench.Core.Tests/BlazorWorkbench.Core.Tests.csproj" />
