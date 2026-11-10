@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="124" height="36" viewBox="0 0 124 36">
+  <!-- Design mockup of the primary button from the Trailhead design file: 8px radius, 18px horizontal padding. -->
+  <rect x="0.5" y="0.5" width="123" height="35" rx="8" ry="8" fill="#3f37c9"/>
+  <text x="62" y="23" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="14" fill="#ffffff">Save changes</text>
+</svg>

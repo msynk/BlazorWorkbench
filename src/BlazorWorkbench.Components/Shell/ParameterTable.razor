@@ -1,0 +1,57 @@
+@* The parameter table of a component, with value coverage: which values of each parameter the declared scenarios exercise. *@
+@if (Component.Metadata.Parameters.Count == 0)
+{
+    <p class="wb-muted">No parameters.</p>
+}
+else
+{
+    <table class="wb-table">
+        <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Description</th>@if (ShowCoverage) {<th scope="col">Covered by scenarios</th>}</tr></thead>
+        <tbody>
+            @foreach (var p in Component.Metadata.Parameters)
+            {
+                var coverage = _coverage.FirstOrDefault(c => c.Parameter == p.Name);
+                <tr>
+                    <th scope="row">
+                        <code>@p.Name</code>
+                        @if (p.IsRequired) { <span class="wb-badge wb-badge-required">required</span> }
+                        @if (p.Kind == ParameterKind.Cascading) { <span class="wb-badge">cascading</span> }
+                        @if (p.IsObsolete) { <span class="wb-badge" title="@p.ObsoleteMessage">obsolete</span> }
+                    </th>
+                    <td><code>@p.TypeName</code></td>
+                    <td>@(p.DefaultValueDisplay is { } d ? d : "—")</td>
+                    <td>@(p.Summary ?? "")@if (p.Summary is null) { <span class="wb-muted">Undocumented</span> }</td>
+                    @if (ShowCoverage)
+                    {
+                        <td class="wb-coverage">
+                            @if (coverage is null)
+                            {
+                                <span class="wb-muted">—</span>
+                            }
+                            else if (coverage.Kind == ParameterCoverageKind.Presence)
+                            {
+                                @if (coverage.ScenariosSettingIt > 0) { <span class="wb-cov wb-cov-yes">set in @coverage.ScenariosSettingIt</span> }
+                                else { <span class="wb-cov wb-cov-no">never set</span> }
+                            }
+                            else
+                            {
+                                @foreach (var v in coverage.Covered) { <span class="wb-cov wb-cov-yes" title="Covered">@v</span> }
+                                @foreach (var v in coverage.Missing) { <span class="wb-cov wb-cov-no" title="No scenario uses this value">@v</span> }
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<ParameterCoverage> _coverage = [];
+
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+
+    private bool ShowCoverage => _coverage.Count > 0;
+
+    protected override void OnParametersSet() => _coverage = ParameterCoverageAnalyzer.Analyze(Component);
+}

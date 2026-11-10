@@ -94,6 +94,7 @@ public sealed class OnboardingWizardScenarios : ScenarioSet<OnboardingWizard>
     protected override void Configure(ScenarioSetBuilder<OnboardingWizard> set)
     {
         set.Title("Forms/Onboarding wizard")
+           .Status(ComponentStatus.Experimental)
            .Tags("forms", "keyboard", "focus", "showcase")
            .Documentation("""
                Multi-step flows are where interaction tests earn their keep. The *Start* scenario's tests double as executable

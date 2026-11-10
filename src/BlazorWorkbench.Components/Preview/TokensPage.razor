@@ -1,0 +1,153 @@
+@page "/_workbench/tokens"
+@inject WorkbenchCatalogAccessor Catalogs
+@inject IJSRuntime JS
+
+<PageTitle>Design tokens · Preview</PageTitle>
+
+<div class="wbt">
+    <div class="wbt-bar">
+        <label>Theme
+            <select @bind="_theme" @bind:after="LoadAsync">
+                @foreach (var t in Catalogs.Options.Themes)
+                {
+                    <option value="@t.Name">@t.Name</option>
+                }
+            </select>
+        </label>
+        <input type="search" placeholder="Filter tokens" aria-label="Filter tokens" @bind="_filter" @bind:event="oninput" />
+        <span class="wbt-muted">@Visible.Count() of @_tokens.Count custom properties</span>
+    </div>
+    @if (!_loaded)
+    {
+        <p class="wbt-muted" role="status">Reading the stylesheets…</p>
+    }
+    else if (_tokens.Count == 0)
+    {
+        <p class="wbt-muted">The preview stylesheets define no custom properties on the root element. Declare design tokens as CSS custom properties
+            (for example <code>:root { --color-primary: #2563eb; }</code>) and add the stylesheet with <code>options.PreviewStylesheets</code>.</p>
+    }
+    else
+    {
+        @foreach (var group in Visible.GroupBy(t => Kind(t)).OrderBy(g => (int)g.Key))
+        {
+            <section class="wbt-group">
+                <h2>@Title(group.Key) <span class="wbt-muted">@group.Count()</span></h2>
+                <div class="wbt-grid wbt-grid-@group.Key.ToString().ToLowerInvariant()">
+                    @foreach (var token in group)
+                    {
+                        <div class="wbt-token">
+                            @Sample(group.Key, token)
+                            <div class="wbt-name"><code>@token.Name</code></div>
+                            <div class="wbt-value">@token.Value</div>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private enum TokenKind { Color, Typography, Spacing, Radius, Shadow, Other }
+
+    private List<DesignTokenValue> _tokens = [];
+    private string _theme = "";
+    private string _filter = "";
+    private bool _loaded;
+
+    [SupplyParameterFromQuery(Name = "theme")] public string? ThemeQuery { get; set; }
+
+    private IEnumerable<DesignTokenValue> Visible => _tokens.Where(t => _filter.Length == 0 ||
+        t.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase) || t.Value.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+
+    protected override void OnInitialized() =>
+        _theme = Catalogs.Options.FindTheme(ThemeQuery)?.Name ?? Catalogs.Options.Themes.FirstOrDefault()?.Name ?? "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var theme = Catalogs.Options.FindTheme(_theme);
+        try
+        {
+            await JS.InvokeVoidAsync("BlazorWorkbenchPreview.theme", new
+            {
+                theme = theme?.Name,
+                colorScheme = theme?.ColorScheme.ToString().ToLowerInvariant(),
+                themeClass = theme?.CssClass,
+                themeStylesheets = theme?.Stylesheets ?? [],
+            });
+            // Theme stylesheets load asynchronously; give them a moment before reading computed values.
+            if (theme?.Stylesheets.Count > 0)
+                await Task.Delay(250);
+            _tokens = await JS.InvokeAsync<List<DesignTokenValue>>("BlazorWorkbenchPreview.tokens");
+        }
+        catch (JSException)
+        {
+            _tokens = [];
+        }
+
+        _loaded = true;
+        StateHasChanged();
+    }
+
+    private static TokenKind Kind(DesignTokenValue token)
+    {
+        var name = token.Name.ToLowerInvariant();
+        var value = token.Value.Trim().ToLowerInvariant();
+        if (name.Contains("shadow")) return TokenKind.Shadow;
+        if (name.Contains("radius") || name.Contains("rounded")) return TokenKind.Radius;
+        if (name.Contains("font") || name.Contains("line-height") || name.Contains("leading") || name.Contains("letter") || name.Contains("text-size") || name.Contains("weight"))
+            return TokenKind.Typography;
+        if (IsColor(value)) return TokenKind.Color;
+        if (name.Contains("space") || name.Contains("spacing") || name.Contains("gap") || name.Contains("size") || name.Contains("width") || name.Contains("height") ||
+            System.Text.RegularExpressions.Regex.IsMatch(value, @"^-?\d*\.?\d+(px|rem|em|vh|vw|%)$"))
+            return TokenKind.Spacing;
+        return TokenKind.Other;
+    }
+
+    private static bool IsColor(string value) =>
+        value.StartsWith('#') || value.StartsWith("rgb", StringComparison.Ordinal) || value.StartsWith("hsl", StringComparison.Ordinal) ||
+        value.StartsWith("oklch", StringComparison.Ordinal) || value.StartsWith("oklab", StringComparison.Ordinal) || value.StartsWith("lab(", StringComparison.Ordinal) ||
+        value.StartsWith("lch(", StringComparison.Ordinal) || value.StartsWith("color(", StringComparison.Ordinal) || value.StartsWith("color-mix(", StringComparison.Ordinal) ||
+        value is "white" or "black" or "transparent" or "currentcolor" or "canvas" or "canvastext";
+
+    private static string Title(TokenKind kind) => kind switch
+    {
+        TokenKind.Color => "Colors",
+        TokenKind.Typography => "Typography",
+        TokenKind.Spacing => "Spacing and sizes",
+        TokenKind.Radius => "Radii",
+        TokenKind.Shadow => "Shadows",
+        _ => "Other",
+    };
+
+    private static RenderFragment Sample(TokenKind kind, DesignTokenValue token) => __builder =>
+    {
+        var reference = $"var({token.Name})";
+        switch (kind)
+        {
+            case TokenKind.Color:
+                <div class="wbt-swatch" style="@($"background:{reference}")"></div>
+                break;
+            case TokenKind.Typography:
+                <div class="wbt-type" style="@(token.Name.Contains("family") || token.Value.Contains(',') ? $"font-family:{reference}" : token.Name.Contains("weight") ? $"font-weight:{reference}" : token.Name.Contains("line") ? $"line-height:{reference}" : $"font-size:{reference}")">Aa Bb 123</div>
+                break;
+            case TokenKind.Spacing:
+                <div class="wbt-bar-sample"><span style="@($"width:{reference}")"></span></div>
+                break;
+            case TokenKind.Radius:
+                <div class="wbt-radius" style="@($"border-radius:{reference}")"></div>
+                break;
+            case TokenKind.Shadow:
+                <div class="wbt-shadow" style="@($"box-shadow:{reference}")"></div>
+                break;
+        }
+    };
+
+    private sealed record DesignTokenValue(string Name, string Value);
+}

@@ -11,8 +11,8 @@ turn every one of them into a test.
 dotnet run --project demo/BlazorWorkbench.Demo     # http://localhost:5280
 ```
 
-The overview page is a guided tour: sixteen stops, each one a link that opens a scenario with the relevant panel already
-open. On any scenario page, the chips under the title list what the scenario **simulates** (fake HTTP rules, the user,
+The overview page is a guided tour: twenty-eight stops in three parts, each one a link that opens a scenario with the
+relevant panel or tool already on. On any scenario page, the chips under the title list what the scenario **simulates** (fake HTTP rules, the user,
 the clock, replaced services, the device, culture, viewport) and what it **verifies** (interaction tests, screenshots,
 accessibility rules, budgets). Click a chip to open the panel behind it.
 
@@ -35,6 +35,23 @@ accessibility rules, budgets). Click a chip to open the panel behind it.
 | [Screenshots that never flake](http://localhost:5280/scenario/analytics-revenue-chart--seeded-data?panel=visual) | Seeded random data, screenshots in both themes | [RevenueChartScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs) |
 | [Documentation for free](http://localhost:5280/docs/commerce-checkout) | Generated pages: parameters, dependencies, live previews, snippets | any component's **Docs** link |
 
+Part 3 of the tour covers the tools for looking closely ([docs/tools.md](../docs/tools.md)):
+
+| Tour stop | What it shows | Code |
+| --- | --- | --- |
+| [Measure, grid and outlines](http://localhost:5280/scenario/layout-app-header--desktop?measure=1&grid=1) | The canvas toolbar: zoom, rotation, backgrounds, grid, outlines, measure, DOM-update flashing | any scenario |
+| [States without a mouse](http://localhost:5280/scenario/inputs-button--keyboard-focus) | `.ForceState(PseudoState.FocusVisible, ".btn")`; **States** in the toolbar for any scenario | [ButtonScenarios](BlazorWorkbench.Demo/Scenarios/InputScenarios.cs) |
+| [Every variant at once](http://localhost:5280/scenario/inputs-button--variants-primary-medium?mode=gallery) | `set.Matrix(...)` and the **Gallery** table; a pairwise matrix on *Badge* | [ButtonScenarios](BlazorWorkbench.Demo/Scenarios/InputScenarios.cs), [BadgeScenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |
+| [One scenario, every theme](http://localhost:5280/scenario/display-card--with-footer?mode=compare) | **Compare**: themes, viewports, cultures, users, states, vision side by side | any scenario |
+| [How others see it](http://localhost:5280/scenario/forms-signup-form--empty?vision=deuteranopia&text=200&tabs=1) | Vision simulation, 200% text, tab order, **Highlight** in Accessibility | any scenario |
+| [The design next to the code](http://localhost:5280/scenario/inputs-button--primary?panel=design) | `.Design(...)`, the overlay and the difference blend | [button-primary.svg](BlazorWorkbench.Demo.Components/wwwroot/designs/button-primary.svg) |
+| [Write tests by clicking](http://localhost:5280/scenario/forms-signup-form--empty?panel=interactions) | The recorder (with assertions) and the step debugger | any scenario |
+| [Remembered between visits](http://localhost:5280/scenario/feedback-whats-new-banner--dismissed-an-older-release?panel=storage) | Storage isolation, `.LocalStorage(...)`, the **Storage** panel | [WhatsNewBanner](BlazorWorkbench.Demo.Components/Feedback/WhatsNewBanner.razor) |
+| [Another user, a slower network](http://localhost:5280/scenario/account-workspace-settings--viewer?user=admin) | **User** and **Network** in the toolbar (`options.AddUser`, `NetworkProfiles`) | [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
+| [What it renders](http://localhost:5280/scenario/display-badge--with-count?panel=html) | The **HTML** panel | any scenario |
+| [Guidelines with live examples](http://localhost:5280/pages/guidelines-buttons-and-actions) | `options.AddPage(...)` with `{{scenario:...}}` and `{{parameters:...}}` embeds, value coverage | [DemoPages](BlazorWorkbench.Demo/DemoPages.cs) |
+| [Design tokens](http://localhost:5280/tokens) | Custom properties of `demo.css`, per theme | [demo.css](BlazorWorkbench.Demo.Components/wwwroot/demo.css) |
+
 The tour itself is Markdown in [DemoTour.cs](BlazorWorkbench.Demo/DemoTour.cs), set with `options.Introduction`; a test in
 `tests/BlazorWorkbench.Components.Tests` fails if one of its links stops resolving.
 
@@ -42,8 +59,8 @@ The tour itself is Markdown in [DemoTour.cs](BlazorWorkbench.Demo/DemoTour.cs), 
 
 | Project | What it is |
 | --- | --- |
-| [BlazorWorkbench.Demo.Components](BlazorWorkbench.Demo.Components) | The component library: 32 components, from a `Button` to a checkout form and a sales dashboard. It knows nothing about Workbench. |
-| [BlazorWorkbench.Demo](BlazorWorkbench.Demo) | The Interactive Server host. It declares every scenario ([Scenarios](BlazorWorkbench.Demo/Scenarios)), the fake backends ([Fakes](BlazorWorkbench.Demo/Fakes)), a custom editor, a scenario provider and the tour. |
+| [BlazorWorkbench.Demo.Components](BlazorWorkbench.Demo.Components) | The component library: 33 components, from a `Button` to a checkout form and a sales dashboard. It knows nothing about Workbench. |
+| [BlazorWorkbench.Demo](BlazorWorkbench.Demo) | The Interactive Server host. It declares every scenario ([Scenarios](BlazorWorkbench.Demo/Scenarios)), the fake backends ([Fakes](BlazorWorkbench.Demo/Fakes)), a custom editor, a scenario provider, the toolbar users, the documentation pages ([DemoPages](BlazorWorkbench.Demo/DemoPages.cs)) and the tour. |
 | [BlazorWorkbench.Demo.Wasm](BlazorWorkbench.Demo.Wasm) + [.Client](BlazorWorkbench.Demo.Wasm.Client) | The same scenarios with Interactive WebAssembly. |
 | [BlazorWorkbench.Demo.Maui](BlazorWorkbench.Demo.Maui) | The same scenarios in a .NET MAUI Blazor Hybrid app, inside the platform WebView. |
 | [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests) | bUnit tests that reuse the scenarios: a smoke test per scenario and focused tests, without a browser. |
@@ -60,7 +77,7 @@ dotnet run --project demo/BlazorWorkbench.Demo.Maui -f net10.0-windows10.0.19041
 
 ## One definition, every test
 
-The 146 scenarios are also the test suite: render checks, 77 interaction tests, axe-core scans and visual comparisons
+The 181 scenarios are also the test suite: render checks, 80 interaction tests, axe-core scans and visual comparisons
 in Chromium, in WebAssembly and in the MAUI WebView, plus a bUnit smoke test per scenario. From the repository root:
 
 ```bash
@@ -96,6 +113,14 @@ baseline, current and difference images.
 | Performance budgets | `Button · Primary`, `Sales dashboard · Loaded` |
 | Custom parameter editor and scenario provider | [HexColorEditor](BlazorWorkbench.Demo/Editors/HexColorEditor.razor), [ToneMatrixProvider](BlazorWorkbench.Demo/Providers/ToneMatrixProvider.cs) |
 | bUnit: smoke test every scenario, gates, fake clock, policies | [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests) |
+| Scenario matrices, full and pairwise (`set.Matrix(...)`, `.Pairwise()`) | *Variants* on `Button`, *Combinations* on `Badge` |
+| Forced pseudo-states (`.ForceState(...)`) | `Button` *Hover* and *Keyboard focus*, `TextField` *Keyboard focus* |
+| Component status (`set.Status(...)`), deprecation | Eleven components; `WeatherForecast` is deprecated |
+| Notes and design references (`.Notes(...)`, `.Design(...)`) | `Button` *Primary* (an image with a deliberate mismatch), `Dialog` (the WAI-ARIA pattern), checkout *Card declined* |
+| Browser storage seeding and isolation | [WhatsNewBanner scenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |
+| Media emulation in automated runs (`.Media(...)`) | `Card` *Printed* and *Windows high contrast* |
+| Toolbar users, backgrounds and documentation pages | [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs), [DemoPages](BlazorWorkbench.Demo/DemoPages.cs) |
+| Relationships and value coverage | Any **Docs** page; `SalesDashboard` renders five catalog components |
 
 ## What Workbench found in this library
 

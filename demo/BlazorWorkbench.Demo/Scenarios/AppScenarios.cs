@@ -56,7 +56,9 @@ public sealed class DialogScenarios : ScenarioSet<Dialog>
 {
     protected override void Configure(ScenarioSetBuilder<Dialog> set)
     {
-        set.Title("Overlays/Dialog").Description("A modal dialog that moves focus into itself when it opens and closes on Escape.").Tags("focus", "keyboard");
+        set.Title("Overlays/Dialog").Description("A modal dialog that moves focus into itself when it opens and closes on Escape.").Tags("focus", "keyboard")
+           .Status(ComponentStatus.Stable)
+           .Design("https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/", "WAI-ARIA APG: Dialog (modal) pattern");
         set.Documentation("`ExpectFocused` asserts where focus is, which screen reader and keyboard users depend on. The scenarios use the full-screen layout (`.Layout(ScenarioLayout.Fullscreen)`), and *Closed* opts out of screenshots because it renders nothing.");
         set.Setup(s => s
             .Parameter(d => d.Title, "Discard draft?")

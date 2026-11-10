@@ -1,0 +1,118 @@
+@* The canvas toolbar above the preview: zoom and orientation, backgrounds, visual aids, forced pseudo-states and
+   accessibility simulations. Every change is reported as a new PreviewTools value; the shell applies it and keeps it in the URL. *@
+<div class="wb-canvas-bar" role="toolbar" aria-label="Canvas tools">
+    <div class="wb-tool-group" role="group" aria-label="Zoom">
+        <button type="button" class="wb-icon-button" title="Zoom out (Alt+-)" aria-label="Zoom out" disabled="@(Tools.Zoom <= PreviewTools.ZoomLevels[0])" @onclick="() => ZoomBy(-1)">−</button>
+        <button type="button" class="wb-icon-button wb-zoom-value" title="Reset zoom (Alt+0)" aria-label="@($"Zoom {Percent(Tools.Zoom)}, reset to 100%")" @onclick="() => Set(Tools with { Zoom = 1 })">@Percent(Tools.Zoom)</button>
+        <button type="button" class="wb-icon-button" title="Zoom in (Alt+=)" aria-label="Zoom in" disabled="@(Tools.Zoom >= PreviewTools.ZoomLevels[^1])" @onclick="() => ZoomBy(1)">+</button>
+    </div>
+    @if (CanRotate)
+    {
+        <button type="button" class="wb-icon-button @(Tools.Rotate ? "active" : "")" aria-pressed="@(Tools.Rotate ? "true" : "false")" title="Rotate the viewport (landscape)" @onclick="() => Set(Tools with { Rotate = !Tools.Rotate })">⟲ Rotate</button>
+    }
+    <span class="wb-tool-separator" aria-hidden="true"></span>
+    <label class="wb-field" title="Preview background">
+        <span class="wb-visually-hidden">Background</span>
+        <select id="wb-tool-bg" @onchange="OnBackground">
+            <option value="" selected="@(Tools.Background is null)">Theme background</option>
+            @foreach (var b in Options.Backgrounds)
+            {
+                <option value="@b.Id" selected="@(Tools.Background == b.Id)">@b.Name</option>
+            }
+        </select>
+    </label>
+    <div class="wb-tool-group" role="group" aria-label="Visual aids">
+        @Toggle("grid", "Grid", "Show a layout grid (G)", Tools.Grid, () => Tools with { Grid = !Tools.Grid })
+        @Toggle("outline", "Outline", "Outline every element (O)", Tools.Outline, () => Tools with { Outline = !Tools.Outline })
+        @Toggle("measure", "Measure", "Hover elements to measure size, padding and margin (M)", Tools.Measure, () => Tools with { Measure = !Tools.Measure })
+        @Toggle("updates", "Updates", "Flash elements whose DOM changes", Tools.Updates, () => Tools with { Updates = !Tools.Updates })
+    </div>
+    <details class="wb-menu" id="wb-tool-pseudo">
+        <summary class="wb-icon-button @(Tools.Pseudo.Count > 0 ? "active" : "")" title="Force :hover, :focus and other states on every element">
+            States@(Tools.Pseudo.Count > 0 ? $" ({Tools.Pseudo.Count})" : "")
+        </summary>
+        <div class="wb-menu-body" role="group" aria-label="Forced pseudo-states">
+            @foreach (var (key, label) in PreviewTools.PseudoStates)
+            {
+                <label class="wb-check"><input type="checkbox" checked="@Tools.Pseudo.Contains(key)" @onchange="() => TogglePseudo(key)" /> <code>@label</code></label>
+            }
+            <p class="wb-muted wb-small">Applies to every element of the preview. Scenarios can force a state on chosen elements with <code>.ForceState(...)</code>.</p>
+        </div>
+    </details>
+    <details class="wb-menu" id="wb-tool-a11y">
+        <summary class="wb-icon-button @(A11yActive ? "active" : "")" title="Vision simulation, text size and keyboard order">Accessibility@(A11yActive ? " ●" : "")</summary>
+        <div class="wb-menu-body" role="group" aria-label="Accessibility simulations">
+            <label class="wb-field wb-field-block"><span>Vision</span>
+                <select id="wb-tool-vision" @onchange="OnVision">
+                    <option value="" selected="@(Tools.Vision is null)">Typical vision</option>
+                    @foreach (var (key, label) in PreviewTools.VisionModes)
+                    {
+                        <option value="@key" selected="@(Tools.Vision == key)">@label</option>
+                    }
+                </select>
+            </label>
+            <label class="wb-field wb-field-block"><span>Text size</span>
+                <select id="wb-tool-text" @onchange="OnTextScale">
+                    @foreach (var scale in PreviewTools.TextScales)
+                    {
+                        <option value="@scale" selected="@(Tools.TextScale == scale)">@scale%</option>
+                    }
+                </select>
+            </label>
+            <label class="wb-check"><input id="wb-tool-spacing" type="checkbox" checked="@Tools.TextSpacing" @onchange="() => Set(Tools with { TextSpacing = !Tools.TextSpacing })" /> Text spacing (WCAG 1.4.12)</label>
+            <label class="wb-check"><input id="wb-tool-tabs" type="checkbox" checked="@Tools.TabOrder" @onchange="() => Set(Tools with { TabOrder = !Tools.TabOrder })" /> Show tab order</label>
+            <p class="wb-muted wb-small">Text size scales the root font size, like a browser's text-only zoom: text set in <code>px</code> does not grow.</p>
+        </div>
+    </details>
+    @if (Tools.Overlay is not null)
+    {
+        <span class="wb-tool-chip">Design overlay <button type="button" class="wb-button wb-button-small" @onclick="() => Set(Tools with { Overlay = null })" aria-label="Remove the design overlay">×</button></span>
+    }
+    <span class="wb-toolbar-spacer"></span>
+    @if (Tools.ActiveCount > 0)
+    {
+        <button type="button" class="wb-button wb-button-small" @onclick="() => Set(PreviewTools.None with { Zoom = Tools.Zoom, Rotate = Tools.Rotate })" title="Turn off every canvas tool">Clear tools</button>
+    }
+    <button type="button" class="wb-icon-button" title="Panel at the bottom or on the right (Alt+D)" aria-label="Move the panel" @onclick='() => OnLayout.InvokeAsync("panel")'>@(PanelRight ? "⬓" : "◨")</button>
+    <button type="button" class="wb-icon-button" title="Focus mode: hide the explorer and the panel (Alt+F)" aria-label="Focus mode" aria-pressed="@(FocusMode ? "true" : "false")" @onclick='() => OnLayout.InvokeAsync("focus")'>⛶</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PreviewTools Tools { get; set; } = PreviewTools.None;
+    [Parameter, EditorRequired] public WorkbenchOptions Options { get; set; } = default!;
+    [Parameter] public EventCallback<PreviewTools> ToolsChanged { get; set; }
+
+    /// <summary>Raised with <c>panel</c> or <c>focus</c> to change the shell layout.</summary>
+    [Parameter] public EventCallback<string> OnLayout { get; set; }
+
+    [Parameter] public bool CanRotate { get; set; }
+    [Parameter] public bool PanelRight { get; set; }
+    [Parameter] public bool FocusMode { get; set; }
+
+    private bool A11yActive => Tools.Vision is not null || Tools.TextScale != 100 || Tools.TextSpacing || Tools.TabOrder;
+
+    private static string Percent(double zoom) => (zoom * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+    private Task Set(PreviewTools tools) => ToolsChanged.InvokeAsync(tools);
+
+    private Task ZoomBy(int direction)
+    {
+        var levels = PreviewTools.ZoomLevels;
+        var next = direction > 0 ? levels.FirstOrDefault(l => l > Tools.Zoom + 0.001, levels[^1]) : levels.LastOrDefault(l => l < Tools.Zoom - 0.001, levels[0]);
+        return Set(Tools with { Zoom = next });
+    }
+
+    private Task TogglePseudo(string key) =>
+        Set(Tools with { Pseudo = Tools.Pseudo.Contains(key) ? Tools.Pseudo.Where(p => p != key).ToArray() : [.. Tools.Pseudo, key] });
+
+    private Task OnBackground(ChangeEventArgs e) => Set(Tools with { Background = e.Value?.ToString() is { Length: > 0 } v ? v : null });
+    private Task OnVision(ChangeEventArgs e) => Set(Tools with { Vision = e.Value?.ToString() is { Length: > 0 } v ? v : null });
+
+    private Task OnTextScale(ChangeEventArgs e) =>
+        Set(Tools with { TextScale = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var s) ? s : 100 });
+
+    private RenderFragment Toggle(string key, string label, string title, bool on, Func<PreviewTools> next) => __builder =>
+    {
+        <button type="button" id="@($"wb-tool-{key}")" class="wb-icon-button @(on ? "active" : "")" aria-pressed="@(on ? "true" : "false")" title="@title" @onclick="() => Set(next())">@label</button>
+    };
+}

@@ -10,6 +10,7 @@ public sealed class ButtonScenarios : ScenarioSet<Button>
     {
         set.Title("Inputs/Button")
            .Tags("inputs")
+           .Status(ComponentStatus.Stable)
            .Documentation("""
                Buttons trigger actions. Use **one** primary button per view.
 
@@ -23,10 +24,23 @@ public sealed class ButtonScenarios : ScenarioSet<Button>
                that `workbench test` enforces, and an interaction test that asserts the `OnClick` callback. *Large icon-only*
                sets `aria-label`, an attribute captured by `CaptureUnmatchedValues`, with `.Parameter("aria-label", ...)`.
                Open **Code** on any scenario to get the Razor markup for its current state.
+
+               **New in this tour:** the *Variants* scenarios are a matrix (`set.Matrix(...)`): one scenario per variant and
+               size, laid out as a table in the **Gallery** view. *Hover* and *Keyboard focus* force `:hover` and
+               `:focus-visible` with `.ForceState(...)`, so those states are screenshotted and scanned like any other.
+               *Primary* links a design mockup: open **Design** and overlay it on the preview.
+
+               {{scenario:inputs-button--keyboard-focus}}
                """);
 
         set.Add("Primary", s => s
             .ChildContent("Save changes")
+            .Design("_content/BlazorWorkbench.Demo.Components/designs/button-primary.svg", "Primary button (design file)")
+            .Notes("""
+                **Design review.** Open **Design** and press **Overlay on preview**, then tick **Difference**: matching pixels
+                turn black. The mockup has 8 px corners and 18 px side padding; the component uses 6 px and 14 px, so the
+                edges light up. Decide which one is right before the next release.
+                """)
             .Budget(readyWithin: TimeSpan.FromSeconds(3), maxDomUpdates: 20)
             .Interaction("click raises OnClick", i => i
                 .Click(By.Role("button", "Save changes"))
@@ -45,6 +59,17 @@ public sealed class ButtonScenarios : ScenarioSet<Button>
             .Parameter(b => b.Loading, true)
             .ChildContent("Saving…")
             .Description("The spinner animation is disabled during visual capture."));
+        set.Add("Hover", s => s
+            .ChildContent("Save changes")
+            .ForceState(PseudoState.Hover)
+            .Description("The :hover style, forced without a mouse: the screenshot and the accessibility scan cover it."));
+        set.Add("Keyboard focus", s => s
+            .ChildContent("Save changes")
+            .ForceState(PseudoState.FocusVisible, ".btn")
+            .Description("The :focus-visible ring on the button only, as a keyboard user sees it."));
+
+        set.Matrix("Variants", m => m.Vary(b => b.Variant).Vary(b => b.Size), s => s.ChildContent("Button"));
+
         set.Add("Large icon-only", s => s
             .Parameter(b => b.Size, Size.Large)
             .Parameter(b => b.Icon, "★")
@@ -116,5 +141,9 @@ public sealed class TextFieldScenarios : ScenarioSet<TextField>
             .Parameter(t => t.Invalid, true)
             .Parameter(t => t.HelperText, "Enter a valid email address."));
         set.Add("Disabled", s => s.Parameter(t => t.Value, "locked@example.com").Parameter(t => t.Disabled, true));
+        set.Add("Keyboard focus", s => s
+            .Parameter(t => t.Placeholder, "you@example.com")
+            .ForceState(PseudoState.FocusVisible, "input")
+            .Description("The input's focus ring, forced with .ForceState(PseudoState.FocusVisible, \"input\")."));
     }
 }

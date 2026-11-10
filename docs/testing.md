@@ -97,8 +97,24 @@ await page.WaitForFunctionAsync("() => window.__workbench?.ready");
 | `releaseGate(name)`, `failGate(name)`, `advanceClock(ms)` | Environment control. |
 | `runAxe({ tags, disabledRules })` | Runs axe-core on the preview root. |
 | `runInteraction(test)` | The in-browser runner (best effort). |
+| `applyTools(tools)`, `highlight(selector)` | Canvas tools (grid, outline, forced states, ...) and element highlighting, as the shell uses them. |
+| `html()`, `storage()`, `tokens()` | The formatted markup of the preview root, the preview's storage, and the CSS custom properties of the stylesheets. |
 
 This surface is part of the public contract and follows the versioning policy in [compatibility](compatibility.md).
+
+### Media features and accessibility todo
+
+Automated runs emulate `prefers-reduced-motion: reduce` for every scenario. A scenario can add `forced-colors: active`
+(Windows high contrast) and the `print` media type with `.Media(m => m.ForcedColors().Print())`; its screenshots then show
+that rendering. A scenario with `.Accessibility(a => a.Todo("reason"))` is scanned, and its violations are listed in the
+report with a `todo:` message, but they do not fail the run.
+
+### Results in the Workbench UI
+
+After `workbench test`, the host reads `report.json` from the results folder: every scenario in the explorer shows a dot for
+its result (passed, failed, flaky, skipped), components show their number of failures, and `is:failing` lists them. The
+**Visual** panel shows baseline, current and difference images. Hosts can serve results from elsewhere (for example a CI
+server) by registering an `ITestResultsProvider` and an `IVisualResultsProvider`.
 
 ## Change impact (`--changed-since`)
 

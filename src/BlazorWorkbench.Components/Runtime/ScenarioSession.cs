@@ -8,7 +8,12 @@ using Microsoft.Extensions.Time.Testing;
 namespace BlazorWorkbench.Components.Runtime;
 
 /// <summary>Per-activation overrides supplied by the toolbar (they never modify the scenario definition).</summary>
-public sealed record ActivationOptions(string? Culture = null, string? Theme = null, TextDirection? Direction = null);
+/// <param name="Culture">Overrides the scenario culture (toolbar, <c>?culture=</c>).</param>
+/// <param name="Theme">Overrides the scenario theme (toolbar, <c>?theme=</c>).</param>
+/// <param name="Direction">Overrides the text direction (toolbar, <c>?dir=</c>).</param>
+/// <param name="User">Previews the scenario as a simulated user from <see cref="WorkbenchOptions.Users"/> (<c>?user=</c>), or <c>anonymous</c>.</param>
+/// <param name="Network">Applies a network profile from <see cref="WorkbenchOptions.NetworkProfiles"/> to the fake backend (<c>?network=</c>).</param>
+public sealed record ActivationOptions(string? Culture = null, string? Theme = null, TextDirection? Direction = null, string? User = null, string? Network = null);
 
 /// <summary>Describes where a service used by the scenario comes from.</summary>
 public sealed record ServiceSourceInfo(string ServiceType, string Source, string Implementation);
@@ -65,6 +70,16 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     public FakeTimeProvider? Clock { get; private set; }
 
     public CultureInfo? Culture { get; private set; }
+
+    /// <summary>The simulated user: the toolbar's choice (<see cref="ActivationOptions.User"/>), else the scenario's.</summary>
+    public SimulatedUser? User { get; private set; }
+
+    /// <summary>The network profile chosen in the toolbar, if any.</summary>
+    public NetworkProfile? Network { get; private set; }
+
+    /// <summary>True when the fake backend fails every request (the scenario is offline or the network profile is).</summary>
+    public bool IsOffline => Scenario?.Environment.Offline == true || Network?.Offline == true;
+
     public CancellationToken Disposed => _disposed.Token;
     public string ScenarioId => Scenario?.Id ?? "";
 
@@ -93,6 +108,12 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
                 Clock = new FakeTimeProvider(now);
                 Clock.SetLocalTimeZone(TimeZoneInfo.Utc);
             }
+
+            var workbenchOptions = catalog.Options;
+            User = Activation.User is { } userName
+                ? string.Equals(userName, "anonymous", StringComparison.OrdinalIgnoreCase) ? SimulatedUser.Anonymous : workbenchOptions.FindUser(userName)?.User ?? env.User
+                : env.User;
+            Network = workbenchOptions.FindNetworkProfile(Activation.Network);
 
             var cultureName = Activation.Culture ?? env.Culture;
             Culture = cultureName is { Length: > 0 } ? CultureInfo.GetCultureInfo(cultureName) : null;
@@ -151,7 +172,8 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
             }
 
             Diagnostics.Add(DiagnosticSource.Scenario, DiagnosticSeverity.Info, scenario.Id,
-                $"Activated {scenario.Id} (seed {Context.Seed}{(Clock is not null ? $", clock {Clock.GetUtcNow():O}" : "")}{(Culture is not null ? $", culture {Culture.Name}" : "")}).");
+                $"Activated {scenario.Id} (seed {Context.Seed}{(Clock is not null ? $", clock {Clock.GetUtcNow():O}" : "")}{(Culture is not null ? $", culture {Culture.Name}" : "")}" +
+                $"{(Activation.User is not null ? $", user {User}" : "")}{(Network is not null ? $", network {Network.Name}" : "")}).");
         }
 
         Auth.NotifyChanged();
@@ -209,10 +231,11 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
         }
 
         var http = Scenario?.Environment.Http;
-        result.Add(new("HttpClient / IHttpClientFactory", "Simulated", Scenario?.Environment.Offline == true
-            ? "Offline (all requests fail)"
-            : $"Fake backend, {http?.Rules.Count ?? 0} rule(s), unmatched → {(int)(http?.UnmatchedStatus ?? System.Net.HttpStatusCode.NotFound)}"));
-        result.Add(new("AuthenticationStateProvider", "Simulated", Scenario?.Environment.User?.ToString() ?? "Anonymous (unspecified)"));
+        result.Add(new("HttpClient / IHttpClientFactory", "Simulated", IsOffline
+            ? "Offline (all requests fail)" + (Network?.Offline == true ? $" — network profile '{Network.Name}'" : "")
+            : $"Fake backend, {http?.Rules.Count ?? 0} rule(s), unmatched → {(int)(http?.UnmatchedStatus ?? System.Net.HttpStatusCode.NotFound)}" +
+              (Network is not null ? $", +{Network.Latency.TotalMilliseconds:0} ms ({Network.Name})" : "")));
+        result.Add(new("AuthenticationStateProvider", "Simulated", (User?.ToString() ?? "Anonymous (unspecified)") + (Activation.User is not null ? " — chosen in the toolbar" : "")));
         result.Add(new("TimeProvider", Clock is null ? "Real" : "Simulated", Clock is null ? "System clock" : $"Fixed at {Clock.GetUtcNow():O}"));
 
         if (Component is not null)

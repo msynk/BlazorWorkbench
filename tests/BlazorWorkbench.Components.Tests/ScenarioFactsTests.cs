@@ -87,19 +87,45 @@ public class ScenarioFactsTests
     public void Every_link_of_the_demo_tour_opens_an_existing_scenario_panel_or_page()
     {
         var (_, catalog) = Demo.Value;
-        var panels = new[] { "controls", "environment", "actions", "diagnostics", "interactions", "accessibility", "visual", "code" };
-        var links = Regex.Matches(DemoTour.Markdown, @"\]\((?<url>(scenario|docs)/[^)]+)\)").Select(m => m.Groups["url"].Value).ToList();
-        Assert.True(links.Count >= 15, $"Expected the tour to link to at least 15 stops, found {links.Count}.");
+        var panels = new[] { "controls", "environment", "actions", "diagnostics", "interactions", "accessibility", "visual", "design", "html", "storage", "code" };
+        var links = Regex.Matches(DemoTour.Markdown, @"\]\((?<url>(scenario/|docs/|pages/|tokens)[^)]*)\)").Select(m => m.Groups["url"].Value).ToList();
+        Assert.True(links.Count >= 25, $"Expected the tour to link to at least 25 stops, found {links.Count}.");
         foreach (var link in links)
         {
             var parts = link.Split('?', 2);
-            var (kind, id) = (parts[0].Split('/')[0], parts[0].Split('/')[1]);
-            if (kind == "scenario")
-                Assert.True(catalog.FindScenario(id) is not null, $"The tour links to scenario '{id}', which does not exist.");
-            else
-                Assert.True(catalog.FindComponent(id) is not null, $"The tour links to component '{id}', which does not exist.");
-            if (parts.Length == 2)
-                Assert.Contains(parts[1]["panel=".Length..], panels);
+            var path = parts[0].Split('/');
+            var id = path.Length > 1 ? path[1] : "";
+            switch (path[0])
+            {
+                case "scenario":
+                    Assert.True(catalog.FindScenario(id) is not null, $"The tour links to scenario '{id}', which does not exist.");
+                    break;
+                case "docs":
+                    Assert.True(catalog.FindComponent(id) is not null, $"The tour links to component '{id}', which does not exist.");
+                    break;
+                case "pages":
+                    Assert.True(catalog.FindPage(id) is not null, $"The tour links to page '{id}', which does not exist.");
+                    break;
+            }
+
+            // Every query parameter must be one the Workbench understands, with a valid value.
+            foreach (var pair in parts.Length == 2 ? parts[1].Split('&') : [])
+            {
+                var (key, value) = (pair.Split('=')[0], pair.Split('=')[1]);
+                var valid = key switch
+                {
+                    "panel" => panels.Contains(value),
+                    "mode" => value is "canvas" or "compare" or "gallery",
+                    "user" => catalog.Options.FindUser(value) is not null || value == "anonymous",
+                    "network" => catalog.Options.FindNetworkProfile(value) is not null,
+                    "vision" => PreviewTools.VisionModes.Any(v => v.Key == value),
+                    "text" => PreviewTools.TextScales.Contains(int.Parse(value, System.Globalization.CultureInfo.InvariantCulture)),
+                    "grid" or "outline" or "measure" or "tabs" or "spacing" or "updates" or "rotate" => value == "1",
+                    "viewport" => catalog.Options.FindViewport(value) is not null,
+                    _ => false,
+                };
+                Assert.True(valid, $"The tour link '{link}' has an unknown or invalid parameter '{pair}'.");
+            }
         }
     }
 }

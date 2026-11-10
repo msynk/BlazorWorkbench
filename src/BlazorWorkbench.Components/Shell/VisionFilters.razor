@@ -1,0 +1,11 @@
+@* SVG color matrices for the vision simulations; the preview frame references them with filter: url(#wb-vision-...). *@
+<svg class="wb-vision-filters" aria-hidden="true" focusable="false" width="0" height="0">
+    <defs>
+        @foreach (var (key, matrix) in PreviewTools.VisionMatrices)
+        {
+            <filter id="@($"wb-vision-{key}")" color-interpolation-filters="linearRGB">
+                <feColorMatrix type="matrix" values="@matrix" />
+            </filter>
+        }
+    </defs>
+</svg>

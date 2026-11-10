@@ -8,6 +8,26 @@ namespace BlazorWorkbench;
 public static class Naming
 {
     /// <summary>Converts text such as <c>DataGrid&lt;Person&gt;</c> or <c>Primary Button</c> to <c>data-grid-person</c> / <c>primary-button</c>.</summary>
+    /// <summary>
+    /// Lower-case slug for display names of presets (users, network profiles, backgrounds): letters and digits are kept, every
+    /// other run of characters becomes one hyphen. "Slow 3G" becomes <c>slow-3g</c>, "Owner on Pro" <c>owner-on-pro</c>.
+    /// </summary>
+    public static string ToSlug(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            if (ch is '\'' or '’')
+                continue;
+            if (char.IsLetterOrDigit(ch))
+                sb.Append(char.ToLowerInvariant(ch));
+            else if (sb.Length > 0 && sb[^1] != '-')
+                sb.Append('-');
+        }
+
+        return sb.ToString().Trim('-');
+    }
+
     public static string ToKebabCase(string value)
     {
         var sb = new StringBuilder(value.Length + 8);
@@ -15,6 +35,8 @@ public static class Naming
         for (var i = 0; i < value.Length; i++)
         {
             var ch = value[i];
+            if (ch is '\'' or '’')
+                continue; // Apostrophes join words: "What's new" becomes whats-new, not what-s-new.
             if (char.IsLetterOrDigit(ch))
             {
                 var boundary = char.IsUpper(ch) && i > 0 && previous != '-' &&

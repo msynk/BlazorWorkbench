@@ -40,6 +40,19 @@ public sealed class ComponentEntry
     public IReadOnlyList<string> Tags { get; init; } = [];
     public string? Documentation { get; init; }
     public string? DeprecationMessage { get; init; }
+
+    /// <summary>Lifecycle status: declared with <c>set.Status(...)</c>, or <see cref="ComponentStatus.Deprecated"/> for deprecated components.</summary>
+    public ComponentStatus? Status { get; init; }
+
+    /// <summary>Design references declared for the component (scenarios add their own).</summary>
+    public IReadOnlyList<DesignReference> Designs { get; init; } = [];
+
+    /// <summary>Ids of catalog components that this component renders (read from its compiled render code).</summary>
+    public IReadOnlyList<string> Uses { get; internal set; } = [];
+
+    /// <summary>Ids of catalog components that render this component.</summary>
+    public IReadOnlyList<string> UsedBy { get; internal set; } = [];
+
     public IReadOnlyList<FixtureDefinition> Fixtures { get; init; } = [];
     public IReadOnlyList<ScenarioDefinition> Scenarios { get; internal set; } = [];
 
@@ -72,6 +85,11 @@ public sealed class WorkbenchCatalog
 
     public IReadOnlyList<ComponentEntry> Components { get; }
     public IReadOnlyList<ScenarioDefinition> Scenarios { get; }
+
+    /// <summary>Standalone documentation pages (<see cref="WorkbenchOptions.Pages"/>).</summary>
+    public IReadOnlyList<DocumentationPage> Pages => Options.Pages as IReadOnlyList<DocumentationPage> ?? Options.Pages.ToArray();
+
+    public DocumentationPage? FindPage(string id) => Options.Pages.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
     public IReadOnlyList<CatalogIssue> Issues { get; }
     public WorkbenchOptions Options { get; }
 

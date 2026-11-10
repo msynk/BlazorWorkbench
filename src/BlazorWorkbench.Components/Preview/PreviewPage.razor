@@ -37,6 +37,8 @@ else
     [SupplyParameterFromQuery(Name = "culture")] public string? Culture { get; set; }
     [SupplyParameterFromQuery(Name = "theme")] public string? Theme { get; set; }
     [SupplyParameterFromQuery(Name = "dir")] public string? Dir { get; set; }
+    [SupplyParameterFromQuery(Name = "user")] public string? User { get; set; }
+    [SupplyParameterFromQuery(Name = "network")] public string? Network { get; set; }
 
     protected override void OnInitialized()
     {
@@ -72,6 +74,13 @@ else
             "ltr" => TextDirection.Ltr,
             _ => null,
         };
-        _activation = new ActivationOptions(culture, string.IsNullOrWhiteSpace(Theme) ? null : Theme, direction);
+        var options = catalog.Options;
+        if (!string.IsNullOrWhiteSpace(User) && !string.Equals(User, "anonymous", StringComparison.OrdinalIgnoreCase) && options.FindUser(User) is null)
+            _argsError = $"Unknown user '{User}'. Defined users: {(options.Users.Count == 0 ? "none" : string.Join(", ", options.Users.Select(u => u.Id)))}, anonymous.";
+        if (!string.IsNullOrWhiteSpace(Network) && options.FindNetworkProfile(Network) is null)
+            _argsError = $"Unknown network profile '{Network}'. Defined profiles: {string.Join(", ", options.NetworkProfiles.Select(n => n.Id))}.";
+
+        _activation = new ActivationOptions(culture, string.IsNullOrWhiteSpace(Theme) ? null : Theme, direction,
+            string.IsNullOrWhiteSpace(User) ? null : User, string.IsNullOrWhiteSpace(Network) ? null : Network);
     }
 }

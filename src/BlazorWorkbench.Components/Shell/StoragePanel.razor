@@ -1,0 +1,91 @@
+<div class="wb-storage">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">
+            @if (Isolated)
+            {
+                <text>Storage is cleared before every preview, so scenarios never see each other's data. Scenarios seed it with <code>.LocalStorage(key, value)</code>.</text>
+            }
+            else
+            {
+                <text>Storage is shared by every preview of this host (<code>IsolateBrowserStorage</code> is off).</text>
+            }
+        </span>
+        <span>
+            <button type="button" class="wb-button" @onclick='() => OnCommand.InvokeAsync(new StorageCommand("get"))'>Refresh</button>
+            <button type="button" class="wb-button" @onclick='() => OnCommand.InvokeAsync(new StorageCommand("clear"))'>Clear all</button>
+        </span>
+    </div>
+
+    @if (Declared.Count > 0)
+    {
+        <p class="wb-small">Seeded by the scenario: @foreach (var e in Declared) { <code class="wb-chip-code">@e.Area.ToString().ToLowerInvariant()Storage["@e.Key"]</code> }</p>
+    }
+
+    @if (Snapshot is null)
+    {
+        <p class="wb-empty" role="status">Reading storage…</p>
+    }
+    else
+    {
+        @Area("localStorage", "local", Snapshot.Local ?? [])
+        @Area("sessionStorage", "session", Snapshot.Session ?? [])
+        <h2 class="wb-h3">Cookies</h2>
+        <p>@(string.IsNullOrEmpty(Snapshot.Cookies) ? "No cookies visible to scripts." : Snapshot.Cookies)</p>
+
+        <form class="wb-storage-add" @onsubmit="Add">
+            <h2 class="wb-h3">Add or change an item</h2>
+            <label class="wb-field"><span>Area</span>
+                <select @bind="_area"><option value="local">localStorage</option><option value="session">sessionStorage</option></select>
+            </label>
+            <label class="wb-field"><span>Key</span><input id="wb-storage-key" type="text" @bind="_key" /></label>
+            <label class="wb-field"><span>Value</span><input id="wb-storage-value" type="text" @bind="_value" /></label>
+            <button type="submit" class="wb-button" disabled="@string.IsNullOrWhiteSpace(_key)">Save</button>
+        </form>
+        <p class="wb-muted wb-small">Changes apply to the running preview; reload it to see how the component starts with them. Secrets in values are redacted here.</p>
+    }
+</div>
+
+@code {
+    private string _area = "local";
+    private string _key = "";
+    private string _value = "";
+
+    [Parameter] public StorageSnapshot? Snapshot { get; set; }
+    [Parameter] public IReadOnlyList<StorageEntry> Declared { get; set; } = [];
+    [Parameter] public bool Isolated { get; set; } = true;
+    [Parameter] public EventCallback<StorageCommand> OnCommand { get; set; }
+
+    private async Task Add()
+    {
+        if (string.IsNullOrWhiteSpace(_key))
+            return;
+        await OnCommand.InvokeAsync(new StorageCommand("set", _area, _key.Trim(), _value));
+        _key = "";
+        _value = "";
+    }
+
+    private RenderFragment Area(string title, string area, StorageItem[] items) => __builder =>
+    {
+        <h2 class="wb-h3">@title <span class="wb-muted wb-small">@items.Length item@(items.Length == 1 ? "" : "s")</span></h2>
+        @if (items.Length == 0)
+        {
+            <p class="wb-muted">Empty.</p>
+        }
+        else
+        {
+            <table class="wb-table">
+                <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col"><span class="wb-visually-hidden">Actions</span></th></tr></thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td><code>@item.Key</code></td>
+                            <td class="wb-args">@item.Value</td>
+                            <td><button type="button" class="wb-button wb-button-small" aria-label="@($"Remove {item.Key}")" @onclick='() => OnCommand.InvokeAsync(new StorageCommand("remove", area, item.Key))'>Remove</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    };
+}

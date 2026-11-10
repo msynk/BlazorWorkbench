@@ -14,6 +14,7 @@ Codes are stable. Errors fail `workbench validate` and make the scenario's rende
 | WB0007 | Warning | Two components produce the same id (disambiguated). | Set a unique `Title`. |
 | WB0008 | Error | A scenario provider threw. | Fix the provider. |
 | WB0009 | Error | Component metadata could not be read. | Check the component type. |
+| WB0010 | Info | Component relationships (which components render which) could not be read from the compiled code. | Nothing to do; documentation pages omit the relationships. |
 
 ## Scenario validation (WB1xxx)
 
@@ -38,6 +39,9 @@ Codes are stable. Errors fail `workbench validate` and make the scenario's rende
 | WB1020 | Error | A visual threshold is outside 0–1. |
 | WB1021 | Warning | Accessibility rules are disabled without a justification. |
 | WB1022 | Error | `TimeProvider` overridden through `Services`; use `.Clock(...)`. |
+| WB1023 | Error | A design reference is not an `http(s)` URL or a relative path (`javascript:`, `data:` and protocol-relative URLs are rejected). |
+| WB1024 | Error | `ForceState(...)` was given an empty selector; pass `null` to force the state on every element. |
+| WB1025 | Warning | A documentation page or a component's documentation embeds `{{scenario:...}}`, `{{scenarios:...}}` or `{{parameters:...}}` with an id that does not exist, or two pages share an id. |
 
 ## Runtime diagnostics
 

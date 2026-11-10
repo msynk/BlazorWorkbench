@@ -40,7 +40,73 @@ public sealed class EnvironmentDefinition
 
     /// <summary>When true, the fake HTTP backend fails every request with a connection error.</summary>
     public bool Offline { get; init; }
+
+    /// <summary>CSS pseudo-classes forced in the preview, such as <c>:hover</c> on every element or on a selector.</summary>
+    public IReadOnlyList<PseudoStateRule> PseudoStates { get; init; } = [];
+
+    /// <summary>Browser storage entries written before the component starts (the preview's storage is cleared first).</summary>
+    public IReadOnlyList<StorageEntry> Storage { get; init; } = [];
+
+    /// <summary>
+    /// Emulates <c>forced-colors: active</c> (Windows high contrast) in automated runs. Browsers cannot emulate it inside the
+    /// Workbench's preview frame, so the interactive preview is unchanged.
+    /// </summary>
+    public bool ForcedColors { get; init; }
+
+    /// <summary>Emulates the <c>print</c> media type in automated runs (screenshots of the printed layout).</summary>
+    public bool PrintMedia { get; init; }
 }
+
+/// <summary>A CSS pseudo-class that the preview can force without user input.</summary>
+public enum PseudoState
+{
+    /// <summary><c>:hover</c></summary>
+    Hover,
+
+    /// <summary><c>:focus</c></summary>
+    Focus,
+
+    /// <summary><c>:focus-visible</c></summary>
+    FocusVisible,
+
+    /// <summary><c>:focus-within</c></summary>
+    FocusWithin,
+
+    /// <summary><c>:active</c></summary>
+    Active,
+}
+
+/// <summary>Forces <see cref="State"/> on the elements matching <see cref="Selector"/> (every element of the preview when null).</summary>
+public sealed record PseudoStateRule(PseudoState State, string? Selector = null)
+{
+    /// <summary>The CSS pseudo-class, for example <c>:focus-visible</c>.</summary>
+    public string PseudoClass => ToPseudoClass(State);
+
+    public static string ToPseudoClass(PseudoState state) => state switch
+    {
+        PseudoState.Hover => ":hover",
+        PseudoState.Focus => ":focus",
+        PseudoState.FocusVisible => ":focus-visible",
+        PseudoState.FocusWithin => ":focus-within",
+        PseudoState.Active => ":active",
+        _ => throw new ArgumentOutOfRangeException(nameof(state)),
+    };
+
+    public override string ToString() => Selector is null ? PseudoClass : $"{Selector}{PseudoClass}";
+}
+
+/// <summary>Browser storage area.</summary>
+public enum StorageArea
+{
+    /// <summary><c>window.localStorage</c></summary>
+    Local,
+
+    /// <summary><c>window.sessionStorage</c></summary>
+    Session,
+}
+
+/// <summary>A key and string value written to browser storage before the scenario renders.</summary>
+public sealed record StorageEntry(StorageArea Area, string Key, string Value);
 
 /// <summary>A simulated principal for authentication and authorization scenarios.</summary>
 public sealed class SimulatedUser

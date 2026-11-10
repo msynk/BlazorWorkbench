@@ -488,6 +488,8 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         http = Session.Http.Exchanges,
         clock = Session.Clock?.GetUtcNow(),
         culture = Session.Culture?.Name,
+        user = Session.Activation.User is not null ? (Session.User?.ToString() ?? "Anonymous") + " (chosen in the toolbar)" : null,
+        network = Session.Network is { } network ? $"{network.Name}{(network.Offline ? ", offline" : $", +{network.Latency.TotalMilliseconds:0} ms per request")}" : null,
     }, WorkbenchJson.Options);
 
     // ---- Bridge ----
@@ -524,6 +526,12 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
                 error = _activationError?.Message,
                 diagnostics = snapshot.Select(ToDto),
                 argErrors = _argErrors,
+                pseudoStates = Scenario.Environment.PseudoStates.Select(p => new { pseudoClass = p.PseudoClass, selector = p.Selector }),
+                // Hosts that cannot write storage before Blazor starts (Blazor Hybrid) seed it here; the preview script
+                // skips entries it already wrote from the server-rendered page.
+                storage = Scenario.Environment.Storage.Select(e => new { area = e.Area.ToString().ToLowerInvariant(), key = e.Key, value = e.Value }),
+                isolateStorage = options.IsolateBrowserStorage,
+                gridSize = options.GridSize,
             });
             _bridgeAttached = true;
 

@@ -62,6 +62,7 @@ public static class WorkbenchHostingExtensions
         services.AddBlazorWorkbenchRuntime(options, catalog, overridable, validateDependencies: options.Interactivity == WorkbenchInteractivity.Server);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, WorkbenchCircuitHandler>());
         services.TryAddSingleton<IVisualResultsProvider, FileVisualResultsProvider>();
+        services.TryAddSingleton<ITestResultsProvider, FileTestResultsProvider>();
 
         // Rewrite overridable registrations right before the container is built, after every host registration.
         var development = builder.Environment.IsDevelopment();
@@ -149,6 +150,9 @@ public static class WorkbenchHostingExtensions
             var path = Path.Combine(AppContext.BaseDirectory, assembly + ".xml");
             return File.Exists(path) ? Results.File(path, "application/xml") : Results.NotFound();
         });
+
+        group.MapGet("/api/results", async (ITestResultsProvider provider, CancellationToken ct) =>
+            Results.Json(await provider.GetSummaryAsync(ct), WorkbenchJson.Options));
 
         group.MapGet("/api/visual/{id}", async (string id, IVisualResultsProvider provider, CancellationToken ct) =>
             Results.Json(await provider.GetAsync(id, ct), WorkbenchJson.Options));
@@ -238,6 +242,31 @@ internal sealed class WorkbenchSecurityMiddleware(RequestDelegate next, Workbenc
         headers["Referrer-Policy"] = "no-referrer";
         headers.ContentSecurityPolicy = "frame-ancestors 'self'";
         return next(context);
+    }
+}
+
+/// <summary>Reads the status of every scenario from the last CLI run (<c>report.json</c> in the results directory).</summary>
+internal sealed class FileTestResultsProvider(WorkbenchHostOptions options) : ITestResultsProvider
+{
+    public Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (options.ResultsDirectory is not { } dir || !File.Exists(Path.Combine(dir, "report.json")))
+                return Task.FromResult(TestRunSummary.Empty);
+            var report = TestRunReport.Load(Path.Combine(dir, "report.json"));
+            if (report is null)
+                return Task.FromResult(TestRunSummary.Empty);
+            var statuses = report.Scenarios
+                .GroupBy(s => s.ScenarioId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => new ScenarioRunStatus(g.Last().Status.ToString(), g.Last().Message, g.Last().Attempts > 1 && g.Last().Status == CheckStatus.Passed),
+                    StringComparer.OrdinalIgnoreCase);
+            return Task.FromResult(new TestRunSummary(report.FinishedAt, statuses));
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return Task.FromResult(TestRunSummary.Empty);
+        }
     }
 }
 

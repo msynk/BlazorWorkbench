@@ -2,7 +2,7 @@
     <header>
         <div class="wb-crumbs">@Component.Title.Replace("/", " / ")</div>
         <h1 class="wb-title">@Component.Metadata.Name</h1>
-        <p class="wb-muted"><code>@Component.Metadata.FullName</code> · @Component.Metadata.AssemblyName@(Component.Metadata.BaseType is { } b ? $" · inherits {b}" : "")</p>
+        <p class="wb-muted">@if (Component.Status is { } status) { <StatusBadge Status="status" /> <text> · </text> }<code>@Component.Metadata.FullName</code> · @Component.Metadata.AssemblyName@(Component.Metadata.BaseType is { } b ? $" · inherits {b}" : "")</p>
         @if (Component.Tags.Count > 0)
         {
             <p>@foreach (var tag in Component.Tags) { <span class="wb-badge">@tag</span> }</p>
@@ -24,36 +24,22 @@
     }
     @if (Component.Documentation is { } markdown)
     {
-        <div class="wb-markdown">@((MarkupString)SafeMarkdown.ToHtml(markdown))</div>
+        <MarkdownView Markdown="@markdown" Catalog="Catalog" PreviewTheme="@PreviewTheme" />
+    }
+
+    @if (Component.Designs.Count > 0)
+    {
+        <h2 class="wb-h2" id="design">Design</h2>
+        <ul class="wb-design-list">
+            @foreach (var design in Component.Designs)
+            {
+                <li><span class="wb-badge">@design.Kind</span> <a href="@design.Url" target="_blank" rel="noopener noreferrer">@design.DisplayTitle</a></li>
+            }
+        </ul>
     }
 
     <h2 class="wb-h2" id="parameters">Parameters</h2>
-    @if (Component.Metadata.Parameters.Count == 0)
-    {
-        <p class="wb-muted">No parameters.</p>
-    }
-    else
-    {
-        <table class="wb-table">
-            <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Default</th><th scope="col">Description</th></tr></thead>
-            <tbody>
-                @foreach (var p in Component.Metadata.Parameters)
-                {
-                    <tr>
-                        <th scope="row">
-                            <code>@p.Name</code>
-                            @if (p.IsRequired) { <span class="wb-badge wb-badge-required">required</span> }
-                            @if (p.Kind == ParameterKind.Cascading) { <span class="wb-badge">cascading</span> }
-                            @if (p.IsObsolete) { <span class="wb-badge" title="@p.ObsoleteMessage">obsolete</span> }
-                        </th>
-                        <td><code>@p.TypeName</code></td>
-                        <td>@(p.DefaultValueDisplay is { } d ? d : "—")</td>
-                        <td>@(p.Summary ?? "")@if (p.Summary is null) { <span class="wb-muted">Undocumented</span> }</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
+    <ParameterTable Component="Component" />
 
     @if (Component.Metadata.Injections.Count > 0)
     {
@@ -66,6 +52,24 @@
         </ul>
     }
 
+    @if (Component.Uses.Count > 0 || Component.UsedBy.Count > 0)
+    {
+        <h2 class="wb-h2" id="relationships">Relationships</h2>
+        <dl class="wb-dl">
+            @if (Component.Uses.Count > 0)
+            {
+                <dt>Renders</dt>
+                <dd>@foreach (var id in Component.Uses) { @ComponentLink(id) }</dd>
+            }
+            @if (Component.UsedBy.Count > 0)
+            {
+                <dt>Rendered by</dt>
+                <dd>@foreach (var id in Component.UsedBy) { @ComponentLink(id) }</dd>
+            }
+        </dl>
+        <p class="wb-muted wb-small">Read from the compiled render code. A change to this component can affect the components that render it.</p>
+    }
+
     <h2 class="wb-h2" id="scenarios">Scenarios</h2>
     <div class="wb-doc-scenarios">
         @foreach (var (scenario, index) in Component.Scenarios.Select((s, i) => (s, i)))
@@ -73,12 +77,16 @@
             <section class="wb-doc-scenario">
                 <h3 class="wb-h3"><a href="@($"scenario/{scenario.Id}")">@scenario.Name</a></h3>
                 @if (scenario.Description is { } description) { <p class="wb-muted">@description</p> }
+                @if (scenario.Notes is { } notes) { <MarkdownView Markdown="@notes" Catalog="Catalog" PreviewTheme="@PreviewTheme" CssClass="wb-notes" /> }
                 <ScenarioFactList Facts="ScenarioFacts.Describe(scenario, Catalog.Options)" ScenarioId="@scenario.Id" IdPrefix="@($"wb-doc-facts-{index}")" />
                 @if (index < MaxLivePreviews)
                 {
                     <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@PreviewSource(scenario)"></iframe>
                 }
-                <pre class="wb-pre"><code>@RazorSnippetGenerator.Generate(scenario, Component.Metadata)</code></pre>
+                <details class="wb-show-code">
+                    <summary>Show code</summary>
+                    <pre class="wb-pre"><code>@RazorSnippetGenerator.Generate(scenario, Component.Metadata)</code></pre>
+                </details>
             </section>
         }
     </div>
@@ -97,6 +105,12 @@
 
     /// <summary>Theme for scenarios that do not declare one (the shell passes the theme matching its own).</summary>
     [Parameter] public string? PreviewTheme { get; set; }
+
+    private RenderFragment ComponentLink(string id) => __builder =>
+    {
+        var other = Catalog.FindComponent(id);
+        <a class="wb-chip-link" href="@($"docs/{id}")">@(other?.Title.Replace("/", " / ") ?? id)</a>
+    };
 
     private string PreviewSource(ScenarioDefinition scenario) =>
         $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" +

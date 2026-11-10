@@ -123,9 +123,31 @@ s.User(u => u.Name("Grace").Role("Admin").Claim("department", "Engineering").Aut
 
 `AuthorizeView`, `[CascadingParameter] Task<AuthenticationState>` and `IAuthorizationService` policies use the simulated principal. Register the policies your components use in the host with `builder.Services.AddAuthorizationCore(o => ...)`; the demo library ships them in `AddDemoComponents()`, which every demo host calls (see [WorkspaceSettingsScenarios](../demo/BlazorWorkbench.Demo/Scenarios/AccountScenarios.cs)). The simulated principal exists only in the preview session and never authenticates real requests.
 
+### Users from the toolbar
+
+`options.AddUser(name, u => ...)` adds a user to the toolbar's **User** menu. Picking it previews *any* scenario as that user,
+without a new scenario, and the link records it (`?user=admin`; `?user=anonymous` signs out). The demo registers a viewer,
+an editor, an admin and an owner on a Pro plan.
+
+## Network profiles
+
+The toolbar's **Network** menu applies a profile from `options.NetworkProfiles` to the fake backend of any scenario:
+*Fast 4G* (+150 ms per request), *Fast 3G* (+560 ms), *Slow 3G* (+2 s) and *Offline* (every request fails with a connection
+error). The latency adds to the rule's own. Add profiles with
+`options.NetworkProfiles.Add(new NetworkProfile("Satellite", TimeSpan.FromMilliseconds(700)))`; links use the profile's
+slug (`?network=slow-3g`).
+
+## Browser storage
+
+Previews share the browser's storage with each other (they have the same origin), so Workbench clears `localStorage` and
+`sessionStorage` before every preview starts, keeping only its own `blazor-workbench:` keys. A scenario then writes what it
+needs with `.LocalStorage(key, value)` and `.SessionStorage(key, value)`. In Server and WebAssembly hosts the values are in
+place before Blazor starts, so `OnInitializedAsync` and the first `OnAfterRenderAsync` see them; in a .NET MAUI app they are
+written when the scenario attaches. Set `options.IsolateBrowserStorage = false` to keep storage between previews.
+
 ## Clock, randomness and culture
 
-- `.Clock(instant)` freezes `TimeProvider` (backed by `FakeTimeProvider`). The Environment panel can advance it by 1 s, 1 min, 1 h or 1 day. Timers created through `TimeProvider` fire when the clock advances.
+- `.Clock(instant)` freezes `TimeProvider` (backed by `FakeTimeProvider`). The Environment panel can advance it by 1 s, 1 min, 1 h or 1 day, jump to a later date and time, or **Play** it in real time. Timers created through `TimeProvider` fire when the clock advances. The fake clock only moves forward; reset the preview to start over.
 - `.Seed(n)` seeds `ScenarioContext.Random`. Without it, the seed is a stable hash of the scenario id.
 - `.Culture("de-DE")` sets `CurrentCulture` and `CurrentUICulture` for the session. The toolbar can override the culture without changing the scenario. Direction follows the culture (`fa-IR` and `ar-SA` give `rtl`) unless `.Direction(...)` sets it.
 

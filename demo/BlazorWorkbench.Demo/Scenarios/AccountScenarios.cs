@@ -85,6 +85,7 @@ public sealed class SessionTimeoutScenarios : ScenarioSet<SessionTimeout>
     protected override void Configure(ScenarioSetBuilder<SessionTimeout> set)
     {
         set.Title("Account/Session timeout")
+           .Status(ComponentStatus.Beta)
            .Tags("clock", "timers", "focus", "showcase")
            .Documentation("""
                Testing "sign out after 15 idle minutes" by hand means waiting 15 minutes. The component takes its time and its

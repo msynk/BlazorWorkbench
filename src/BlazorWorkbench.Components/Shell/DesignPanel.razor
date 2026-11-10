@@ -1,0 +1,51 @@
+@* Design references of the scenario: images (with a pixel overlay on the preview), embedded Figma frames and links. *@
+<div class="wb-design">
+    @foreach (var design in Designs)
+    {
+        <section class="wb-design-item">
+            <h2 class="wb-h3"><span class="wb-badge">@design.Kind</span> @design.DisplayTitle
+                <a class="wb-link wb-small" href="@design.Url" target="_blank" rel="noopener noreferrer">Open ↗</a>
+            </h2>
+            @switch (design.Kind)
+            {
+                case DesignKind.Image:
+                    var overlaid = Tools.Overlay == design.Url;
+                    <div class="wb-inspector-actions">
+                        <button type="button" class="wb-button @(overlaid ? "active" : "")" aria-pressed="@(overlaid ? "true" : "false")"
+                                @onclick="() => ToolsChanged.InvokeAsync(Tools with { Overlay = overlaid ? null : design.Url })">
+                            @(overlaid ? "Remove overlay" : "Overlay on preview")
+                        </button>
+                        @if (overlaid)
+                        {
+                            <label class="wb-field"><span>Opacity</span>
+                                <input type="range" min="0" max="100" value="@Tools.OverlayOpacity" aria-label="Overlay opacity"
+                                       @onchange="SetOpacity" />
+                            </label>
+                            <label class="wb-check" title="Identical pixels turn black, so differences stand out">
+                                <input type="checkbox" checked="@(Tools.OverlayBlend == "difference")"
+                                       @onchange='() => ToolsChanged.InvokeAsync(Tools with { OverlayBlend = Tools.OverlayBlend == "difference" ? "normal" : "difference" })' /> Difference
+                            </label>
+                        }
+                    </div>
+                    <img class="wb-design-image" src="@design.Url" alt="@($"Design: {design.DisplayTitle}")" loading="lazy" />
+                    break;
+                case DesignKind.Figma:
+                    <iframe class="wb-design-embed" title="@($"Figma: {design.DisplayTitle}")" loading="lazy" allowfullscreen
+                            src="@($"https://www.figma.com/embed?embed_host=blazor-workbench&url={Uri.EscapeDataString(design.Url)}")"></iframe>
+                    break;
+                default:
+                    <p class="wb-muted">A link to the design or specification; open it in a new tab.</p>
+                    break;
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DesignReference> Designs { get; set; } = [];
+    [Parameter, EditorRequired] public PreviewTools Tools { get; set; } = PreviewTools.None;
+    [Parameter] public EventCallback<PreviewTools> ToolsChanged { get; set; }
+
+    private Task SetOpacity(ChangeEventArgs e) =>
+        ToolsChanged.InvokeAsync(Tools with { OverlayOpacity = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(v, 0, 100) : 50 });
+}

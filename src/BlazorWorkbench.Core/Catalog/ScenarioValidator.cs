@@ -122,6 +122,13 @@ public static class ScenarioValidator
         if (scenario.Interactions.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } duplicate)
             Add(IssueSeverity.Error, "WB1012", $"Interaction name '{duplicate.Key}' is used more than once.");
 
+        foreach (var design in scenario.Designs.Where(d => !IsSafeDesignUrl(d.Url)))
+            Add(IssueSeverity.Error, "WB1023", $"Design reference '{design.Url}' is not an http(s) URL or a relative path.",
+                "Use an absolute https:// URL or a path served by the host, such as designs/button.png.");
+
+        foreach (var rule in env.PseudoStates.Where(p => p.Selector is not null && string.IsNullOrWhiteSpace(p.Selector)))
+            Add(IssueSeverity.Error, "WB1024", $"Forced state {rule.PseudoClass} has an empty selector.", "Pass null to force the state on every element.");
+
         if (scenario.Visual.Threshold is < 0 or > 1 || scenario.Visual.MaxDiffPixelRatio is < 0 or > 1)
             Add(IssueSeverity.Error, "WB1020", "Visual thresholds must be between 0 and 1.");
         if (scenario.Accessibility.DisabledRules.Count > 0 && string.IsNullOrWhiteSpace(scenario.Accessibility.Justification))
@@ -210,6 +217,16 @@ public static class ScenarioValidator
             return ("WB1011", $"'{step.Value}' is not an EventCallback parameter.");
 
         return null;
+    }
+
+    /// <summary>Absolute http(s) URLs and relative paths are allowed; other schemes (javascript:, data:, file:) are not.</summary>
+    internal static bool IsSafeDesignUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !url.StartsWith('/'))
+            return uri.Scheme is "http" or "https";
+        return !url.Contains(':') && !url.StartsWith("//", StringComparison.Ordinal);
     }
 
     private static bool IsValidCulture(string name)

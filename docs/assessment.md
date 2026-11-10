@@ -27,11 +27,54 @@ The repository contained only `LICENSE` (MIT, 2026) and a one-line `README.md`. 
 | Diagnostics | console/actions | – | – | traces | ✔ correlated, redacted, bounded; traces on failure |
 | CLI/CI reports | test runner, JUnit | – | test frameworks | ✔ | ✔ JSON/JUnit/HTML, exit codes, retries/flaky |
 | AI/MCP | Storybook MCP (preview) | MCP (Server variant) | – | Playwright MCP | ✔ read-only by default, audited, approval gated |
+| Canvas tools (zoom, viewport rotate/custom, backgrounds, grid, measure, outline) | ✔ core toolbar | ✔ (no rotate/zoom levels) | – | – | ✔ in the URL, plus DOM-update flashing and a design overlay |
+| Forced pseudo-states | ✔ pseudo-states addon | – | – | – | ✔ toolbar and per scenario (`.ForceState`), covered by screenshots and scans |
+| Vision simulation, text scale, tab order | vision simulator | color-vision filter | – | – | ✔ vision, 200% text, WCAG 1.4.12 spacing, tab-order overlay, highlight |
+| Combinatorial variants | community addons | – | – | – | ✔ `set.Matrix(...)` with pairwise reduction, gallery table |
+| Multi-environment comparison | Chromatic modes (CI) | – | – | – | ✔ Compare view (themes, viewports, cultures, users, states, vision, network) |
+| Interaction recorder / step debugger | debugger; recorder experimental | – | – | codegen | ✔ both, with accessible locators and C# output |
+| Docs pages with live embeds, design tokens | MDX, doc blocks (manual tokens) | Markdown pages | – | – | ✔ pages with `{{scenario}}` embeds; tokens read from stylesheets |
+| Component status, relationships, value coverage | tags; change detection | – | – | – | ✔ status, "renders / rendered by" from IL, value coverage |
+| Sidebar test status | ✔ test widget | – | – | – | ✔ last-run dots, `is:failing` (runs stay in the CLI) |
 | License | MIT (Chromatic commercial) | MPL-2.0 | MIT | Apache-2.0/MIT | MIT |
 
 Sources: the Storybook 9 release announcement (storybook.js.org) and community guides on Storybook 10 testing; the Blazing Story repository README (github.com/jsakamoto/BlazingStory); official bUnit and Playwright documentation.
 
 Differentiation: Workbench treats scenarios as executable, environment-complete definitions. One C# definition drives preview, docs, bUnit, Playwright, accessibility and visual checks, with dependency, network, identity, clock and async simulation built in. Comparable JS tools need several addons and a paid visual service to reach a similar scope.
+
+## Round 2: workbench feature audit (November 2026)
+
+A second study compared Workbench with Storybook 9–11 and Chromatic, and with Widgetbook, React Cosmos, Histoire, Ladle,
+Playroom, Lookbook, Showcase, Pattern Lab, Fractal, Compose and SwiftUI previews, Showkase, Paparazzi, Blazing Story and
+PlayBlazor, and design-system documentation tools (zeroheight, Supernova). Sources were the official documentation,
+repositories and release notes. The features most worth having in a developer-facing workbench, and their state:
+
+| Feature (inspired by) | State |
+| --- | --- |
+| Zoom, rotate, custom viewport, backgrounds, grid, measure, outline (Storybook core, Blazing Story) | Done ([tools](tools.md)) |
+| Vision simulator, text scale, text spacing, tab order (Storybook a11y, Widgetbook, Compose UI Check) | Done |
+| Forced pseudo-states (storybook-addon-pseudo-states) | Done, also per scenario |
+| Props matrix with pairwise reduction (Histoire, Widgetbook v4, Compose `@PreviewParameter`) | Done |
+| Side-by-side modes (Chromatic modes, Playroom, Showkase permutations) | Done (Compare view) |
+| Interaction step-through debugger and recorder (Storybook interactions) | Done |
+| HTML output panel (Lookbook, storybook-addon-html) | Done |
+| Design references and overlay (storybook-addon-designs, Widgetbook `designLink`) | Done |
+| Lifecycle status (Pattern Lab, Fractal, zeroheight) | Done |
+| Lineage, "uses / used by" (Pattern Lab, Fractal) | Done (from compiled render code) |
+| Docs pages with live embeds, design tokens (MDX doc blocks, Lookbook embeds) | Done |
+| Sidebar test status and failure filter (Storybook test widget) | Done for the last CLI run |
+| Accessibility `todo` mode (Storybook `a11y.test`) | Done |
+| Media features in visual runs (Chromatic media features) | Done (forced colors, print; reduced motion always) |
+| Browser storage per scenario (storybook-addon-cookie, Cosmos fixtures) | Done, with isolation |
+| User and network switching for any scenario (Storybook globals) | Done |
+| Running tests from the UI with watch mode (Storybook test widget) | Open: the UI runs one interaction or scan at a time; full runs stay in the CLI |
+| Approving visual changes in the UI (Chromatic UI Review) | Open: approval is `workbench approve` |
+| Change detection in the sidebar (Storybook 10.4) | Open: `--changed-since` exists in the CLI only |
+| Live Razor playground across themes and widths (Playroom) | Open: needs Razor compilation at run time |
+| JS interop fakes per scenario (bUnit `JSInterop`) | Open: `IJSRuntime` is bound to the circuit and cannot be overridden through DI |
+| Composition of several catalogs (Storybook refs) | Open |
+| Drag-to-resize viewport, viewport sweeps (Storybook 10.2, Pattern Lab) | Open |
+| Canvas comments for agents (Histoire) | Open |
 
 ## Dependency and licensing review
 
@@ -72,6 +115,7 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 | 7 Advanced diagnostics and performance | Done | Budgets, ready time, DOM updates, server activity metrics, bUnit render counts and allocations, OpenTelemetry activities and metrics, `diagnostics.jsonl` with session correlation, 1,000-component benchmark |
 | 8 Extensibility and AI | Done | Providers, editors, collectors, telemetry, MCP with approval gating and audit log |
 | 9 Production readiness | Done (release pending) | Deterministic packages with Source Link and symbols, SBOM, optional signing, release workflow, template, clean-install validation. Publishing needs a tag and the `NUGET_API_KEY` secret. |
+| 10 Workbench tools (round 2) | Done | Canvas toolbar, accessibility simulations, forced states, Compare and Gallery, matrices, status, notes, designs, HTML and Storage panels, recorder and debugger, pages, tokens, relationships, coverage, last-run status; 14 new end-to-end tests ([tools](tools.md)) |
 
 ## Measured baseline (Windows 11, Chromium 156, .NET 10.0.403)
 

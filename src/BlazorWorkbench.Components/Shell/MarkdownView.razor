@@ -1,0 +1,76 @@
+@* Documentation Markdown with live embeds. Text is rendered with the safe Markdown subset (raw HTML escaped); directive lines
+   such as {{scenario:id}} become live previews, parameter tables or the design tokens. *@
+@foreach (var segment in _segments)
+{
+    if (!segment.IsDirective)
+    {
+        <div class="wb-markdown @CssClass">@((MarkupString)SafeMarkdown.ToHtml(segment.Markdown!))</div>
+        continue;
+    }
+
+    switch (segment.Directive)
+    {
+        case "scenario" when segment.Argument is { } id && Catalog.FindScenario(id) is { } scenario:
+            <figure class="wb-embed">
+                <figcaption>
+                    <span class="wb-muted">@(Catalog.GetComponentOf(scenario)?.Title.Replace("/", " / "))</span> · <strong>@scenario.Name</strong>
+                    <a class="wb-link" href="@($"scenario/{scenario.Id}")">Open</a>
+                </figcaption>
+                <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@PreviewSource(scenario)"></iframe>
+            </figure>
+            break;
+        case "scenarios" when segment.Argument is { } cid && Catalog.FindComponent(cid) is { } component:
+            <div class="wb-embed-grid">
+                @foreach (var s in component.Scenarios.Take(MaxEmbeds))
+                {
+                    <figure class="wb-embed">
+                        <figcaption><strong>@s.Name</strong> <a class="wb-link" href="@($"scenario/{s.Id}")">Open</a></figcaption>
+                        <iframe class="wb-doc-frame" loading="lazy" title="Preview of @s.Name" src="@PreviewSource(s)"></iframe>
+                    </figure>
+                }
+            </div>
+            if (component.Scenarios.Count > MaxEmbeds)
+            {
+                <p class="wb-muted wb-small">@(component.Scenarios.Count - MaxEmbeds) more on <a href="@($"docs/{component.Id}")">the documentation page</a>.</p>
+            }
+            break;
+        case "parameters" when segment.Argument is { } pid && Catalog.FindComponent(pid) is { } documented:
+            <ParameterTable Component="documented" />
+            break;
+        case "tokens":
+            <iframe class="wb-tokens-frame" title="Design tokens" src="@TokensSource"></iframe>
+            break;
+        default:
+            <p class="wb-callout wb-callout-warning" role="note">Unknown embed <code>{{@segment.Directive@(segment.Argument is null ? "" : ":" + segment.Argument)}}</code>: no such scenario or component.</p>
+            break;
+    }
+}
+
+@code {
+    private const int MaxEmbeds = 12;
+    private IReadOnlyList<MarkdownSegment> _segments = [];
+    private string? _parsed;
+
+    [Parameter, EditorRequired] public string? Markdown { get; set; }
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+
+    /// <summary>Theme for embedded previews of scenarios that do not declare one.</summary>
+    [Parameter] public string? PreviewTheme { get; set; }
+
+    [Parameter] public string? CssClass { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (_parsed != Markdown)
+        {
+            _parsed = Markdown;
+            _segments = MarkdownDirectives.Split(Markdown);
+        }
+    }
+
+    private string TokensSource => "_workbench/tokens" + (string.IsNullOrEmpty(PreviewTheme) ? "" : $"?theme={Uri.EscapeDataString(PreviewTheme)}");
+
+    private string PreviewSource(ScenarioDefinition scenario) =>
+        $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" +
+        (scenario.Environment.Theme is null && !string.IsNullOrEmpty(PreviewTheme) ? $"?theme={Uri.EscapeDataString(PreviewTheme)}" : "");
+}

@@ -9,6 +9,9 @@
 | Environment simulation | `.Services(...)`, `.Http(...).Handle(...)`, gates, `ScenarioContext` | Per activation. Services are disposed with the session. |
 | Diagnostic collectors | `IDiagnosticCollector` (register in DI) | Called synchronously for every diagnostic after redaction. Must not throw; exceptions are swallowed. |
 | Visual results | `IVisualResultsProvider` | Replaces the file-based provider of the Visual panel, for example with results from a CI server. |
+| Test results | `ITestResultsProvider` | Supplies the last run's scenario statuses to the explorer (dots, failure counts, `is:failing`). The default reads `report.json`. |
+| Toolbar presets | `options.Users`/`AddUser`, `options.NetworkProfiles`, `options.Backgrounds`, `options.GridSize` | Entries of the User, Network and Background menus. |
+| Documentation pages | `options.AddPage(title, markdown)` | Standalone pages with `{{scenario:id}}`, `{{scenarios:id}}`, `{{parameters:id}}` and `{{tokens}}` embeds. |
 | Test runners | `WorkbenchTestRunner`, `WorkbenchHost`, `PlaywrightSteps`, `ITestRunObserver` | Use them from any test framework. |
 | Report exporters | `TestRunReport` (JSON contract), `ReportWriter` | Write your own exporter from `report.json`. |
 | Documentation | `set.Documentation(markdown)`, XML docs, `CatalogPublisher`, `CatalogDto` | The published catalog is generated from `CatalogDto`, so a custom generator can use the same contract. |

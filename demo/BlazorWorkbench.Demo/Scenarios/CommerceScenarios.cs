@@ -88,6 +88,10 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
 
         set.Add("Card declined", s => s
             .Description("Click Place order: the payment API answers 402 with a problem response. The form keeps what the customer typed.")
+            .Notes("""
+                **Review note.** The wording was approved by the payments team: never echo the processor's decline code, and keep
+                every field the customer typed. Try **Network → Slow 3G** in the toolbar to see the same decline on a slow connection.
+                """)
             .Http(h => h.Post("/api/orders").RespondJson(new ProblemDetailsResponse("Card declined", "Insufficient funds."), HttpStatusCode.PaymentRequired))
             .Interaction("explains the decline and keeps the form", i => i
                 .Click(By.Role("button", "Place order"))
@@ -230,6 +234,7 @@ public sealed class FlashSaleScenarios : ScenarioSet<FlashSaleBanner>
     protected override void Configure(ScenarioSetBuilder<FlashSaleBanner> set)
     {
         set.Title("Commerce/Flash sale banner")
+           .Status(ComponentStatus.Beta)
            .Tags("clock", "timers", "showcase")
            .Documentation("""
                The countdown reads `TimeProvider` and ticks with a `TimeProvider` timer. Every scenario freezes the clock with

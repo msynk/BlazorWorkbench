@@ -1,0 +1,38 @@
+<div class="wb-dialog-backdrop" @onclick="() => OnClose.InvokeAsync()">
+    <div class="wb-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-shortcuts-title" @onclick:stopPropagation="true">
+        <header class="wb-code-header">
+            <h2 class="wb-h2" id="wb-shortcuts-title">Keyboard shortcuts</h2>
+            <button type="button" class="wb-button" id="wb-shortcuts-close" @onclick="() => OnClose.InvokeAsync()" aria-label="Close">×</button>
+        </header>
+        <table class="wb-table">
+            <tbody>
+                @foreach (var (keys, action) in Shortcuts)
+                {
+                    <tr><td>@foreach (var key in keys.Split(' ')) { <kbd>@key</kbd> }</td><td>@action</td></tr>
+                }
+            </tbody>
+        </table>
+        <p class="wb-muted wb-small">Shortcuts work while the Workbench has focus; click outside the preview first.</p>
+    </div>
+</div>
+
+@code {
+    private static readonly (string Keys, string Action)[] Shortcuts =
+    [
+        ("/", "Search components, scenarios and pages"),
+        ("Alt+← Alt+→", "Previous or next scenario"),
+        ("Alt+↑ Alt+↓", "Previous or next component"),
+        ("R", "Reload the preview, keeping changes"),
+        ("Shift+R", "Reset to the declared scenario"),
+        ("G", "Toggle the grid"),
+        ("O", "Toggle outlines"),
+        ("M", "Toggle the measure tool"),
+        ("Alt+= Alt+- Alt+0", "Zoom in, zoom out, reset zoom"),
+        ("Alt+F", "Focus mode: hide the explorer and the panel"),
+        ("Alt+D", "Panel at the bottom or on the right"),
+        ("?", "Show this list"),
+        ("Esc", "Close this list or leave the search box"),
+    ];
+
+    [Parameter] public EventCallback OnClose { get; set; }
+}

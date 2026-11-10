@@ -1,0 +1,51 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+
+@* Remembers in localStorage which release the visitor dismissed, so the banner shows once per release. *@
+<div class="whats-new-host" data-checked="@_checked">
+    @if (_visible)
+    {
+        <aside class="whats-new" role="region" aria-label="What's new">
+            <span class="whats-new-tag">New in @Release</span>
+            <span class="whats-new-text">@ChildContent</span>
+            <button type="button" class="btn btn-small btn-secondary" @onclick="DismissAsync">Got it</button>
+        </aside>
+    }
+</div>
+
+@code {
+    /// <summary>The localStorage key that holds the last dismissed release.</summary>
+    public const string StorageKey = "trailhead:whats-new-dismissed";
+
+    private bool _visible;
+    private bool _checked;
+
+    /// <summary>The release the banner announces, for example <c>2026.3</c>.</summary>
+    [Parameter, EditorRequired] public string Release { get; set; } = "";
+
+    /// <summary>What changed in the release.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Raised with the release when the visitor dismisses the banner.</summary>
+    [Parameter] public EventCallback<string> OnDismissed { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        string? dismissed = null;
+        try { dismissed = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey); }
+        catch (JSException) { /* storage unavailable: show the banner */ }
+        _visible = dismissed != Release;
+        _checked = true;
+        StateHasChanged();
+    }
+
+    private async Task DismissAsync()
+    {
+        _visible = false;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, Release); }
+        catch (JSException) { /* storage unavailable: the banner returns next time */ }
+        await OnDismissed.InvokeAsync(Release);
+    }
+}

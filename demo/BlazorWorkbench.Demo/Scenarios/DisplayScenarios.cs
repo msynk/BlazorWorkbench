@@ -12,17 +12,26 @@ public sealed class BadgeScenarios : ScenarioSet<Badge>
 {
     protected override void Configure(ScenarioSetBuilder<Badge> set)
     {
-        set.Title("Display/Badge").Description("A small status label. Pair the tone with text: color alone never carries meaning.");
+        set.Title("Display/Badge").Description("A small status label. Pair the tone with text: color alone never carries meaning.")
+           .Status(ComponentStatus.Stable);
         set.Documentation("""
             - *Custom accent*: `Accent` is a `HexColor`, and the host registers a color picker for that type with
               `options.AddParameterEditor<HexColor, HexColorEditor>()`. Open **Controls** to use it.
             - The *Tone ...* scenarios are not written by hand: `ToneMatrixProvider`, an `IScenarioProvider`, generates one per
               value of the `Tone` enum, so a new tone is previewed and screenshotted the day it is added.
+            - The *Combinations* scenarios are a **pairwise** matrix: every pair of tone, count and accent appears in at least
+              one scenario, with 15 scenarios instead of the 30 a full product needs.
             """);
         set.Add("Neutral", s => s.Parameter(b => b.Text, "Draft"));
         set.Add("Success", s => s.Parameter(b => b.Text, "Published").Parameter(b => b.Tone, Tone.Success));
         set.Add("With count", s => s.Parameter(b => b.Text, "Inbox").Parameter(b => b.Tone, Tone.Info).Parameter(b => b.Count, 7));
         set.Add("Overflowing count", s => s.Parameter(b => b.Text, "Notifications").Parameter(b => b.Tone, Tone.Danger).Parameter(b => b.Count, 1250));
+        set.Matrix("Combinations", m => m
+                .Vary(b => b.Tone)
+                .Vary(b => b.Count, [("no count", null), ("count 7", 7), ("count 1250", 1250)])
+                .Vary(b => b.Accent, [("tone color", null), ("purple accent", new HexColor("#a21caf"))])
+                .Pairwise(),
+            s => s.Parameter(b => b.Text, "Label"));
         set.Add("Custom accent", s => s
             .Parameter(b => b.Text, "Beta")
             .Parameter(b => b.Accent, new HexColor("#a21caf"))
@@ -49,7 +58,8 @@ public sealed class CardScenarios : ScenarioSet<Card>
 
     protected override void Configure(ScenarioSetBuilder<Card> set)
     {
-        set.Title("Display/Card").Description("A surface that groups related content, with an optional heading and footer.").Tags("layout", "accessibility");
+        set.Title("Display/Card").Description("A surface that groups related content, with an optional heading and footer.").Tags("layout", "accessibility")
+           .Status(ComponentStatus.Stable);
         set.Documentation("""
             `Footer` and `ChildContent` are render fragments, so scenarios pass real components into them, here the library's
             own `Button`.
@@ -77,8 +87,20 @@ public sealed class CardScenarios : ScenarioSet<Card>
                 builder.CloseComponent();
             }, "Cancel + Delete buttons"));
         set.Add("Without title", s => s.ChildContent("A card without a heading is not a labelled region."));
+        set.Add("Printed", s => s
+            .Parameter(c => c.Title, "Order #4711")
+            .ChildContent("2 × Trail runner, 1 × Rain shell. Paid by card.")
+            .Fragment(c => c.Footer, "Print · Email receipt")
+            .Media(m => m.Print())
+            .Description("Automated runs screenshot the print layout (.Media(m => m.Print())): the footer actions are hidden on paper."));
+        set.Add("Windows high contrast", s => s
+            .Parameter(c => c.Title, "Project Apollo")
+            .ChildContent("Launch window opens in three days.")
+            .Media(m => m.ForcedColors())
+            .Description("Automated runs emulate forced-colors: active, so the screenshot shows the card with a Windows high contrast theme."));
 
         set.Add("Icon actions, labeled", s => s
+            .Tags("do")
             .Parameter(c => c.Title, "Lake loop trail report")
             .ChildContent("Muddy after the rain, but the bridge is open again.")
             .Fragment(c => c.Footer, IconActions(labeled: true), "Edit + Delete icon buttons with aria-label")
@@ -135,11 +157,48 @@ public sealed class AlertScenarios : ScenarioSet<Alert>
     }
 }
 
+public sealed class WhatsNewBannerScenarios : ScenarioSet<WhatsNewBanner>
+{
+    protected override void Configure(ScenarioSetBuilder<WhatsNewBanner> set)
+    {
+        set.Title("Feedback/What's new banner")
+           .Description("Announces a release once: dismissing it writes the release to localStorage.")
+           .Tags("storage")
+           .Status(ComponentStatus.Beta)
+           .Documentation("""
+               The banner reads and writes `localStorage` through `IJSRuntime`. Workbench clears the preview's storage before every
+               scenario (`IsolateBrowserStorage`), so what one scenario writes never leaks into the next, and scenarios seed it with
+               `.LocalStorage(key, value)`. Open **Storage** to see, edit or clear the values while the preview runs.
+               """);
+        set.Setup(s => s
+            .Parameter(b => b.Release, "2026.3")
+            .ChildContent("Trail maps now work offline, and the packing list syncs between devices.")
+            .ReadyWhen(".whats-new-host[data-checked]"));
+
+        set.Add("First visit", s => s
+            .Description("Nothing in storage: the banner shows. Click Got it, then open Storage.")
+            .Interaction("dismissing hides the banner", i => i
+                .ExpectVisible(By.Role("region", "What's new"))
+                .Click(By.Role("button", "Got it"))
+                .ExpectHidden(By.Role("region", "What's new"))
+                .ExpectCallback("OnDismissed", times: 1)));
+        set.Add("Already dismissed", s => s
+            .LocalStorage(WhatsNewBanner.StorageKey, "2026.3")
+            .Description("The visitor dismissed this release before: the banner stays hidden.")
+            .Interaction("stays hidden", i => i.ExpectCount(By.Role("region", "What's new"), 0)));
+        set.Add("Dismissed an older release", s => s
+            .LocalStorage(WhatsNewBanner.StorageKey, "2025.12")
+            .Notes("Seeded with `.LocalStorage(WhatsNewBanner.StorageKey, \"2025.12\")`: an older release was dismissed, so the new one shows.")
+            .Interaction("shows the new release", i => i.ExpectVisible(By.Text("New in 2026.3"))));
+    }
+}
+
 public sealed class FlakyWidgetScenarios : ScenarioSet<FlakyWidget>
 {
     protected override void Configure(ScenarioSetBuilder<FlakyWidget> set)
     {
         set.Title("Feedback/Flaky widget")
+           .Status(ComponentStatus.Experimental)
            .Tags("diagnostics")
            .Description("Demonstrates how Workbench reports render and event-handler exceptions.")
            .Documentation("""

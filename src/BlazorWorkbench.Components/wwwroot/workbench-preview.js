@@ -185,7 +185,9 @@
     setState('ready');
   }
 
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((records) => {
+    // Overlays drawn by the preview tools are not part of the scenario.
+    if (records.every((r) => isToolNode(r.target))) return;
     state.lastMutation = performance.now();
     if (state.state === 'loading') {
       state.domUpdates++;
@@ -309,7 +311,7 @@
 
   function cssEscape(v) { return window.CSS && CSS.escape ? CSS.escape(v) : v.replace(/"/g, '\\"'); }
 
-  function all(selector) { return Array.from(document.body.querySelectorAll(selector)); }
+  function all(selector) { return Array.from(document.body.querySelectorAll(selector)).filter((e) => !isToolNode(e)); }
 
   function resolve(locator) {
     const value = locator.value;
@@ -491,11 +493,27 @@
     return parts.join(' ');
   }
 
-  async function runInteraction(test) {
+  // Step-through debugging: the runner pauses before each step until the shell sends 'interaction-continue'.
+  let debug = null;
+  function waitForContinue(test, index, step) {
+    let elements = [];
+    try { if (step.target) elements = resolve(step.target); } catch { elements = []; }
+    highlight(elements, `${index + 1}. ${describeStep(step)}`, true);
+    post('interaction-paused', { name: test.name, index });
+    return new Promise((resolveContinue) => { debug.resume = resolveContinue; });
+  }
+
+  async function runInteraction(test, options) {
     const results = [];
     let failed = false;
+    debug = options && options.step ? { mode: 'step', resume: null } : null;
     for (let i = 0; i < test.steps.length; i++) {
       const step = test.steps[i];
+      if (!failed && debug && debug.mode === 'step') {
+        const command = await waitForContinue(test, i, step);
+        if (command === 'stop') failed = true;
+        else if (command === 'run') debug.mode = 'run';
+      }
       const started = performance.now();
       if (failed) { results.push({ index: i, description: describeStep(step), status: 'skipped' }); continue; }
       try {
@@ -508,7 +526,14 @@
       }
       post('interaction-progress', { name: test.name, results });
     }
-    const outcome = { name: test.name, passed: !failed, results };
+    const outcome = { name: test.name, passed: !results.some((r) => r.status === 'failed') && results.every((r) => r.status === 'passed'), results };
+    if (debug) {
+      const failedStep = results.find((r) => r.status === 'failed');
+      if (failedStep && test.steps[failedStep.index].target) {
+        try { highlight(resolve(test.steps[failedStep.index].target), `Failed: ${failedStep.description}`, true); } catch { highlight(null); }
+      } else highlight(null);
+    }
+    debug = null;
     post('interaction', outcome);
     return outcome;
   }
@@ -551,6 +576,546 @@
     return outcome;
   }
 
+  // ---------- preview tools (canvas toolbar, accessibility tools, inspection) ----------
+  // Everything drawn by the tools lives in one layer outside the preview root, marked data-wb-tool, so readiness, locators,
+  // axe-core scans and screenshots ignore it. Tool styles are <style data-wb-tool> elements in <head>.
+  const TOOL_ATTR = 'data-wb-tool';
+  const tools = { current: {}, declaredPseudo: [], gridSize: 8 };
+  let layer = null;
+
+  function isToolNode(node) {
+    const el = node && (node.nodeType === 1 ? node : node.parentElement);
+    return !!(el && el.closest && el.closest('[' + TOOL_ATTR + ']'));
+  }
+
+  function toolLayer() {
+    if (layer && layer.isConnected) return layer;
+    layer = document.createElement('div');
+    layer.setAttribute(TOOL_ATTR, 'layer');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;overflow:hidden;';
+    document.body.appendChild(layer);
+    return layer;
+  }
+
+  function toolPart(name, create) {
+    const host = toolLayer();
+    let el = host.querySelector(`[data-wb-part="${name}"]`);
+    if (!el && create) {
+      el = document.createElement('div');
+      el.setAttribute('data-wb-part', name);
+      el.style.cssText = 'position:absolute;inset:0;';
+      host.appendChild(el);
+    }
+    return el;
+  }
+
+  function removePart(name) { const el = toolPart(name, false); if (el) el.remove(); }
+
+  function toolStyle(name, css) {
+    let el = document.head.querySelector(`style[${TOOL_ATTR}="${name}"]`);
+    if (!css) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('style'); el.setAttribute(TOOL_ATTR, name); document.head.appendChild(el); }
+    if (el.textContent !== css) el.textContent = css;
+  }
+
+  function box(parent, rect, style, label) {
+    const b = document.createElement('div');
+    b.style.cssText = `position:absolute;left:${rect.left}px;top:${rect.top}px;width:${Math.max(0, rect.width)}px;height:${Math.max(0, rect.height)}px;box-sizing:border-box;${style}`;
+    if (label) {
+      const l = document.createElement('span');
+      l.textContent = label;
+      l.style.cssText = 'position:absolute;left:0;top:-18px;font:11px/16px system-ui,sans-serif;padding:0 4px;border-radius:3px;background:#1d1d22;color:#fff;white-space:nowrap;';
+      if (rect.top < 20) l.style.top = '100%';
+      b.appendChild(l);
+    }
+    parent.appendChild(b);
+    return b;
+  }
+
+  // Tool values can come from a link (?bg=, ?overlay=), so they are checked before they reach CSS or an <img>.
+  const safeCssValue = (v) => typeof v === 'string' && v.length <= 300 && !/[{};<>@\\]|\/\*/.test(v);
+  const safeUrl = (u) => typeof u === 'string' && u.length <= 2000 && (/^https?:\/\//i.test(u) || !/^[a-z][a-z0-9+.-]*:/i.test(u)) && !/^\/\//.test(u);
+
+  // Background
+  function applyBackground(value) {
+    toolStyle('background', value && safeCssValue(value) ? `html, body { background: ${value} !important; }` : '');
+  }
+
+  // Grid
+  function applyGrid(on) {
+    if (!on) { removePart('grid'); return; }
+    const size = tools.gridSize || 8;
+    const part = toolPart('grid', true);
+    const minor = 'rgba(255, 71, 133, 0.12)';
+    const major = 'rgba(255, 71, 133, 0.28)';
+    part.style.backgroundImage = `linear-gradient(to right, ${major} 1px, transparent 1px), linear-gradient(to bottom, ${major} 1px, transparent 1px),` +
+      `linear-gradient(to right, ${minor} 1px, transparent 1px), linear-gradient(to bottom, ${minor} 1px, transparent 1px)`;
+    part.style.backgroundSize = `${size * 8}px ${size * 8}px, ${size * 8}px ${size * 8}px, ${size}px ${size}px, ${size}px ${size}px`;
+  }
+
+  // Outline
+  function applyOutline(on) {
+    toolStyle('outline', on ? `#${ROOT_ID} * { outline: 1px solid rgba(255, 71, 133, 0.55) !important; outline-offset: -1px !important; }
+      #${ROOT_ID} * * { outline-color: rgba(30, 167, 253, 0.55) !important; }
+      #${ROOT_ID} * * * { outline-color: rgba(102, 191, 60, 0.6) !important; }
+      #${ROOT_ID} * * * * { outline-color: rgba(255, 174, 0, 0.6) !important; }` : '');
+  }
+
+  // Measure: hover an element to see its size, padding and margin.
+  let measureHandler = null;
+  function applyMeasure(on) {
+    if (!on) {
+      if (measureHandler) { document.removeEventListener('mousemove', measureHandler, true); measureHandler = null; }
+      removePart('measure');
+      return;
+    }
+    if (measureHandler) return;
+    measureHandler = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const part = toolPart('measure', true);
+      part.textContent = '';
+      if (!el || isToolNode(el) || el === document.documentElement || el === document.body) return;
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      const n = (v) => parseFloat(v) || 0;
+      const m = { t: n(cs.marginTop), r: n(cs.marginRight), b: n(cs.marginBottom), l: n(cs.marginLeft) };
+      const p = { t: n(cs.paddingTop), r: n(cs.paddingRight), b: n(cs.paddingBottom), l: n(cs.paddingLeft) };
+      const bw = { t: n(cs.borderTopWidth), r: n(cs.borderRightWidth), b: n(cs.borderBottomWidth), l: n(cs.borderLeftWidth) };
+      box(part, { left: r.left - m.l, top: r.top - m.t, width: r.width + m.l + m.r, height: r.height + m.t + m.b }, 'background:rgba(246,178,107,.55);');
+      box(part, r, 'background:rgba(255,229,153,.7);');
+      box(part, { left: r.left + bw.l, top: r.top + bw.t, width: r.width - bw.l - bw.r, height: r.height - bw.t - bw.b }, 'background:rgba(147,196,125,.6);');
+      const content = { left: r.left + bw.l + p.l, top: r.top + bw.t + p.t, width: r.width - bw.l - bw.r - p.l - p.r, height: r.height - bw.t - bw.b - p.t - p.b };
+      const fmt = (v) => (Math.round(v * 100) / 100).toString();
+      box(part, content, 'background:rgba(111,168,220,.7);',
+        `${el.tagName.toLowerCase()} ${fmt(r.width)} × ${fmt(r.height)}` +
+        (p.t || p.r || p.b || p.l ? ` · padding ${fmt(p.t)} ${fmt(p.r)} ${fmt(p.b)} ${fmt(p.l)}` : '') +
+        (m.t || m.r || m.b || m.l ? ` · margin ${fmt(m.t)} ${fmt(m.r)} ${fmt(m.b)} ${fmt(m.l)}` : ''));
+    };
+    document.addEventListener('mousemove', measureHandler, true);
+  }
+
+  // Pseudo-states: stylesheet rules with :hover, :focus, ... are copied with the pseudo-class replaced, so the state can be
+  // forced on every element (attribute on <html>) or on chosen elements (attribute on the element).
+  const PSEUDO = { hover: ':hover', focus: ':focus', 'focus-visible': ':focus-visible', 'focus-within': ':focus-within', active: ':active' };
+  const PSEUDO_RE = /:(hover|focus-visible|focus-within|focus|active)(?![\w-])/g;
+  const pseudoKey = (cls) => Object.keys(PSEUDO).find((k) => PSEUDO[k] === cls) || cls.replace(/^:/, '');
+
+  function splitSelectors(text) {
+    const parts = [];
+    let depth = 0, start = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (c === '(' || c === '[') depth++;
+      else if (c === ')' || c === ']') depth--;
+      else if (c === ',' && depth === 0) { parts.push(text.slice(start, i)); start = i + 1; }
+    }
+    parts.push(text.slice(start));
+    return parts.map((p) => p.trim()).filter(Boolean);
+  }
+
+  function rewriteRules(rules, out) {
+    for (const rule of Array.from(rules)) {
+      if (rule.selectorText !== undefined && rule.style) {
+        const forced = [];
+        for (const sel of splitSelectors(rule.selectorText)) {
+          const states = [...sel.matchAll(PSEUDO_RE)].map((m) => m[1]);
+          if (!states.length) continue;
+          const all = states.map((s) => `[data-wb-pseudo-all~="${s}"]`).join('');
+          const stripped = sel.replace(PSEUDO_RE, '').trim() || '*';
+          forced.push(/^(html|:root)\b/.test(stripped) ? stripped.replace(/^(html|:root)/, `html${all}`) : `html${all} ${stripped}`);
+          forced.push(sel.replace(PSEUDO_RE, (_, s) => `[data-wb-pseudo~="${s}"]`));
+        }
+        if (forced.length) out.push(`${forced.join(', ')} { ${rule.style.cssText} }`);
+      } else if (rule.cssRules && rule.conditionText !== undefined) {
+        const inner = [];
+        rewriteRules(rule.cssRules, inner);
+        const at = rule.constructor && rule.constructor.name === 'CSSSupportsRule' ? '@supports' : rule.constructor && rule.constructor.name === 'CSSContainerRule' ? '@container' : '@media';
+        if (inner.length) out.push(`${at} ${rule.conditionText} { ${inner.join('\n')} }`);
+      } else if (rule.cssRules && rule.name !== undefined && rule.constructor && rule.constructor.name === 'CSSLayerBlockRule') {
+        const inner = [];
+        rewriteRules(rule.cssRules, inner);
+        if (inner.length) out.push(`@layer ${rule.name} { ${inner.join('\n')} }`);
+      }
+    }
+  }
+
+  function buildPseudoStyles() {
+    const out = [];
+    for (const sheet of Array.from(document.styleSheets)) {
+      if (sheet.ownerNode && sheet.ownerNode.hasAttribute && sheet.ownerNode.hasAttribute(TOOL_ATTR)) continue;
+      try { rewriteRules(sheet.cssRules, out); } catch { /* cross-origin stylesheet */ }
+    }
+    toolStyle('pseudo', out.join('\n'));
+  }
+
+  let pseudoObserver = null;
+  function applyPseudo() {
+    const all = (tools.current.pseudo || []).filter((s) => PSEUDO[s]);
+    const targeted = tools.declaredPseudo.filter((p) => p.selector);
+    all.push(...tools.declaredPseudo.filter((p) => !p.selector).map((p) => pseudoKey(p.pseudoClass)));
+    const html = document.documentElement;
+    if (all.length) html.setAttribute('data-wb-pseudo-all', Array.from(new Set(all)).join(' ')); else html.removeAttribute('data-wb-pseudo-all');
+    if (!all.length && !targeted.length) { toolStyle('pseudo', ''); if (pseudoObserver) { pseudoObserver.disconnect(); pseudoObserver = null; } return; }
+    buildPseudoStyles();
+    const mark = () => {
+      for (const p of targeted) {
+        const key = pseudoKey(p.pseudoClass);
+        let matches = [];
+        try { matches = Array.from(document.querySelectorAll(p.selector)); } catch { continue; }
+        for (const el of matches) {
+          const current = (el.getAttribute('data-wb-pseudo') || '').split(' ').filter(Boolean);
+          if (!current.includes(key)) el.setAttribute('data-wb-pseudo', [...current, key].join(' '));
+        }
+      }
+    };
+    mark();
+    if (targeted.length && !pseudoObserver && document.body) {
+      // Elements re-created by Blazor lose the attribute; mark new ones as they appear.
+      pseudoObserver = new MutationObserver(mark);
+      pseudoObserver.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
+  // Text scale (WCAG 1.4.4) and text spacing (WCAG 1.4.12)
+  function applyTextScale(percent) {
+    toolStyle('text-scale', '');
+    const scale = Number(percent) || 100;
+    if (scale === 100) return;
+    const base = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    toolStyle('text-scale', `html { font-size: ${(base * scale) / 100}px !important; }`);
+  }
+
+  function applyTextSpacing(on) {
+    toolStyle('text-spacing', on ? `#${ROOT_ID} * { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }
+      #${ROOT_ID} p { margin-bottom: 2em !important; }` : '');
+  }
+
+  // Tab order: a numbered badge on every element reachable with Tab, in order.
+  let tabTimer = 0;
+  function drawTabOrder() {
+    const part = toolPart('tab-order', true);
+    part.textContent = '';
+    const list = tabbables();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.style.cssText = 'position:absolute;inset:0;';
+    const points = [];
+    list.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      if (!r.width && !r.height) return;
+      box(part, r, 'border:2px solid #7c3aed;border-radius:3px;');
+      const badge = document.createElement('span');
+      badge.textContent = String(i + 1);
+      badge.style.cssText = `position:absolute;left:${Math.max(0, r.left - 10)}px;top:${Math.max(0, r.top - 10)}px;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:10px;background:#7c3aed;color:#fff;font:600 11px/20px system-ui,sans-serif;text-align:center;`;
+      part.appendChild(badge);
+      points.push(`${r.left + r.width / 2},${r.top + r.height / 2}`);
+    });
+    if (points.length > 1) {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      line.setAttribute('points', points.join(' '));
+      line.setAttribute('fill', 'none');
+      line.setAttribute('stroke', 'rgba(124,58,237,.55)');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('stroke-dasharray', '4 3');
+      svg.appendChild(line);
+      part.insertBefore(svg, part.firstChild);
+    }
+  }
+  function scheduleTabOrder() { cancelAnimationFrame(tabTimer); tabTimer = requestAnimationFrame(drawTabOrder); }
+  function applyTabOrder(on) {
+    window.removeEventListener('scroll', scheduleTabOrder, true);
+    window.removeEventListener('resize', scheduleTabOrder);
+    if (!on) { removePart('tab-order'); return; }
+    window.addEventListener('scroll', scheduleTabOrder, true);
+    window.addEventListener('resize', scheduleTabOrder);
+    scheduleTabOrder();
+  }
+
+  // Highlight DOM updates: changed elements flash, which exposes unexpected re-rendering.
+  let updatesObserver = null;
+  function applyUpdates(on) {
+    if (!on) { if (updatesObserver) { updatesObserver.disconnect(); updatesObserver = null; } removePart('updates'); return; }
+    if (updatesObserver || !root()) return;
+    toolStyle('updates-keyframes', '@keyframes wb-flash { from { opacity: 1; } to { opacity: 0; } }');
+    updatesObserver = new MutationObserver((records) => {
+      const part = toolPart('updates', true);
+      const seen = new Set();
+      for (const record of records) {
+        const el = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+        if (!el || seen.has(el) || isToolNode(el) || seen.size > 40) continue;
+        seen.add(el);
+        const flash = box(part, el.getBoundingClientRect(), 'border:2px solid #f97316;background:rgba(249,115,22,.12);animation:wb-flash .9s ease-out forwards;');
+        setTimeout(() => flash.remove(), 950);
+      }
+    });
+    updatesObserver.observe(root(), { subtree: true, childList: true, attributes: true, characterData: true });
+  }
+
+  // Design overlay: a mockup over the component, for pixel comparison.
+  function applyOverlay(o) {
+    if (!o || !o.url || !safeUrl(o.url)) { removePart('overlay'); return; }
+    const part = toolPart('overlay', true);
+    let img = part.querySelector('img');
+    if (!img) { img = document.createElement('img'); img.alt = ''; part.appendChild(img); }
+    if (img.getAttribute('src') !== o.url) img.setAttribute('src', o.url);
+    const target = (root() && root().firstElementChild) || root() || document.body;
+    const r = target.getBoundingClientRect();
+    img.style.cssText = `position:absolute;left:${r.left}px;top:${r.top}px;max-width:none;opacity:${(o.opacity == null ? 50 : o.opacity) / 100};mix-blend-mode:${o.blend === 'difference' ? 'difference' : 'normal'};`;
+  }
+
+  // Highlight elements (accessibility findings, interaction targets).
+  let highlightTimer = 0;
+  function highlight(selectorOrElements, label, keep) {
+    clearTimeout(highlightTimer);
+    const part = toolPart('highlight', true);
+    part.textContent = '';
+    if (!selectorOrElements) return 0;
+    let elements = [];
+    if (typeof selectorOrElements === 'string') { try { elements = Array.from(document.querySelectorAll(selectorOrElements)); } catch { elements = []; } }
+    else elements = selectorOrElements;
+    elements = elements.filter((el) => el && !isToolNode(el));
+    if (elements[0]) elements[0].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    requestAnimationFrame(() => {
+      elements.forEach((el, i) => box(part, el.getBoundingClientRect(), 'border:2px dashed #e11d48;background:rgba(225,29,72,.10);', i === 0 ? label : null));
+    });
+    if (!keep) highlightTimer = setTimeout(() => { part.textContent = ''; }, 3000);
+    return elements.length;
+  }
+
+  function applyTools(t) {
+    tools.current = Object.assign({}, t || {});
+    const c = tools.current;
+    applyBackground(c.bg);
+    applyGrid(!!c.grid);
+    applyOutline(!!c.outline);
+    applyMeasure(!!c.measure);
+    applyPseudo();
+    applyTextScale(c.text);
+    applyTextSpacing(!!c.spacing);
+    applyTabOrder(!!c.tabs);
+    applyUpdates(!!c.updates);
+    applyOverlay(c.overlay);
+  }
+
+  function toolsFromQuery() {
+    const q = new URLSearchParams(location.search);
+    const t = {};
+    if (q.get('bg')) t.bg = q.get('bg');
+    for (const flag of ['grid', 'outline', 'measure', 'spacing', 'tabs', 'updates']) if (q.get(flag) === '1') t[flag] = true;
+    if (q.get('pseudo')) t.pseudo = q.get('pseudo').split(',').filter(Boolean);
+    if (q.get('text')) t.text = Number(q.get('text'));
+    if (q.get('overlay')) t.overlay = { url: q.get('overlay'), opacity: Number(q.get('overlayOpacity') || 50), blend: q.get('overlayBlend') || 'normal' };
+    return t;
+  }
+
+  // Redraw position-dependent tools when the layout changes.
+  window.addEventListener('resize', () => { if (tools.current.overlay) applyOverlay(tools.current.overlay); });
+
+  // ---------- browser storage ----------
+  const SHELL_KEY_PREFIX = 'blazor-workbench:';
+  const seeded = new Set();
+  function storageArea(name) { try { return name === 'session' ? window.sessionStorage : window.localStorage; } catch { return null; } }
+
+  function isolateAndSeed(config) {
+    if (!config) return;
+    if (config.isolateStorage) {
+      for (const name of ['local', 'session']) {
+        const area = storageArea(name);
+        if (!area) continue;
+        try {
+          for (let i = area.length - 1; i >= 0; i--) {
+            const k = area.key(i);
+            if (k && !k.startsWith(SHELL_KEY_PREFIX)) area.removeItem(k);
+          }
+        } catch { /* storage unavailable */ }
+      }
+    }
+    seedStorage(config.storage);
+  }
+
+  function seedStorage(entries) {
+    for (const e of entries || []) {
+      const id = e.area + ':' + e.key;
+      if (seeded.has(id)) continue;
+      seeded.add(id);
+      try { storageArea(e.area).setItem(e.key, e.value); } catch { /* storage unavailable */ }
+    }
+  }
+
+  function storageSnapshot() {
+    const read = (name) => {
+      const area = storageArea(name);
+      const items = [];
+      try {
+        for (let i = 0; i < area.length; i++) {
+          const k = area.key(i);
+          if (k && !k.startsWith(SHELL_KEY_PREFIX)) items.push({ key: k, value: redact(area.getItem(k) || '') });
+        }
+      } catch { /* storage unavailable */ }
+      return items.sort((a, b) => a.key.localeCompare(b.key));
+    };
+    return { local: read('local'), session: read('session'), cookies: redact(document.cookie || '') };
+  }
+
+  try {
+    const configElement = document.getElementById('workbench-preview-config');
+    if (configElement) isolateAndSeed(JSON.parse(configElement.textContent || '{}'));
+  } catch { /* malformed config: previews still render */ }
+
+  // ---------- rendered HTML ----------
+  const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
+  function formatHtml(rootElement) {
+    const lines = [];
+    const escape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const attrs = (el) => Array.from(el.attributes)
+      .filter((a) => !/^_bl_/.test(a.name) && !/^b-[a-z0-9]{10}$/.test(a.name) && !/^data-wb-/.test(a.name))
+      .map((a) => a.value === '' ? ` ${a.name}` : ` ${a.name}="${escape(a.value).replace(/"/g, '&quot;')}"`).join('');
+    const walk = (node, depth) => {
+      const pad = '  '.repeat(depth);
+      if (node.nodeType === 3) { const text = node.textContent.replace(/\s+/g, ' ').trim(); if (text) lines.push(pad + escape(text)); return; }
+      if (node.nodeType !== 1 || isToolNode(node)) return;
+      const tag = node.tagName.toLowerCase();
+      if (tag === 'script' || tag === 'style') return;
+      const open = `<${tag}${attrs(node)}>`;
+      if (VOID.has(tag)) { lines.push(pad + open); return; }
+      const children = Array.from(node.childNodes).filter((c) => c.nodeType === 1 || (c.nodeType === 3 && c.textContent.trim()));
+      if (children.length === 0) { lines.push(`${pad}${open}</${tag}>`); return; }
+      if (children.length === 1 && children[0].nodeType === 3 && children[0].textContent.trim().length <= 80) {
+        lines.push(`${pad}${open}${escape(children[0].textContent.replace(/\s+/g, ' ').trim())}</${tag}>`);
+        return;
+      }
+      lines.push(pad + open);
+      children.forEach((c) => walk(c, depth + 1));
+      lines.push(`${pad}</${tag}>`);
+    };
+    Array.from(rootElement.childNodes).forEach((c) => walk(c, 0));
+    return redact(lines.join('\n'));
+  }
+
+  // ---------- interaction recorder ----------
+  let recorder = null;
+  const RECORD_ROLES = ['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox', 'textbox', 'searchbox', 'slider', 'spinbutton', 'listbox', 'treeitem'];
+
+  function cssPath(el) {
+    const parts = [];
+    for (let e = el; e && e.nodeType === 1 && e.id !== ROOT_ID && parts.length < 5; e = e.parentElement) {
+      if (e.id) { parts.unshift('#' + cssEscape(e.id)); break; }
+      let part = e.tagName.toLowerCase();
+      const cls = Array.from(e.classList).filter((c) => !/^b-|^wb-/.test(c)).slice(0, 2);
+      if (cls.length) part += '.' + cls.map(cssEscape).join('.');
+      const siblings = e.parentElement ? Array.from(e.parentElement.children).filter((s) => s.tagName === e.tagName) : [];
+      if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(e) + 1})`;
+      parts.unshift(part);
+    }
+    return parts.join(' > ');
+  }
+
+  function unique(locator, el) { try { const m = resolve(locator); return m.length === 1 && m[0] === el; } catch { return false; } }
+
+  function locatorFor(el) {
+    const testId = el.getAttribute('data-testid');
+    if (testId) return { kind: 'TestId', value: testId, exact: true };
+    const role = roleOf(el);
+    const name = accessibleName(el);
+    if (role && name && RECORD_ROLES.includes(role)) {
+      for (const exact of [false, true]) { const l = { kind: 'Role', value: role, name, exact }; if (unique(l, el)) return l; }
+    }
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) {
+      const label = el.labels && el.labels.length ? normalize(el.labels[0].textContent) : el.getAttribute('aria-label');
+      if (label) { const l = { kind: 'Label', value: normalize(label), exact: false }; if (unique(l, el)) return l; }
+      const ph = el.getAttribute('placeholder');
+      if (ph) { const l = { kind: 'Placeholder', value: ph, exact: false }; if (unique(l, el)) return l; }
+    }
+    const text = normalize(el.textContent);
+    if (text && text.length <= 60) { const l = { kind: 'Text', value: text, exact: false }; if (unique(l, el)) return l; }
+    return { kind: 'Css', value: cssPath(el), exact: true };
+  }
+
+  const isTextField = (el) => (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color'].includes((el.type || '').toLowerCase())) || el.tagName === 'TEXTAREA' || el.isContentEditable;
+
+  function emitRecorded(step) { post('recorded-step', step); }
+
+  function startRecording() {
+    if (recorder) return;
+    const onClick = (e) => {
+      if (!e.isTrusted || isToolNode(e.target) || !root() || !root().contains(e.target)) return;
+      const target = e.target.closest('button,a[href],summary,[role="button"],[role="link"],[role="tab"],[role="menuitem"],[role="option"],[role="switch"],[role="treeitem"],label') || e.target;
+      if (target.tagName === 'SELECT' || isTextField(target) || (target.tagName === 'INPUT' && ['checkbox', 'radio'].includes(target.type))) return;
+      if (target.tagName === 'LABEL' && target.control) return; // the control's change event is recorded instead
+      emitRecorded({ action: 'Click', target: locatorFor(target) });
+    };
+    const onChange = (e) => {
+      const el = e.target;
+      if (!e.isTrusted || isToolNode(el) || !root() || !root().contains(el)) return;
+      if (el.tagName === 'SELECT') {
+        const option = el.options[el.selectedIndex];
+        emitRecorded({ action: 'Select', target: locatorFor(el), value: option ? normalize(option.textContent) : el.value });
+      } else if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
+        emitRecorded({ action: el.checked ? 'Check' : 'Uncheck', target: locatorFor(el) });
+      } else if (isTextField(el)) {
+        emitRecorded({ action: 'Fill', target: locatorFor(el), value: el.value });
+      }
+    };
+    const onKey = (e) => {
+      if (!e.isTrusted || isToolNode(e.target)) return;
+      const keys = ['Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', ' '];
+      if (!keys.includes(e.key) || (e.key === ' ' && isTextField(e.target))) return;
+      if (e.key === 'Enter' && isTextField(e.target) && e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'Tab') { emitRecorded({ action: 'Press', value: e.shiftKey ? 'Shift+Tab' : 'Tab' }); return; }
+      if (e.key === 'Enter' && isTextField(e.target)) emitRecorded({ action: 'Fill', target: locatorFor(e.target), value: e.target.value });
+      const mods = [e.ctrlKey && 'Control', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta'].filter(Boolean);
+      emitRecorded({ action: 'Press', target: e.target && e.target !== document.body ? locatorFor(e.target) : undefined, value: [...mods, e.key === ' ' ? 'Space' : e.key].join('+') });
+    };
+    // Assertions: with the assert mode on, a click adds an expectation instead of clicking.
+    const onAssert = (e) => {
+      if (!recorder || !recorder.assert || isToolNode(e.target) || !root() || !root().contains(e.target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target;
+      const text = normalize(el.textContent);
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) emitRecorded({ action: 'ExpectValue', target: locatorFor(el), expected: el.value });
+      else if (text && text.length <= 120) emitRecorded({ action: 'ExpectText', target: locatorFor(el), expected: text });
+      else emitRecorded({ action: 'ExpectVisible', target: locatorFor(el) });
+      highlight([el], 'Assertion added');
+    };
+    recorder = { onClick, onChange, onKey, onAssert, assert: false };
+    document.addEventListener('click', onAssert, true);
+    document.addEventListener('click', onClick, false);
+    document.addEventListener('change', onChange, true);
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  function stopRecording() {
+    if (!recorder) return;
+    document.removeEventListener('click', recorder.onAssert, true);
+    document.removeEventListener('click', recorder.onClick, false);
+    document.removeEventListener('change', recorder.onChange, true);
+    document.removeEventListener('keydown', recorder.onKey, true);
+    recorder = null;
+  }
+
+  // ---------- design tokens ----------
+  // Custom properties declared in the preview stylesheets that resolve on the root element, with their computed values.
+  function collectTokens() {
+    const names = new Set();
+    const visit = (rules) => {
+      for (const rule of Array.from(rules)) {
+        if (rule.style) for (let i = 0; i < rule.style.length; i++) { const p = rule.style[i]; if (p.startsWith('--')) names.add(p); }
+        if (rule.cssRules) visit(rule.cssRules);
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      if (sheet.ownerNode && sheet.ownerNode.hasAttribute && sheet.ownerNode.hasAttribute(TOOL_ATTR)) continue;
+      try { visit(sheet.cssRules); } catch { /* cross-origin stylesheet */ }
+    }
+    const cs = getComputedStyle(document.documentElement);
+    return Array.from(names).map((name) => ({ name, value: cs.getPropertyValue(name).trim() }))
+      .filter((t) => t.value.length > 0 && !t.name.startsWith('--wb-'))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   // ---------- shell messages ----------
   window.addEventListener('message', async (e) => {
     if (e.origin !== location.origin || !e.data || e.data.source !== SHELL) return;
@@ -572,7 +1137,25 @@
           if (state.dotnet) await state.dotnet.invokeMethodAsync('AdvanceClock', payload);
           break;
         case 'a11y': await runAxe(payload); break;
-        case 'interaction': await runInteraction(payload); break;
+        case 'interaction': await runInteraction(payload.test || payload, payload.test ? payload : null); break;
+        case 'interaction-continue': if (debug && debug.resume) { const r = debug.resume; debug.resume = null; r(payload || 'step'); } break;
+        case 'tools': applyTools(payload); break;
+        case 'highlight': highlight(payload && payload.selector, payload && payload.label); break;
+        case 'html': { const r = root(); post('html', { html: r ? formatHtml(r) : '' }); break; }
+        case 'storage': {
+          const area = payload && payload.area ? storageArea(payload.area) : null;
+          try {
+            if (payload && payload.op === 'set' && area) area.setItem(payload.key, payload.value);
+            else if (payload && payload.op === 'remove' && area) area.removeItem(payload.key);
+            else if (payload && payload.op === 'clear') isolateAndSeed({ isolateStorage: true });
+          } catch (err) { addDiagnostic({ source: 'JsInterop', severity: 'Warning', message: 'Storage change failed: ' + stringify(err) }); }
+          post('storage', storageSnapshot());
+          break;
+        }
+        case 'record':
+          if (payload && payload.on) { startRecording(); if (recorder) recorder.assert = !!payload.assert; } else stopRecording();
+          break;
+        case 'tokens': post('tokens', collectTokens()); break;
         case 'session':
           if (state.dotnet) post('session', JSON.parse(await state.dotnet.invokeMethodAsync('GetSessionInfo')));
           break;
@@ -598,6 +1181,10 @@
       applyTheme(info);
       applyDir(info.dir);
       if (info.lang) document.documentElement.setAttribute('lang', info.lang);
+      tools.gridSize = info.gridSize || 8;
+      tools.declaredPseudo = info.pseudoStates || [];
+      if (info.storage && info.storage.length && !document.getElementById('workbench-preview-config')) isolateAndSeed({ isolateStorage: info.isolateStorage, storage: info.storage });
+      applyTools(Object.assign(toolsFromQuery(), tools.current));
       (info.diagnostics || []).forEach((d) => { if (!state.diagnostics.some((x) => x.timestamp === d.timestamp && x.message === d.message)) addDiagnostic(d); });
       if (info.argErrors && Object.keys(info.argErrors).length) post('arg-errors', info.argErrors);
       state.attached = true;
@@ -624,6 +1211,8 @@
     },
     gates(list) { state.gates = list; post('gates', list); },
     argsChanged(json) { post('args-changed', JSON.parse(json)); },
+    theme(t) { applyTheme(t); },
+    tokens: collectTokens,
   };
   window.BlazorWorkbenchPreview = api;
 
@@ -645,5 +1234,10 @@
     advanceClock: (ms) => state.dotnet ? state.dotnet.invokeMethodAsync('AdvanceClock', ms) : Promise.resolve(false),
     runInteraction,
     runAxe,
+    applyTools,
+    highlight,
+    html: () => (root() ? formatHtml(root()) : ''),
+    storage: storageSnapshot,
+    tokens: collectTokens,
   };
 })();

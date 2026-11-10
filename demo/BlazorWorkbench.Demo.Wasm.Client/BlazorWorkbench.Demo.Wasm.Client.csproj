@@ -14,6 +14,7 @@
     <!-- One set of scenario sources for both hosting models. -->
     <Compile Include="..\BlazorWorkbench.Demo\DemoCatalog.cs" Link="DemoCatalog.cs" />
     <Compile Include="..\BlazorWorkbench.Demo\DemoTour.cs" Link="DemoTour.cs" />
+    <Compile Include="..\BlazorWorkbench.Demo\DemoPages.cs" Link="DemoPages.cs" />
     <Compile Include="..\BlazorWorkbench.Demo\Scenarios\*.cs" Link="Scenarios\%(Filename)%(Extension)" />
     <Compile Include="..\BlazorWorkbench.Demo\Fakes\*.cs" Link="Fakes\%(Filename)%(Extension)" />
     <Compile Include="..\BlazorWorkbench.Demo\Providers\*.cs" Link="Providers\%(Filename)%(Extension)" />

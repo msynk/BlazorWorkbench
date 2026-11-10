@@ -1,15 +1,18 @@
+@inject IJSRuntime JS
+
 <div class="wb-interactions">
     <p class="wb-muted wb-small">
-        Interaction tests run against a freshly loaded scenario. This in-browser runner is best effort;
-        <code>workbench test</code> runs the same steps with Playwright and is authoritative.
+        Interaction tests run against a freshly loaded scenario. <strong>Debug</strong> pauses before every step and highlights its
+        target. This in-browser runner is best effort; <code>workbench test</code> runs the same steps with Playwright and is authoritative.
     </p>
     @if (Scenario.Interactions.Count == 0)
     {
-        <p class="wb-empty">No interaction tests. Add them with <code>.Interaction("name", i =&gt; i.Click(By.Role("button", "Save")).ExpectCallback("OnClick"))</code>.</p>
+        <p class="wb-empty">No interaction tests. Record one below, or add <code>.Interaction("name", i =&gt; i.Click(By.Role("button", "Save")).ExpectCallback("OnClick"))</code>.</p>
     }
     @foreach (var test in Scenario.Interactions)
     {
         var result = Results.GetValueOrDefault(test.Name);
+        var debugging = Paused is not null && Paused.Value.Name == test.Name;
         <section class="wb-interaction">
             <header>
                 <h2 class="wb-h3">
@@ -19,15 +22,29 @@
                     }
                     @test.Name
                 </h2>
-                <button type="button" class="wb-button" @onclick="() => OnRun.InvokeAsync(test.Name)" disabled="@(Running is not null)">@(Running == test.Name ? "Running…" : "Run")</button>
+                <span class="wb-inline-actions">
+                    @if (debugging)
+                    {
+                        <button type="button" class="wb-button" @onclick='() => OnContinue.InvokeAsync("step")' title="Run the highlighted step and pause before the next">Step</button>
+                        <button type="button" class="wb-button" @onclick='() => OnContinue.InvokeAsync("run")' title="Run the remaining steps without pausing">Continue</button>
+                        <button type="button" class="wb-button" @onclick='() => OnContinue.InvokeAsync("stop")' title="Skip the remaining steps">Stop</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="wb-button" @onclick="() => OnRun.InvokeAsync((test.Name, false))" disabled="@(Running is not null)">@(Running == test.Name ? "Running…" : "Run")</button>
+                        <button type="button" class="wb-button" @onclick="() => OnRun.InvokeAsync((test.Name, true))" disabled="@(Running is not null)" title="Pause before every step">Debug</button>
+                    }
+                </span>
             </header>
             <ol class="wb-steps">
                 @for (var i = 0; i < test.Steps.Count; i++)
                 {
                     var index = i;
                     var step = result?.Results.FirstOrDefault(r => r.Index == index);
-                    <li class="wb-step wb-step-@(step?.Status ?? "idle")">
+                    var current = debugging && Paused!.Value.Index == index;
+                    <li class="wb-step wb-step-@(step?.Status ?? "idle") @(current ? "wb-step-current" : "")" aria-current="@(current ? "step" : null)">
                         <code>@test.Steps[index]</code>
+                        @if (current) { <span class="wb-badge">paused</span> }
                         @if (step?.DurationMs is { } ms)
                         {
                             <span class="wb-muted"> @ms ms</span>
@@ -41,11 +58,89 @@
             </ol>
         </section>
     }
+
+    <section class="wb-interaction wb-recorder">
+        <header>
+            <h2 class="wb-h3">Record an interaction</h2>
+            <span class="wb-inline-actions">
+                @if (Recording)
+                {
+                    <button type="button" class="wb-button active" aria-pressed="@(AssertMode ? "true" : "false")" @onclick="() => OnRecord.InvokeAsync((true, !AssertMode))"
+                            title="When on, clicking an element in the preview adds an assertion about it instead of clicking it">@(AssertMode ? "Asserting: click to check" : "Add assertion")</button>
+                    <button type="button" class="wb-button" @onclick="() => OnRecord.InvokeAsync((false, false))">Stop</button>
+                }
+                else
+                {
+                    <button type="button" class="wb-button" id="wb-record" @onclick="() => OnRecord.InvokeAsync((true, false))">● Record</button>
+                }
+                @if (Recorded.Count > 0)
+                {
+                    <button type="button" class="wb-button" @onclick="() => OnClearRecording.InvokeAsync()">Clear</button>
+                }
+            </span>
+        </header>
+        @if (Recorded.Count == 0)
+        {
+            <p class="wb-muted wb-small">
+                @(Recording ? "Recording: click, type, choose and press keys in the preview." : "Use the component in the preview while recording; Workbench writes the steps with accessible locators (role and name, label, text) and turns them into C#.")
+            </p>
+        }
+        else
+        {
+            <ol class="wb-steps">
+                @foreach (var step in Recorded)
+                {
+                    <li><code>@Describe(step)</code></li>
+                }
+            </ol>
+            <header class="wb-code-header">
+                <h3 class="wb-h3">C#</h3>
+                <button type="button" class="wb-button wb-button-small" @onclick="Copy">@(_copied ? "Copied" : "Copy")</button>
+            </header>
+            <pre class="wb-pre"><code>@Code</code></pre>
+        }
+    </section>
 </div>
 
 @code {
+    private bool _copied;
+
     [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
     [Parameter] public IReadOnlyDictionary<string, InteractionOutcome> Results { get; set; } = new Dictionary<string, InteractionOutcome>();
     [Parameter] public string? Running { get; set; }
-    [Parameter] public EventCallback<string> OnRun { get; set; }
+
+    /// <summary>The test and step the debugger is paused at.</summary>
+    [Parameter] public (string Name, int Index)? Paused { get; set; }
+
+    /// <summary>Runs a test; the flag requests step-through debugging.</summary>
+    [Parameter] public EventCallback<(string Name, bool Debug)> OnRun { get; set; }
+
+    /// <summary><c>step</c>, <c>run</c> or <c>stop</c>.</summary>
+    [Parameter] public EventCallback<string> OnContinue { get; set; }
+
+    [Parameter] public bool Recording { get; set; }
+    [Parameter] public bool AssertMode { get; set; }
+    [Parameter] public IReadOnlyList<InteractionStep> Recorded { get; set; } = [];
+
+    /// <summary>Starts or stops recording, with the assertion mode.</summary>
+    [Parameter] public EventCallback<(bool On, bool Assert)> OnRecord { get; set; }
+    [Parameter] public EventCallback OnClearRecording { get; set; }
+
+    private string Code => InteractionCode.ToCSharp("recorded interaction", Recorded);
+
+    private static string Describe(InteractionStep step) => step.ToString();
+
+    protected override void OnParametersSet() => _copied = false;
+
+    private async Task Copy()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
+            _copied = await module.InvokeAsync<bool>("copy", Code);
+        }
+        catch (JSException)
+        {
+        }
+    }
 }

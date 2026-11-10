@@ -44,6 +44,25 @@ public static class DemoTour
         | [Screenshots that never flake](scenario/analytics-revenue-chart--seeded-data?panel=visual) | The chart's random data comes from a seeded `Random`: the same on every run and machine, so screenshots can be compared pixel by pixel. |
         | [Documentation for free](docs/commerce-checkout) | Generated from the component and its scenarios: parameters, dependencies, and a live preview and Razor snippet per scenario. |
 
+        ## Tour, part 3: look closely
+
+        | Stop | Try this |
+        | --- | --- |
+        | [Measure, grid and outlines](scenario/layout-app-header--desktop?measure=1&grid=1) | Hover the header: the measure tool shows size, padding and margin. The canvas toolbar also zooms (**Alt+=**), rotates the viewport, switches backgrounds and flashes DOM updates. |
+        | [States without a mouse](scenario/inputs-button--keyboard-focus) | `:focus-visible` is forced with `.ForceState(...)`, so it is screenshotted like any state. In any scenario, **States** in the canvas toolbar forces `:hover`, `:focus` or `:active`. |
+        | [Every variant at once](scenario/inputs-button--variants-primary-medium?mode=gallery) | `set.Matrix(...)` made one scenario per variant and size; **Gallery** lays them out as a table. *Badge* has a pairwise matrix: 15 scenarios cover every pair of 30 combinations. |
+        | [One scenario, every theme](scenario/display-card--with-footer?mode=compare) | **Compare** renders the scenario once per theme, viewport, culture, user, forced state or vision simulation, side by side. |
+        | [How others see it](scenario/forms-signup-form--empty?vision=deuteranopia&text=200&tabs=1) | Deuteranopia, text at 200% and the tab order, from the toolbar's **Accessibility** menu. In **Accessibility**, **Highlight** outlines each finding in the preview. |
+        | [The design next to the code](scenario/inputs-button--primary?panel=design) | Overlay the mockup on the button and tick **Difference**: the corners and padding do not match the design file. |
+        | [Write tests by clicking](scenario/forms-signup-form--empty?panel=interactions) | Press **Record**, fill in the form and submit; **Add assertion** checks what you click. Copy the C#. **Debug** steps through existing tests one step at a time. |
+        | [Remembered between visits](scenario/feedback-whats-new-banner--dismissed-an-older-release?panel=storage) | `localStorage` is cleared before every preview and seeded by the scenario. Edit it in **Storage**, then reload. |
+        | [Another user, a slower network](scenario/account-workspace-settings--viewer?user=admin) | **User** and **Network** in the toolbar preview any scenario as another person or on Slow 3G, without a new scenario. |
+        | [What it renders](scenario/display-badge--with-count?panel=html) | **HTML** shows the markup, without Blazor's comments and scoped-CSS attributes. |
+        | [Guidelines with live examples](pages/guidelines-buttons-and-actions) | Documentation pages embed scenarios and parameter tables; the parameter table shows which values no scenario covers. |
+        | [Design tokens](tokens) | Every CSS custom property of the stylesheets, as swatches, type samples and spacing bars, per theme. Nothing to declare. |
+
+        Press **?** for keyboard shortcuts; **Alt+←** and **Alt+→** walk through the scenarios.
+
         ## Every scenario is a test
 
         The scenarios you just explored run unchanged as automated tests. From the repository root:

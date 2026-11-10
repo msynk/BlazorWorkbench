@@ -1,0 +1,115 @@
+@* Shows the current scenario several times side by side, one frame per value of an axis: every theme, viewport, culture,
+   direction, user, forced state, vision simulation or network profile. Each frame is an independent preview session. *@
+<div class="wb-compare">
+    <div class="wb-inspector-actions">
+        <label class="wb-field"><span>Compare</span>
+            <select id="wb-compare-axis" @onchange="OnAxis">
+                @foreach (var axis in Axes)
+                {
+                    <option value="@axis" selected="@(axis == _axis)">@Label(axis)</option>
+                }
+            </select>
+        </label>
+        <fieldset class="wb-flags" aria-label="Values to compare">
+            @foreach (var value in Values(_axis))
+            {
+                <label class="wb-check"><input type="checkbox" checked="@(!_hidden.Contains(value.Key))" @onchange="() => Flip(value.Key)" /> @value.Label</label>
+            }
+        </fieldset>
+        <label class="wb-field"><span>Frame zoom</span>
+            <select @bind="_zoom">
+                <option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option>
+            </select>
+        </label>
+    </div>
+    <div class="wb-compare-grid">
+        @foreach (var value in Values(_axis).Where(v => !_hidden.Contains(v.Key)).Take(MaxFrames))
+        {
+            var cell = Cell(value.Key);
+            var (width, height) = FrameSize(value.Key);
+            <figure class="wb-compare-cell">
+                <figcaption>@value.Label</figcaption>
+                <div class="wb-compare-viewport" style="@($"width:{(width * _zoom).ToString("0", CultureInfo.InvariantCulture)}px;height:{(height * _zoom).ToString("0", CultureInfo.InvariantCulture)}px;")">
+                    <iframe title="@($"{Scenario.Name}, {value.Label}")" loading="lazy" src="@BuildUrl(cell)"
+                            style="@($"width:{width}px;height:{height}px;transform:scale({_zoom.ToString(CultureInfo.InvariantCulture)});{(VisionFilter(cell) is { } f ? $"filter:{f};" : "")}")"></iframe>
+                </div>
+            </figure>
+        }
+    </div>
+    <p class="wb-muted wb-small">Every frame is a separate preview session with the current controls. Up to @MaxFrames frames are shown.</p>
+</div>
+
+@code {
+    private const int MaxFrames = 12;
+    private static readonly string[] Axes = ["theme", "viewport", "culture", "direction", "user", "state", "vision", "network"];
+    private string _axis = "theme";
+    private readonly HashSet<string> _hidden = new(StringComparer.Ordinal);
+    private double _zoom = 0.5;
+
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter, EditorRequired] public WorkbenchOptions Options { get; set; } = default!;
+
+    /// <summary>Builds the preview URL of one frame.</summary>
+    [Parameter, EditorRequired] public Func<CompareCell, string> BuildUrl { get; set; } = default!;
+
+    /// <summary>The viewport of the canvas, used for frames that do not compare viewports.</summary>
+    [Parameter] public ViewportPreset? Viewport { get; set; }
+
+    /// <summary>The initial axis (for deep links: <c>?compare=viewport</c>).</summary>
+    [Parameter] public string? InitialAxis { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (InitialAxis is { } axis && Axes.Contains(axis))
+            _axis = axis;
+        _zoom = _axis == "viewport" ? 0.25 : 0.5;
+    }
+
+    private static string Label(string axis) => axis switch
+    {
+        "theme" => "Themes",
+        "viewport" => "Viewports",
+        "culture" => "Cultures",
+        "direction" => "Directions",
+        "user" => "Users",
+        "state" => "Forced states",
+        "vision" => "Vision",
+        _ => "Network",
+    };
+
+    private IEnumerable<(string Key, string Label)> Values(string axis) => axis switch
+    {
+        "theme" => Options.Themes.Select(t => (t.Name, t.Name)),
+        "viewport" => Options.Viewports.Select(v => (v.Name, $"{v.Name} ({v.Width}×{v.Height})")),
+        "culture" => Options.Cultures.Select(c => (c, c)),
+        "direction" => [("ltr", "Left to right"), ("rtl", "Right to left")],
+        "user" => [("", "Scenario user"), ("anonymous", "Signed out"), .. Options.Users.Select(u => (u.Id, u.Name))],
+        "state" => [("", "Default"), .. PreviewTools.PseudoStates.Select(p => (p.Key, p.Label))],
+        "vision" => [("", "Typical vision"), .. PreviewTools.VisionModes],
+        _ => [("", "Fake backend as declared"), .. Options.NetworkProfiles.Select(n => (n.Id, n.Name))],
+    };
+
+    private CompareCell Cell(string value) => new(_axis, value);
+
+    private (int Width, int Height) FrameSize(string value)
+    {
+        var viewport = _axis == "viewport" ? Options.FindViewport(value) : Viewport;
+        return viewport is null ? (1024, 640) : (viewport.Width, viewport.Height);
+    }
+
+    private static string? VisionFilter(CompareCell cell) =>
+        cell.Axis == "vision" && cell.Value.Length > 0 ? (PreviewTools.None with { Vision = cell.Value }).VisionFilter : null;
+
+    private void OnAxis(ChangeEventArgs e)
+    {
+        _axis = e.Value?.ToString() ?? "theme";
+        _hidden.Clear();
+        _zoom = _axis == "viewport" ? 0.25 : 0.5;
+    }
+
+    private void Flip(string key)
+    {
+        if (!_hidden.Remove(key))
+            _hidden.Add(key);
+    }
+}

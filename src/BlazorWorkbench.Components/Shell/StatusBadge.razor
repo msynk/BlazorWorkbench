@@ -1,0 +1,19 @@
+@* A component lifecycle status (draft, experimental, beta, stable, deprecated). *@
+<span class="wb-status wb-status-@Status.ToString().ToLowerInvariant() @(Compact ? "wb-status-compact" : "")" title="@Describe(Status)">@Status.ToString().ToLowerInvariant()</span>
+
+@code {
+    [Parameter, EditorRequired] public ComponentStatus Status { get; set; }
+
+    /// <summary>Smaller badge for the explorer.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    public static string Describe(ComponentStatus status) => status switch
+    {
+        ComponentStatus.Draft => "Draft: work in progress, not ready for use",
+        ComponentStatus.Experimental => "Experimental: the API or design may change without notice",
+        ComponentStatus.Beta => "Beta: feature complete and in review",
+        ComponentStatus.Stable => "Stable: ready for production use",
+        ComponentStatus.Deprecated => "Deprecated: do not use in new code",
+        _ => status.ToString(),
+    };
+}

@@ -246,7 +246,8 @@ public class ShellTests(WorkbenchFixture fixture)
         await Expect(page.Locator(".wb-docs h1")).ToHaveTextAsync("Button");
         await Expect(page.Locator("h2#parameters + table")).ToContainTextAsync("Visual emphasis of the button.");
         await Expect(page.Locator(".wb-markdown table")).ToContainTextAsync("Destructive actions");
-        await Expect(page.Locator(".wb-doc-scenario")).ToHaveCountAsync(6);
+        var catalog = await fixture.Host.GetCatalogAsync();
+        await Expect(page.Locator(".wb-doc-scenario")).ToHaveCountAsync(catalog.Components.Single(c => c.Id == "inputs-button").Scenarios.Count);
         Directory.CreateDirectory(Screens);
         await page.ScreenshotAsync(new() { Path = Path.Combine(Screens, "docs.png"), FullPage = false });
     }

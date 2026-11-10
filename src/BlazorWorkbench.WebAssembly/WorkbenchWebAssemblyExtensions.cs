@@ -47,8 +47,26 @@ public static class WorkbenchWebAssemblyExtensions
         var overridable = ServiceOverrides.CollectTypes(catalog).ToHashSet();
         builder.Services.AddBlazorWorkbenchRuntime(options, catalog, overridable);
         builder.Services.AddScoped<IVisualResultsProvider>(_ => new HttpVisualResultsProvider(baseAddress));
+        builder.Services.AddScoped<ITestResultsProvider>(_ => new HttpTestResultsProvider(baseAddress));
         builder.ConfigureContainer(new DefaultServiceProviderFactory(), services => ServiceOverrides.Apply(services, overridable));
         return builder;
+    }
+}
+
+/// <summary>Reads the last run's scenario statuses from the host's <c>/_workbench/api/results</c> endpoint.</summary>
+internal sealed class HttpTestResultsProvider(Uri baseAddress) : ITestResultsProvider
+{
+    public async Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using var http = new HttpClient { BaseAddress = baseAddress };
+        try
+        {
+            return await http.GetFromJsonAsync<TestRunSummary>("_workbench/api/results", WorkbenchJson.Options, cancellationToken).ConfigureAwait(false) ?? TestRunSummary.Empty;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return TestRunSummary.Empty;
+        }
     }
 }
 

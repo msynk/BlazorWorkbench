@@ -1,0 +1,76 @@
+@* Every scenario of a component on one canvas. Matrix scenarios with two axes are laid out as a table (rows × columns). *@
+<div class="wb-gallery">
+    @foreach (var group in Component.Scenarios.GroupBy(s => s.Matrix?.Name))
+    {
+        var scenarios = group.ToList();
+        if (group.Key is { } matrixName && TwoAxes(scenarios) is { } axes)
+        {
+            var rows = scenarios.Select(s => s.Matrix!.Values[0].Value).Distinct().ToList();
+            var columns = scenarios.Select(s => s.Matrix!.Values[1].Value).Distinct().ToList();
+            <section class="wb-gallery-matrix">
+                <h2 class="wb-h3">@matrixName <span class="wb-muted wb-small">@axes.Row × @axes.Column</span></h2>
+                <div class="wb-matrix-scroll">
+                    <table class="wb-matrix">
+                        <thead><tr><th scope="col"><span class="wb-visually-hidden">@axes.Row</span></th>@foreach (var c in columns) { <th scope="col">@c</th> }</tr></thead>
+                        <tbody>
+                            @foreach (var r in rows)
+                            {
+                                <tr>
+                                    <th scope="row">@r</th>
+                                    @foreach (var c in columns)
+                                    {
+                                        var cell = scenarios.FirstOrDefault(s => s.Matrix!.Values[0].Value == r && s.Matrix.Values[1].Value == c);
+                                        <td>
+                                            @if (cell is not null)
+                                            {
+                                                <a class="wb-matrix-link" href="@($"scenario/{cell.Id}")" title="@cell.Name">
+                                                    <iframe loading="lazy" tabindex="-1" title="@cell.Name" src="@PreviewSource(cell)"></iframe>
+                                                </a>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section>
+                @if (group.Key is { } name) { <h2 class="wb-h3">@name</h2> }
+                <div class="wb-gallery-grid">
+                    @foreach (var scenario in scenarios.Take(MaxTiles))
+                    {
+                        <figure class="wb-gallery-tile @(scenario.Id == SelectedScenarioId ? "active" : "")">
+                            <figcaption><a href="@($"scenario/{scenario.Id}")">@scenario.Name</a></figcaption>
+                            <iframe loading="lazy" tabindex="-1" title="Preview of @scenario.Name" src="@PreviewSource(scenario)"></iframe>
+                        </figure>
+                    }
+                </div>
+                @if (scenarios.Count > MaxTiles)
+                {
+                    <p class="wb-muted wb-small">@(scenarios.Count - MaxTiles) more scenarios are listed in the explorer.</p>
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private const int MaxTiles = 24;
+
+    [Parameter, EditorRequired] public ComponentEntry Component { get; set; } = default!;
+    [Parameter] public string? SelectedScenarioId { get; set; }
+
+    /// <summary>Theme for scenarios that do not declare one.</summary>
+    [Parameter] public string? PreviewTheme { get; set; }
+
+    private static (string Row, string Column)? TwoAxes(List<ScenarioDefinition> scenarios) =>
+        scenarios.All(s => s.Matrix is { Values.Count: 2 }) ? (scenarios[0].Matrix!.Values[0].Key, scenarios[0].Matrix!.Values[1].Key) : null;
+
+    private string PreviewSource(ScenarioDefinition scenario) =>
+        $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" +
+        (scenario.Environment.Theme is null && !string.IsNullOrEmpty(PreviewTheme) ? $"?theme={Uri.EscapeDataString(PreviewTheme)}" : "");
+}

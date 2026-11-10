@@ -32,7 +32,8 @@ public sealed class ShareCardScenarios : ScenarioSet<ShareCard>
 {
     protected override void Configure(ScenarioSetBuilder<ShareCard> set)
     {
-        set.Title("Device/Share card").Description("A card whose Share button opens the platform share sheet (IShare from .NET MAUI Essentials).").Tags("device", "maui");
+        set.Title("Device/Share card").Description("A card whose Share button opens the platform share sheet (IShare from .NET MAUI Essentials).").Tags("device", "maui")
+           .Status(ComponentStatus.Draft);
         set.Documentation("In a browser there is no share sheet, so `.Device()` simulates one. Every call to a simulated device service is reported in **Diagnostics** as a `Platform` entry: click **Share** and look.");
         set.Setup(s => s
             .Parameter(c => c.Title, "Lake loop trail")

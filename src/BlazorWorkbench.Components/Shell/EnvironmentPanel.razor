@@ -1,3 +1,5 @@
+@implements IDisposable
+
 <div class="wb-env">
     <section>
         <h2 class="wb-h2">Environment</h2>
@@ -6,7 +8,7 @@
             <dt>Direction</dt><dd>@Scenario.Environment.Direction</dd>
             <dt>Theme</dt><dd>@(Scenario.Environment.Theme ?? Options.Themes.FirstOrDefault()?.Name ?? "none")</dd>
             <dt>Viewport</dt><dd>@(Scenario.Environment.Viewport ?? "responsive")</dd>
-            <dt>User</dt><dd>@(Scenario.Environment.User?.ToString() ?? "Anonymous (unspecified)")</dd>
+            <dt>User</dt><dd>@(SessionText("user") ?? Scenario.Environment.User?.ToString() ?? "Anonymous (unspecified)")</dd>
             <dt>Clock</dt>
             <dd>
                 @if (Scenario.Environment.Clock is { } clock)
@@ -17,6 +19,13 @@
                         <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(60_000)">+1 min</button>
                         <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(3_600_000)">+1 h</button>
                         <button type="button" class="wb-button wb-button-small" @onclick="() => OnAdvanceClock.InvokeAsync(86_400_000)">+1 day</button>
+                        <button type="button" class="wb-button wb-button-small @(_playing ? "active" : "")" aria-pressed="@(_playing ? "true" : "false")" @onclick="TogglePlay"
+                                title="Let the fake clock run in real time; timers fire as they would in the app">@(_playing ? "❚❚ Pause" : "▶ Play")</button>
+                    </span>
+                    <span class="wb-inline-actions">
+                        <label class="wb-field"><span>Jump to</span><input id="wb-clock-target" type="datetime-local" step="1" @bind="_jumpTo" /></label>
+                        <button type="button" class="wb-button wb-button-small" @onclick="Jump" disabled="@(_jumpTo is null)">Go</button>
+                        @if (_jumpError is not null) { <span class="wb-error">@_jumpError</span> }
                     </span>
                 }
                 else
@@ -25,7 +34,15 @@
                 }
             </dd>
             <dt>Random seed</dt><dd>@(Scenario.Environment.Seed?.ToString(CultureInfo.InvariantCulture) ?? $"{StableHash.Compute(Scenario.Id)} (derived from the scenario id)")</dd>
-            <dt>Network</dt><dd>@(Scenario.Environment.Offline ? "Offline: every request fails" : "Fake backend (requests never leave the browser session)")</dd>
+            <dt>Network</dt><dd>@(SessionText("network") is { } network ? $"{network} (chosen in the toolbar)" : Scenario.Environment.Offline ? "Offline: every request fails" : "Fake backend (requests never leave the browser session)")</dd>
+            @if (Scenario.Environment.PseudoStates.Count > 0)
+            {
+                <dt>Forced states</dt><dd>@string.Join(", ", Scenario.Environment.PseudoStates.Select(p => p.ToString()))</dd>
+            }
+            @if (Scenario.Environment.Storage.Count > 0)
+            {
+                <dt>Storage</dt><dd>@string.Join(", ", Scenario.Environment.Storage.Select(e => $"{e.Area.ToString().ToLowerInvariant()}Storage[\"{e.Key}\"]"))</dd>
+            }
         </dl>
     </section>
 
@@ -145,6 +162,42 @@
         Session is { } s && s.TryGetProperty("http", out var http)
             ? http.Deserialize<List<HttpExchange>>(WorkbenchJson.Options) ?? []
             : [];
+
+    private System.Threading.Timer? _timer;
+    private bool _playing;
+    private DateTime? _jumpTo;
+    private string? _jumpError;
+
+    private string? SessionText(string property) =>
+        Session is { } s && s.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private void TogglePlay()
+    {
+        _playing = !_playing;
+        _timer?.Dispose();
+        _timer = _playing
+            ? new System.Threading.Timer(_ => InvokeAsync(async () => { await OnAdvanceClock.InvokeAsync(1000); await OnRefresh.InvokeAsync(); }), null, 1000, 1000)
+            : null;
+    }
+
+    private async Task Jump()
+    {
+        _jumpError = null;
+        if (_jumpTo is not { } target || Scenario.Environment.Clock is not { } declared)
+            return;
+        var current = DateTimeOffset.TryParse(CurrentClock(declared), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ? parsed : declared;
+        var delta = new DateTimeOffset(DateTime.SpecifyKind(target, DateTimeKind.Unspecified), current.Offset) - current;
+        if (delta <= TimeSpan.Zero)
+        {
+            _jumpError = "The fake clock only moves forward; reset the preview to go back.";
+            return;
+        }
+
+        await OnAdvanceClock.InvokeAsync(delta.TotalMilliseconds);
+        await OnRefresh.InvokeAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
 
     private string CurrentClock(DateTimeOffset declared) =>
         Session is { } s && s.TryGetProperty("clock", out var c) && c.ValueKind == JsonValueKind.String

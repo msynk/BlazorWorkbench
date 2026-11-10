@@ -28,10 +28,43 @@ export function init(dotnetRef) {
       e.target.blur();
     } else if (!editing && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
       dotnet.invokeMethodAsync('OnShortcut', e.shiftKey ? 'reset' : 'reload');
+    } else if (!editing && !e.ctrlKey && !e.metaKey) {
+      const action = shortcutFor(e);
+      if (action) {
+        e.preventDefault();
+        dotnet.invokeMethodAsync('OnShortcut', action);
+      }
     }
   };
   document.addEventListener('keydown', keyListener);
   document.documentElement.setAttribute('data-workbench-shell', 'ready');
+}
+
+// Storybook-like keys: Alt+arrows move through the catalog, Alt+F/D change the layout, single letters toggle tools.
+function shortcutFor(e) {
+  if (e.altKey) {
+    switch (e.code) {
+      case 'ArrowLeft': return 'previous-scenario';
+      case 'ArrowRight': return 'next-scenario';
+      case 'ArrowUp': return 'previous-component';
+      case 'ArrowDown': return 'next-component';
+      case 'KeyF': return 'focus';
+      case 'KeyD': return 'panel';
+      case 'Equal': case 'NumpadAdd': return 'zoom-in';
+      case 'Minus': case 'NumpadSubtract': return 'zoom-out';
+      case 'Digit0': case 'Numpad0': return 'zoom-reset';
+      default: return null;
+    }
+  }
+  if (e.shiftKey && e.key !== '?') return null;
+  switch (e.key) {
+    case '?': return 'shortcuts';
+    case 'Escape': return 'escape';
+    case 'g': case 'G': return 'grid';
+    case 'o': case 'O': return 'outline';
+    case 'm': case 'M': return 'measure';
+    default: return null;
+  }
 }
 
 export function post(type, payload) {

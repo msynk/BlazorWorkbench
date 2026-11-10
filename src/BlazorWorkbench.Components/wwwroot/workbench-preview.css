@@ -12,3 +12,21 @@ body { background: Canvas; color: CanvasText; }
 .wb-preview-error pre { white-space: pre-wrap; font-size: 12px; max-height: 240px; overflow: auto; }
 .wb-preview-error button { margin-top: .5rem; }
 #blazor-error-ui { display: none; }
+
+/* Design tokens page (/_workbench/tokens): rendered with the preview stylesheets so samples use the real values. */
+.wbt { font: 14px/1.45 system-ui, sans-serif; padding: 1rem 1.25rem 2rem; }
+.wbt-bar { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: .5rem; }
+.wbt-bar select, .wbt-bar input { font: inherit; padding: .2rem .4rem; }
+.wbt-muted { opacity: .7; font-size: 12.5px; }
+.wbt-group h2 { font-size: 1rem; margin: 1.25rem 0 .5rem; }
+.wbt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .75rem; }
+.wbt-token { border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 8px; padding: .5rem; overflow: hidden; }
+.wbt-name code { font: 12px ui-monospace, Consolas, monospace; word-break: break-all; }
+.wbt-value { font: 11.5px ui-monospace, Consolas, monospace; opacity: .75; word-break: break-all; }
+.wbt-swatch { height: 56px; border-radius: 6px; margin-bottom: .4rem; border: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+  background-image: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%); background-size: 12px 12px; }
+.wbt-type { font-size: 1.25rem; margin-bottom: .35rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wbt-bar-sample { height: 14px; margin-bottom: .4rem; }
+.wbt-bar-sample span { display: block; height: 100%; max-width: 100%; min-width: 2px; background: #6366f1; border-radius: 2px; }
+.wbt-radius { width: 56px; height: 40px; border: 2px solid #6366f1; margin-bottom: .4rem; }
+.wbt-shadow { width: 72px; height: 40px; margin: .25rem 0 .6rem; background: Canvas; border-radius: 6px; }

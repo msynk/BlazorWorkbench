@@ -61,6 +61,7 @@ public sealed class WeatherScenarios : ScenarioSet<WeatherForecast>
     protected override void Configure(ScenarioSetBuilder<WeatherForecast> set)
     {
         set.Title("Data/Weather forecast")
+           .Deprecated("Superseded by the dashboard's KPI cards; kept for the stores that still embed it.")
            .Tags("http", "async")
            .Documentation("""
                Loads data with an injected `HttpClient`. Every scenario uses Workbench's fake HTTP backend, so no request

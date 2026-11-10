@@ -1,23 +1,43 @@
 @inject NavigationManager Navigation
+@inject IServiceProvider Services
 
 <div class="wb-explorer">
     <div class="wb-search">
         <label for="wb-search" class="wb-visually-hidden">Search components and scenarios</label>
         <input id="wb-search" type="search" placeholder="Search ( / )" autocomplete="off"
                @bind="Query" @bind:event="oninput" @onkeydown="OnSearchKey" aria-describedby="wb-search-hint" />
-        <span id="wb-search-hint" class="wb-visually-hidden">Matches component names, titles, tags, parameters and scenario names. Press Enter to open the first result.</span>
+        <span id="wb-search-hint" class="wb-visually-hidden">
+            Matches component names, titles, tags, parameters, scenario names and pages. Filters: tag:name, status:beta, is:matrix,
+            is:generated, is:tested, is:skipped, is:deprecated, is:failing, is:passing. Press Enter to open the first result.
+        </span>
+        <div class="wb-quick-filters" role="group" aria-label="Quick filters">
+            @foreach (var (token, label) in QuickFilters)
+            {
+                var on = _query.Split(' ').Contains(token);
+                <button type="button" class="wb-chip @(on ? "active" : "")" aria-pressed="@(on ? "true" : "false")" @onclick="() => ToggleFilter(token)">@label</button>
+            }
+        </div>
     </div>
 
     @if (_matches is not null)
     {
-        <p class="wb-muted wb-small" role="status">@_matches.Count result@(_matches.Count == 1 ? "" : "s")</p>
+        <p class="wb-muted wb-small" role="status">@(_matches.Count + _pageMatches.Count) result@(_matches.Count + _pageMatches.Count == 1 ? "" : "s")</p>
         <ul class="wb-results">
+            @foreach (var docPage in _pageMatches)
+            {
+                <li>
+                    <a href="@($"pages/{docPage.Id}")" class="@(docPage.Id == SelectedPageId ? "active" : "")">
+                        <span class="wb-result-component">Page</span>
+                        <span>@docPage.Title</span>
+                    </a>
+                </li>
+            }
             @foreach (var (component, scenario) in _matches.Take(200))
             {
                 <li>
                     <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")" aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">
-                        <span class="wb-result-component">@component.Title</span>
-                        <span>@scenario.Name</span>
+                        <span class="wb-result-component">@component.Title @if (component.Status is { } status) { <StatusBadge Status="status" Compact="true" /> }</span>
+                        <span>@scenario.Name @RunDot(scenario.Id)</span>
                     </a>
                 </li>
             }
@@ -26,13 +46,33 @@
     else
     {
         <nav aria-label="Components">
+            @if (RecentScenarios.Count > 0)
+            {
+                <details class="wb-recent" open="@_recentOpen">
+                    <summary class="wb-node-group" @onclick="() => _recentOpen = !_recentOpen" @onclick:preventDefault>Recent</summary>
+                    <ul class="wb-tree wb-recent-list">
+                        @foreach (var (component, scenario) in RecentScenarios)
+                        {
+                            <li><a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")"><span class="wb-muted">@component.DisplayName ·</span> @scenario.Name</a></li>
+                        }
+                    </ul>
+                </details>
+            }
             @RenderGroup(_tree, 0)
         </nav>
     }
 
     <div class="wb-explorer-footer">
         <a href="">Overview</a>
+        <a href="tokens">Tokens</a>
         <span class="wb-muted">@Catalog.Components.Count components · @Catalog.Scenarios.Count scenarios</span>
+        @if (_run.FinishedAt is { } finished)
+        {
+            var failing = _run.Scenarios.Values.Count(r => r.Status is "Failed" or "Error");
+            <button type="button" class="wb-chip @(failing > 0 ? "wb-chip-failed" : "")" title="@($"Last workbench test run: {finished.ToLocalTime():g}")" @onclick='() => ToggleFilter(failing > 0 ? "is:failing" : "is:passing")'>
+                Last run: @(failing > 0 ? $"{failing} failing" : "all passed")
+            </button>
+        }
         @if (_errors > 0)
         {
             <a href="" class="wb-count wb-count-error" title="Catalog errors">@_errors</a>
@@ -41,10 +81,17 @@
 </div>
 
 @code {
+    private static readonly (string Token, string Label)[] QuickFilters =
+        [("is:tested", "Has tests"), ("is:failing", "Failing"), ("is:matrix", "Matrix"), ("status:beta", "Beta"), ("status:experimental", "Experimental"), ("is:deprecated", "Deprecated")];
+
+    private TestRunSummary _run = TestRunSummary.Empty;
+
     private Node _tree = new("", "");
     private readonly Dictionary<string, bool> _expanded = new(StringComparer.Ordinal);
     private bool _large;
+    private bool _recentOpen = true;
     private List<(ComponentEntry Component, ScenarioDefinition Scenario)>? _matches;
+    private List<DocumentationPage> _pageMatches = [];
     private string _query = "";
     private int _errors;
     private WorkbenchCatalog? _built;
@@ -52,6 +99,14 @@
     [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
     [Parameter] public string? SelectedScenarioId { get; set; }
     [Parameter] public string? SelectedComponentId { get; set; }
+    [Parameter] public string? SelectedPageId { get; set; }
+
+    /// <summary>Recently opened scenario ids, most recent first.</summary>
+    [Parameter] public IReadOnlyList<string> Recent { get; set; } = [];
+
+    private List<(ComponentEntry Component, ScenarioDefinition Scenario)> RecentScenarios =>
+        Recent.Where(id => id != SelectedScenarioId).Select(id => Catalog.FindScenario(id)).OfType<ScenarioDefinition>()
+            .Select(s => (Catalog.GetComponentOf(s)!, s)).Where(x => x.Item1 is not null).Take(5).ToList();
 
     private string Query
     {
@@ -59,9 +114,37 @@
         set
         {
             _query = value;
-            _matches = string.IsNullOrWhiteSpace(value) ? null : Search(value.Trim());
+            Refresh();
         }
     }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService(typeof(ITestResultsProvider)) is ITestResultsProvider provider)
+        {
+            try { _run = await provider.GetSummaryAsync(); }
+            catch (Exception ex) when (ex is IOException or InvalidOperationException or HttpRequestException) { _run = TestRunSummary.Empty; }
+        }
+    }
+
+    private int FailedCount(ComponentEntry component) =>
+        _run.Scenarios.Count == 0 ? 0 : component.Scenarios.Count(s => _run.Scenarios.TryGetValue(s.Id, out var r) && r.Status is "Failed" or "Error");
+
+    /// <summary>A small mark for the scenario's result in the last automated run.</summary>
+    private RenderFragment RunDot(string scenarioId) => __builder =>
+    {
+        if (_run.Scenarios.TryGetValue(scenarioId, out var result))
+        {
+            var (css, symbol, text) = result.Status switch
+            {
+                "Passed" when result.Flaky => ("flaky", "●", "Passed after a retry (flaky)"),
+                "Passed" => ("passed", "●", "Passed in the last test run"),
+                "Skipped" => ("skipped", "○", "Skipped in the last test run"),
+                _ => ("failed", "●", $"{result.Status} in the last test run: {result.Message}"),
+            };
+            <span class="wb-run wb-run-@css" title="@text"><span aria-hidden="true">@symbol</span><span class="wb-visually-hidden">@text</span></span>
+        }
+    };
 
     protected override void OnParametersSet()
     {
@@ -72,14 +155,39 @@
             _large = Catalog.Components.Count > 150;
             _errors = Catalog.Issues.Count(i => i.Severity == IssueSeverity.Error);
             if (_query.Length > 0)
-                _matches = Search(_query);
+                Refresh();
         }
     }
 
-    /// <summary>Ranks scenarios: every term must match somewhere; names and titles weigh more than tags and parameters.</summary>
-    private List<(ComponentEntry, ScenarioDefinition)> Search(string text)
+    private void Refresh()
     {
-        var terms = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (string.IsNullOrWhiteSpace(_query))
+        {
+            _matches = null;
+            _pageMatches = [];
+            return;
+        }
+
+        (_matches, _pageMatches) = Search(_query.Trim());
+    }
+
+    private void ToggleFilter(string token)
+    {
+        var parts = _query.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (!parts.Remove(token))
+            parts.Add(token);
+        Query = string.Join(' ', parts) + (parts.Count > 0 ? " " : "");
+    }
+
+    /// <summary>
+    /// Ranks scenarios: every term must match somewhere; names and titles weigh more than tags and parameters. Terms of the form
+    /// <c>tag:</c>, <c>status:</c> and <c>is:</c> filter instead of scoring.
+    /// </summary>
+    private (List<(ComponentEntry, ScenarioDefinition)>, List<DocumentationPage>) Search(string text)
+    {
+        var all = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var filters = all.Where(t => t.Contains(':') && t.IndexOf(':') > 0).ToArray();
+        var terms = all.Except(filters).ToArray();
         static bool Has(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
 
         static int Score(ComponentEntry c, ScenarioDefinition s, string t) =>
@@ -88,32 +196,74 @@
             (c.Metadata.Parameters.Any(p => Has(p.Name, t)) ? 1 : 0) +
             (Has(c.Description, t) || Has(s.Description, t) ? 1 : 0);
 
-        return Catalog.Components
+        var scenarios = Catalog.Components
             .SelectMany(c => c.Scenarios.Select(s => (c, s)))
+            .Where(x => filters.All(f => Matches(x.c, x.s, f, _run)))
             .Select(x => (x.c, x.s, scores: terms.Select(t => Score(x.c, x.s, t)).ToArray()))
             .Where(x => x.scores.All(score => score > 0))
             .OrderByDescending(x => x.scores.Sum())
             .ThenBy(x => x.c.Title, StringComparer.OrdinalIgnoreCase)
             .Select(x => (x.c, x.s))
             .ToList();
+        var pages = filters.Length > 0 ? [] : Catalog.Pages.Where(p => terms.All(t => Has(p.Title, t) || Has(p.Markdown, t))).ToList();
+        return (scenarios, pages);
+    }
+
+    private static bool Matches(ComponentEntry c, ScenarioDefinition s, string filter, TestRunSummary run)
+    {
+        var colon = filter.IndexOf(':');
+        var key = filter[..colon].ToLowerInvariant();
+        var value = filter[(colon + 1)..];
+        return key switch
+        {
+            "tag" => s.Tags.Concat(c.Tags).Any(t => string.Equals(t, value, StringComparison.OrdinalIgnoreCase)),
+            "status" => c.Status is { } status && string.Equals(status.ToString(), value, StringComparison.OrdinalIgnoreCase),
+            "is" => value.ToLowerInvariant() switch
+            {
+                "matrix" => s.Matrix is not null,
+                "generated" => s.IsGenerated,
+                "tested" => s.Interactions.Count > 0,
+                "skipped" => s.SkipReason is not null,
+                "deprecated" => c.DeprecationMessage is not null || c.Status == ComponentStatus.Deprecated,
+                "documented" => c.Documentation is not null || c.Metadata.Summary is not null,
+                "failing" => run.Scenarios.TryGetValue(s.Id, out var failing) && failing.Status is "Failed" or "Error",
+                "passing" => run.Scenarios.TryGetValue(s.Id, out var passing) && passing.Status == "Passed",
+                "flaky" => run.Scenarios.TryGetValue(s.Id, out var flaky) && flaky.Flaky,
+                _ => false,
+            },
+            _ => false,
+        };
     }
 
     private void OnSearchKey(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && _matches is { Count: > 0 })
+        if (e.Key != "Enter")
+            return;
+        if (_pageMatches.Count > 0 && (_matches is null || _matches.Count == 0))
+            Navigation.NavigateTo($"pages/{_pageMatches[0].Id}");
+        else if (_matches is { Count: > 0 })
             Navigation.NavigateTo($"scenario/{_matches[0].Scenario.Id}");
     }
 
     private bool IsOpen(Node node) =>
         (SelectedScenarioId is not null && node.Contains(c => c.Scenarios.Any(s => s.Id == SelectedScenarioId))) ||
-        (SelectedComponentId is not null && node.Contains(c => c.Id == SelectedComponentId));
+        (SelectedComponentId is not null && node.Contains(c => c.Id == SelectedComponentId)) ||
+        (SelectedPageId is not null && node.ContainsPage(SelectedPageId));
 
     private RenderFragment RenderGroup(Node node, int depth) => __builder =>
     {
         <ul class="wb-tree">
-            @foreach (var child in node.Children.Values.OrderBy(c => c.Component is null ? 0 : 1).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
+            @foreach (var child in node.Children.Values.OrderBy(c => c.Component is null && c.Page is null ? 0 : c.Page is not null ? 1 : 2).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
             {
-                if (child.Component is { } component)
+                if (child.Page is { } docPage)
+                {
+                    <li>
+                        <a href="@($"pages/{docPage.Id}")" class="wb-node-page @(docPage.Id == SelectedPageId ? "active" : "")" aria-current="@(docPage.Id == SelectedPageId ? "page" : null)">
+                            <span class="wb-icon" aria-hidden="true">▤</span>@child.Name
+                        </a>
+                    </li>
+                }
+                else if (child.Component is { } component)
                 {
                     var open = IsExpanded(child.Path, component.Scenarios.Any(s => s.Id == SelectedScenarioId) || component.Id == SelectedComponentId);
                     var issues = Catalog.IssuesFor(component).Count(i => i.Severity == IssueSeverity.Error);
@@ -129,9 +279,13 @@
                                 {
                                     <span class="wb-count wb-count-error" title="@issues error(s)">@issues</span>
                                 }
-                                @if (component.DeprecationMessage is not null)
+                                @if (FailedCount(component) is > 0 and var failed)
                                 {
-                                    <span class="wb-badge" title="@component.DeprecationMessage">deprecated</span>
+                                    <span class="wb-run wb-run-failed" title="@($"{failed} scenario(s) failed in the last test run")">✖ @failed</span>
+                                }
+                                @if (component.Status is { } status && status != ComponentStatus.Stable)
+                                {
+                                    <StatusBadge Status="status" Compact="true" />
                                 }
                             </summary>
                             @if (open)
@@ -142,7 +296,7 @@
                                 {
                                     <li>
                                         <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")"
-                                           aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">@scenario.Name</a>
+                                           aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">@scenario.Name @RunDot(scenario.Id)</a>
                                     </li>
                                 }
                             </ul>
@@ -171,10 +325,9 @@
     private static Node BuildTree(WorkbenchCatalog catalog)
     {
         var root = new Node("", "");
-        foreach (var component in catalog.Components)
+        Node GroupFor(IReadOnlyList<string> path)
         {
             var node = root;
-            var path = component.Path;
             for (var i = 0; i < path.Count - 1; i++)
             {
                 if (!node.Children.TryGetValue("g:" + path[i], out var next))
@@ -182,8 +335,14 @@
                 node = next;
             }
 
-            node.Children["c:" + component.Id] = new Node(component.DisplayName, component.Title) { Component = component };
+            return node;
         }
+
+        foreach (var page in catalog.Pages)
+            GroupFor(page.Path).Children["p:" + page.Id] = new Node(page.DisplayName, "page:" + page.Title) { Page = page };
+
+        foreach (var component in catalog.Components)
+            GroupFor(component.Path).Children["c:" + component.Id] = new Node(component.DisplayName, component.Title) { Component = component };
 
         return root;
     }
@@ -194,14 +353,18 @@
 
     private sealed class Node(string name, string path)
     {
-        public int Count => Component is not null ? 1 : Children.Values.Sum(c => c.Count);
+        public int Count => Component is not null ? 1 : Page is not null ? 0 : Children.Values.Sum(c => c.Count);
 
         public string Name { get; } = name;
         public string Path { get; } = path;
         public ComponentEntry? Component { get; init; }
+        public DocumentationPage? Page { get; init; }
         public Dictionary<string, Node> Children { get; } = new(StringComparer.Ordinal);
 
         public bool Contains(Func<ComponentEntry, bool> predicate) =>
             (Component is not null && predicate(Component)) || Children.Values.Any(c => c.Contains(predicate));
+
+        public bool ContainsPage(string id) =>
+            (Page is not null && string.Equals(Page.Id, id, StringComparison.OrdinalIgnoreCase)) || Children.Values.Any(c => c.ContainsPage(id));
     }
 }

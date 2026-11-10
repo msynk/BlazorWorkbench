@@ -12,10 +12,12 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
 {
     private readonly Type? _declaringType;
     private readonly List<Action<ScenarioBuilder<TComponent>>> _setups = [];
-    private readonly List<(string Name, Action<ScenarioBuilder<TComponent>> Configure)> _scenarios = [];
+    private readonly List<(string Name, Action<ScenarioBuilder<TComponent>> Configure, MatrixCell? Cell)> _scenarios = [];
     private readonly List<FixtureDefinition> _fixtures = [];
+    private readonly List<DesignReference> _designs = [];
     private readonly List<string> _tags = [];
     private string? _title, _description, _category, _documentation, _deprecation;
+    private ComponentStatus? _status;
 
     public ScenarioSetBuilder(Type? declaringType = null) => _declaringType = declaringType;
 
@@ -31,6 +33,15 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
 
     public ScenarioSetBuilder<TComponent> Deprecated(string message) { _deprecation = message; return this; }
 
+    /// <summary>Sets the lifecycle status (draft, experimental, beta, stable or deprecated) shown in the explorer and documentation.</summary>
+    public ScenarioSetBuilder<TComponent> Status(ComponentStatus status) { _status = status; return this; }
+
+    /// <summary>
+    /// Links a design artifact to every scenario of the component: an image (shown in the Design panel and as a pixel overlay on
+    /// the preview), a Figma file or frame (embedded), or any other page (linked). Relative URLs resolve against the host.
+    /// </summary>
+    public ScenarioSetBuilder<TComponent> Design(string url, string? title = null) { _designs.Add(DesignReference.Create(url, title)); return this; }
+
     /// <summary>Registers a named value factory that the parameter inspector offers for parameters of type <typeparamref name="TValue"/>.</summary>
     public ScenarioSetBuilder<TComponent> Fixture<TValue>(string name, Func<ScenarioContext, TValue> factory, string? description = null)
     {
@@ -45,16 +56,48 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
     public ScenarioSetBuilder<TComponent> Add(string name, Action<ScenarioBuilder<TComponent>>? configure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        _scenarios.Add((name, configure ?? (_ => { })));
+        _scenarios.Add((name, configure ?? (_ => { }), null));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds one scenario per combination of parameter values, for example every <c>Variant</c> in every <c>Size</c>. Each
+    /// combination is a regular scenario (previewed, screenshotted and scanned) named <c>{name} · value · value</c> and tagged
+    /// <c>matrix</c>; the gallery shows a matrix as a table. Use <see cref="MatrixBuilder{TComponent}.Pairwise"/> to cover every
+    /// pair of values with fewer scenarios.
+    /// </summary>
+    /// <param name="name">Matrix name, used as the prefix of the scenario names.</param>
+    /// <param name="axes">The parameters to vary and their values.</param>
+    /// <param name="configure">Configuration applied to every combination before its values (child content, services, ...).</param>
+    public ScenarioSetBuilder<TComponent> Matrix(string name, Action<MatrixBuilder<TComponent>> axes, Action<ScenarioBuilder<TComponent>>? configure = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(axes);
+        var matrix = new MatrixBuilder<TComponent>();
+        axes(matrix);
+        foreach (var combination in matrix.Combinations())
+        {
+            var values = combination.Select(c => new KeyValuePair<string, string>(c.Parameter, c.Display)).ToArray();
+            var cell = new MatrixCell(name, values);
+            var scenarioName = $"{name} · {string.Join(" · ", combination.Select(c => c.Label))}";
+            _scenarios.Add((scenarioName, s =>
+            {
+                configure?.Invoke(s);
+                foreach (var choice in combination)
+                    s.Parameter(choice.Parameter, choice.Value);
+                s.Tags("matrix");
+            }, cell));
+        }
+
         return this;
     }
 
     public ScenarioSetDefinition Build()
     {
         var scenarios = new List<ScenarioDefinition>(_scenarios.Count);
-        foreach (var (name, configure) in _scenarios)
+        foreach (var (name, configure, cell) in _scenarios)
         {
-            var builder = new ScenarioBuilder<TComponent>(name, _declaringType) { InSetup = true };
+            var builder = new ScenarioBuilder<TComponent>(name, _declaringType) { InSetup = true, MatrixCell = cell };
             foreach (var setup in _setups)
                 setup(builder);
             builder.InSetup = false;
@@ -72,6 +115,8 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
             Tags = _tags.ToArray(),
             Documentation = _documentation,
             DeprecationMessage = _deprecation,
+            Status = _status,
+            Designs = _designs.ToArray(),
             Fixtures = _fixtures.ToArray(),
             Scenarios = scenarios,
         };
@@ -90,12 +135,16 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private readonly List<InteractionTest> _interactions = [];
     private readonly List<string> _tags = [];
     private readonly List<string> _ignore = [], _visualViewports = [], _visualThemes = [], _disabledRules = [];
-    private string? _key, _description, _culture, _theme, _viewport, _readySelector, _skip, _visualSkip, _a11ySkip, _a11yJustification;
+    private readonly List<DesignReference> _designs = [];
+    private readonly List<PseudoStateRule> _pseudoStates = [];
+    private readonly List<StorageEntry> _storage = [];
+    private string? _key, _description, _culture, _theme, _viewport, _readySelector, _skip, _visualSkip, _a11ySkip, _a11yJustification, _notes;
     private TextDirection _direction = TextDirection.Auto;
     private SimulatedUser? _user;
     private TimeSpan _httpLatency;
     private HttpStatusCode _unmatched = HttpStatusCode.NotFound;
-    private bool _httpConfigured, _offline, _fullPage, _visualSkipSet, _a11ySkipSet;
+    private bool _httpConfigured, _offline, _fullPage, _visualSkipSet, _a11ySkipSet, _forcedColors, _print;
+    private string? _a11yTodo;
     private DateTimeOffset? _clock;
     private int? _seed;
     private ScenarioLayout _layout = ScenarioLayout.Padded;
@@ -111,11 +160,52 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
 
     internal bool InSetup { get; set; }
 
+    internal MatrixCell? MatrixCell { get; init; }
+
     /// <summary>Overrides the scenario key (the part after <c>--</c> in the scenario id). Keep keys stable; they are used in URLs and baselines.</summary>
     public ScenarioBuilder<TComponent> Key(string key) { _key = Naming.ToKebabCase(key); return this; }
 
     public ScenarioBuilder<TComponent> Description(string description) { _description = description; return this; }
     public ScenarioBuilder<TComponent> Tags(params string[] tags) { _tags.AddRange(tags); return this; }
+
+    /// <summary>Markdown notes shown under the scenario title and on the documentation page: usage hints, review notes, known issues.</summary>
+    public ScenarioBuilder<TComponent> Notes(string markdown) { _notes = markdown; return this; }
+
+    /// <summary>
+    /// Links a design artifact to the scenario: an image (shown in the Design panel and available as a pixel overlay on the
+    /// preview), a Figma file or frame (embedded), or any other page (linked). Relative URLs resolve against the host.
+    /// </summary>
+    public ScenarioBuilder<TComponent> Design(string url, string? title = null) { _designs.Add(DesignReference.Create(url, title)); return this; }
+
+    /// <summary>
+    /// Forces a CSS pseudo-class such as <c>:hover</c> or <c>:focus-visible</c> without user input, on every element of the
+    /// preview or on the elements matching <paramref name="selector"/>. Screenshots and accessibility scans then cover the state.
+    /// </summary>
+    public ScenarioBuilder<TComponent> ForceState(PseudoState state, string? selector = null)
+    {
+        var rule = new PseudoStateRule(state, selector);
+        if (!_pseudoStates.Contains(rule))
+            _pseudoStates.Add(rule);
+        return this;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> to <c>localStorage</c> before the component starts. Strings are stored as they are, other
+    /// values as JSON. The preview clears its storage first, so every scenario starts from the same state.
+    /// </summary>
+    public ScenarioBuilder<TComponent> LocalStorage(string key, object? value) => Storage(StorageArea.Local, key, value);
+
+    /// <summary>Writes <paramref name="value"/> to <c>sessionStorage</c> before the component starts (strings as they are, other values as JSON).</summary>
+    public ScenarioBuilder<TComponent> SessionStorage(string key, object? value) => Storage(StorageArea.Session, key, value);
+
+    private ScenarioBuilder<TComponent> Storage(StorageArea area, string key, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        var text = value as string ?? JsonSerializer.Serialize(value, HttpRuleBuilder.WebJson);
+        _storage.RemoveAll(e => e.Area == area && e.Key == key);
+        _storage.Add(new StorageEntry(area, key, text));
+        return this;
+    }
 
     /// <summary>Sets a parameter to a literal value.</summary>
     public ScenarioBuilder<TComponent> Parameter<TValue>(Expression<Func<TComponent, TValue>> parameter, TValue value) =>
@@ -258,6 +348,20 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         if (b.SkipSet) { _a11ySkipSet = true; _a11ySkip = b.SkipReasonValue; }
         _disabledRules.AddRange(b.DisabledRuleValues);
         _a11yJustification = b.JustificationValue ?? _a11yJustification;
+        _a11yTodo = b.TodoValue ?? _a11yTodo;
+        return this;
+    }
+
+    /// <summary>
+    /// Emulates CSS media features in automated runs: <c>forced-colors: active</c> (Windows high contrast) and the
+    /// <c>print</c> media type. Automated runs always emulate <c>prefers-reduced-motion: reduce</c>.
+    /// </summary>
+    public ScenarioBuilder<TComponent> Media(Action<MediaBuilder> configure)
+    {
+        var b = new MediaBuilder();
+        configure(b);
+        _forcedColors |= b.ForcedColorsValue;
+        _print |= b.PrintValue;
         return this;
     }
 
@@ -295,6 +399,9 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         ReadySelector = _readySelector,
         Interactions = _interactions.ToArray(),
         SkipReason = _skip,
+        Notes = _notes,
+        Designs = _designs.ToArray(),
+        Matrix = MatrixCell,
         Environment = new EnvironmentDefinition
         {
             Culture = _culture,
@@ -305,6 +412,10 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
             Clock = _clock,
             Seed = _seed,
             Offline = _offline,
+            PseudoStates = _pseudoStates.ToArray(),
+            Storage = _storage.ToArray(),
+            ForcedColors = _forcedColors,
+            PrintMedia = _print,
             Http = _httpConfigured
                 ? new HttpSimulation { Rules = [.. _httpRules, .. _setupHttpRules], Latency = _httpLatency, UnmatchedStatus = _unmatched }
                 : null,
@@ -326,6 +437,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
             SkipReason = _a11ySkip,
             DisabledRules = _disabledRules.Distinct().ToArray(),
             Justification = _a11yJustification,
+            TodoReason = _a11yTodo,
         },
         Budget = new PerformanceBudget { ReadyWithin = _readyWithin, InteractionWithin = _interactionWithin, MaxDomUpdates = _maxDomUpdates },
     };
@@ -381,7 +493,7 @@ public sealed class HttpSimulationBuilder
 /// <summary>Configures the response of one fake HTTP rule.</summary>
 public sealed class HttpRuleBuilder
 {
-    private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web);
+    internal static JsonSerializerOptions WebJson { get; } = new(JsonSerializerDefaults.Web);
     private readonly string _method, _pattern;
     private readonly List<KeyValuePair<string, string>> _headers = [];
     private HttpStatusCode _status = HttpStatusCode.OK;
@@ -400,7 +512,7 @@ public sealed class HttpRuleBuilder
     /// <summary>Responds with <paramref name="value"/> serialized using web JSON defaults.</summary>
     public HttpRuleBuilder RespondJson<T>(T value, HttpStatusCode status = HttpStatusCode.OK)
     {
-        _body = JsonSerializer.Serialize(value, s_json);
+        _body = JsonSerializer.Serialize(value, WebJson);
         _contentType = "application/json";
         _status = status;
         return this;
@@ -491,8 +603,12 @@ public sealed class AccessibilityOptionsBuilder
     internal string? SkipReasonValue { get; private set; }
     internal List<string> DisabledRuleValues { get; } = [];
     internal string? JustificationValue { get; private set; }
+    internal string? TodoValue { get; private set; }
 
     public AccessibilityOptionsBuilder Skip(string reason) { SkipSet = true; SkipReasonValue = reason; return this; }
+
+    /// <summary>Scans as usual but reports violations without failing the run; <paramref name="reason"/> says why (a ticket, a date).</summary>
+    public AccessibilityOptionsBuilder Todo(string reason) { TodoValue = reason; return this; }
 
     /// <summary>Disables an axe-core rule for this scenario. A justification is required and shown in reports.</summary>
     public AccessibilityOptionsBuilder DisableRule(string ruleId, string justification)
@@ -501,4 +617,17 @@ public sealed class AccessibilityOptionsBuilder
         JustificationValue = JustificationValue is null ? $"{ruleId}: {justification}" : $"{JustificationValue}; {ruleId}: {justification}";
         return this;
     }
+}
+
+/// <summary>CSS media features emulated by automated runs (<see cref="ScenarioBuilder{TComponent}.Media"/>).</summary>
+public sealed class MediaBuilder
+{
+    internal bool ForcedColorsValue { get; private set; }
+    internal bool PrintValue { get; private set; }
+
+    /// <summary><c>forced-colors: active</c>, as with Windows high contrast themes.</summary>
+    public MediaBuilder ForcedColors() { ForcedColorsValue = true; return this; }
+
+    /// <summary>The <c>print</c> media type.</summary>
+    public MediaBuilder Print() { PrintValue = true; return this; }
 }

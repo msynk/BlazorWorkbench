@@ -79,6 +79,7 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
     protected override void Configure(ScenarioSetBuilder<SalesDashboard> set)
     {
         set.Title("Analytics/Sales dashboard")
+           .Status(ComponentStatus.Beta)
            .Tags("http", "composition", "showcase")
            .Documentation("""
                A whole page built from library components (`KpiCard`, `RevenueChart`, `DataTable`, `Badge`, `DateLabel`).

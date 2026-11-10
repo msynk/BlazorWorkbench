@@ -49,3 +49,21 @@ public abstract class ParameterEditorBase<TValue> : ComponentBase
 
     protected Task SetValueAsync(TValue? value) => ValueChanged.InvokeAsync(value);
 }
+
+/// <summary>The outcome of one scenario in the last automated run (<c>workbench test</c>).</summary>
+/// <param name="Status"><c>Passed</c>, <c>Failed</c>, <c>Skipped</c> or <c>Error</c>.</param>
+/// <param name="Message">The first failure, if any.</param>
+/// <param name="Flaky">True when the scenario passed only after a retry.</param>
+public sealed record ScenarioRunStatus(string Status, string? Message, bool Flaky);
+
+/// <summary>The last automated run as the explorer shows it: when it ran and the status of every scenario.</summary>
+public sealed record TestRunSummary(DateTimeOffset? FinishedAt, IReadOnlyDictionary<string, ScenarioRunStatus> Scenarios)
+{
+    public static TestRunSummary Empty { get; } = new(null, new Dictionary<string, ScenarioRunStatus>());
+}
+
+/// <summary>Supplies the results of the last automated run to the explorer. Implemented by the preview host; optional.</summary>
+public interface ITestResultsProvider
+{
+    Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
+}

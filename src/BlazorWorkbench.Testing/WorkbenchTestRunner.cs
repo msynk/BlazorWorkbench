@@ -342,7 +342,10 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         var context = await NewContextAsync(browser, variant, scenario).ConfigureAwait(false);
         try
         {
-            return new PageLease(await context.NewPageAsync().ConfigureAwait(false), context, context.DisposeAsync);
+            var page = await context.NewPageAsync().ConfigureAwait(false);
+            if (scenario.Environment.PrintMedia)
+                await page.EmulateMediaAsync(new PageEmulateMediaOptions { Media = Microsoft.Playwright.Media.Print }).ConfigureAwait(false);
+            return new PageLease(page, context, context.DisposeAsync);
         }
         catch
         {
@@ -365,6 +368,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             Locale = scenario.Environment.Culture ?? "en-US",
             TimezoneId = "UTC",
             ReducedMotion = ReducedMotion.Reduce,
+            ForcedColors = scenario.Environment.ForcedColors ? Microsoft.Playwright.ForcedColors.Active : Microsoft.Playwright.ForcedColors.None,
         });
 
     private static bool IsFirefox(IBrowser browser) => string.Equals(browser.BrowserType.Name, "firefox", StringComparison.OrdinalIgnoreCase);
@@ -524,6 +528,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         check.Findings = findings;
         var blockingCount = findings.Count(f => f.Blocking);
+        if (scenario.Accessibility.TodoReason is { } todo && blockingCount > 0)
+        {
+            // Todo mode: report, do not fail.
+            check.Status = CheckStatus.Passed;
+            check.Message = $"todo: {blockingCount} violation(s) reported without failing ({todo}): {string.Join(", ", findings.Where(f => f.Blocking).Select(f => f.RuleId).Distinct())}";
+            return check;
+        }
+
         check.Status = blockingCount > 0 ? CheckStatus.Failed : CheckStatus.Passed;
         var violations = findings.Count(f => !f.NeedsReview);
         check.Message = blockingCount > 0

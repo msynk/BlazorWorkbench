@@ -86,6 +86,16 @@ public static class ScenarioFacts
             Simulates("Viewport", options.FindViewport(viewport) is { } preset ? $"{preset.Name} ({preset.Width}×{preset.Height})" : viewport, panel: null);
         if (env.Seed is { } seed)
             Simulates("Random", "seed " + seed.ToString(CultureInfo.InvariantCulture));
+        foreach (var state in env.PseudoStates)
+            Simulates("State", state.ToString(), panel: null);
+        if (env.Storage.Count > 0)
+            Simulates("Storage", string.Join(", ", env.Storage.Select(e => e.Key)), "storage");
+        if (env.ForcedColors)
+            Simulates("Media", "forced colors (automated runs)", panel: null);
+        if (env.PrintMedia)
+            Simulates("Media", "print (automated runs)", panel: null);
+        if (scenario.Designs.Count > 0)
+            Simulates("Design", scenario.Designs.Count == 1 ? scenario.Designs[0].DisplayTitle : $"{scenario.Designs.Count} references", "design");
 
         // What the scenario checks beyond rendering without errors.
         if (scenario.SkipReason is not null)
@@ -104,6 +114,8 @@ public static class ScenarioFacts
             Verifies("Accessibility", "excluded from automated scans", "accessibility");
         foreach (var rule in a11y.DisabledRules)
             Verifies("Accessibility", $"rule {rule} disabled", "accessibility");
+        if (a11y.TodoReason is { } todo)
+            Verifies("Accessibility", $"todo: reported, not failing ({todo})", "accessibility");
 
         var budget = scenario.Budget;
         if (budget.ReadyWithin is { } ready)

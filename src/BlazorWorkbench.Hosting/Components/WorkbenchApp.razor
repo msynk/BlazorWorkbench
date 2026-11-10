@@ -10,6 +10,8 @@
     <base href="/" />
     @if (IsPreview)
     {
+        @* Read by the preview script before Blazor starts: browser storage isolation and the scenario's storage seed. *@
+        <script type="application/json" id="workbench-preview-config">@((MarkupString)PreviewConfig)</script>
         @* Loaded first so console, error and network capture starts before Blazor. *@
         <script src="_content/BlazorWorkbench.Components/workbench-preview.js"></script>
         <link rel="stylesheet" href="_content/BlazorWorkbench.Components/workbench-preview.css" />
@@ -48,7 +50,31 @@
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 
-    private bool IsPreview => HttpContext?.Request.Path.StartsWithSegments("/_workbench/preview") == true;
+    private bool IsPreview => HttpContext?.Request.Path.StartsWithSegments("/_workbench/preview") == true ||
+                              HttpContext?.Request.Path.StartsWithSegments("/_workbench/tokens") == true;
+
+    [Inject] private BlazorWorkbench.Components.Runtime.WorkbenchCatalogAccessor Catalogs { get; set; } = default!;
+
+    /// <summary>
+    /// JSON for the preview script: whether to clear browser storage and the entries the scenario writes. Encoded with the
+    /// default JavaScript encoder, which escapes &lt;, &gt; and &amp;, so values cannot close the script element.
+    /// </summary>
+    private string PreviewConfig
+    {
+        get
+        {
+            var path = HttpContext?.Request.Path.Value ?? "";
+            const string prefix = "/_workbench/preview/";
+            var id = path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ? Uri.UnescapeDataString(path[prefix.Length..].TrimEnd('/')) : null;
+            var scenario = id is null ? null : Catalogs.Catalog.FindScenario(id);
+            var config = new
+            {
+                isolateStorage = scenario is not null && Options.IsolateBrowserStorage,
+                storage = (scenario?.Environment.Storage ?? []).Select(e => new { area = e.Area.ToString().ToLowerInvariant(), key = e.Key, value = e.Value }),
+            };
+            return System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Default });
+        }
+    }
 
     private IEnumerable<string> PreviewStylesheets
     {

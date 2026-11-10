@@ -58,7 +58,7 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
         var activity = _session.Activity.Begin();
         try
         {
-            if (env?.Offline == true)
+            if (_session.IsOffline)
             {
                 Record(method, url, null, stopwatch, "offline", null, DiagnosticSeverity.Warning);
                 throw new HttpRequestException(HttpRequestError.ConnectionError, $"Simulated offline mode: {method} {url} failed.");
@@ -93,7 +93,7 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
                 }
             }
 
-            var latency = rule.Latency ?? simulation?.Latency ?? TimeSpan.Zero;
+            var latency = (rule.Latency ?? simulation?.Latency ?? TimeSpan.Zero) + (_session.Network?.Latency ?? TimeSpan.Zero);
             if (latency > TimeSpan.Zero)
                 await Task.Delay(latency, token).ConfigureAwait(false);
 
@@ -300,7 +300,7 @@ public sealed class WorkbenchAuthenticationStateProvider : AuthenticationStatePr
     internal WorkbenchAuthenticationStateProvider(ScenarioSession session) => _session = session;
 
     public override Task<AuthenticationState> GetAuthenticationStateAsync() =>
-        _session.Scenario?.Environment.User is { } user
+        _session.User is { } user
             ? Task.FromResult(new AuthenticationState(user.ToPrincipal()))
             : _host ?? s_anonymous;
 

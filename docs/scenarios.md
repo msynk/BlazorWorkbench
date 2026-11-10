@@ -14,7 +14,9 @@ public sealed class ButtonScenarios : ScenarioSet<Button>
            .Category("Inputs")
            .Tags("inputs")
            .Documentation("Use **one** primary button per view.")   // Markdown, rendered safely
-           .Deprecated("Use ActionButton.");                         // optional
+           .Deprecated("Use ActionButton.")                          // optional
+           .Status(ComponentStatus.Beta)                             // draft, experimental, beta, stable, deprecated
+           .Design("designs/button.png", "Button mockup");           // shown in the Design panel of every scenario
 
         set.Setup(s => s.Parameter(b => b.Size, Size.Medium));     // applied to every scenario first
         set.Add("Primary", s => s.ChildContent("Save"));
@@ -69,6 +71,44 @@ set.Fixture<IReadOnlyList<Person>>("Nobody", _ => []);
 set.Add("Few rows", s => s.Fixture(t => t.Items, "Three people"));
 ```
 
+### Matrices
+
+A matrix adds one scenario per combination of parameter values, so every variant is previewed, screenshotted and scanned
+without writing each one:
+
+```csharp
+set.Matrix("Variants", m => m.Vary(b => b.Variant).Vary(b => b.Size), s => s.ChildContent("Button"));
+```
+
+- `Vary(parameter)` without values takes every value of a `bool` or a non-`[Flags]` enum (and `null` for nullable ones).
+  `Vary(parameter, a, b, c)` takes the listed values, and `Vary(parameter, [("none", null), ("purple", color)])` gives them
+  display labels.
+- The scenarios are named `Variants · Primary · Small` (keys `variants-primary-small`), tagged `matrix`, and carry the
+  combination in `ScenarioDefinition.Matrix`. The **Gallery** view lays out a two-axis matrix as a table.
+- The third argument configures every combination first (child content, services, environment); the varied values win.
+- `.Pairwise()` keeps only enough combinations to cover every pair of values of any two parameters. Four parameters with
+  4, 3, 2 and 2 values need about 12 scenarios instead of 48; most defects involve one or two parameters.
+- A matrix may produce at most 256 scenarios.
+
+### Status
+
+`set.Status(ComponentStatus.Beta)` sets the component's lifecycle status: `Draft`, `Experimental`, `Beta`, `Stable` or
+`Deprecated`. It appears next to the component in the explorer (except *stable*), on its documentation page and in the
+catalog JSON. A component marked `.Deprecated("...")` or `[Obsolete]` gets `Deprecated` unless it declares a status.
+Filter the explorer with `status:beta`.
+
+### Notes and design references
+
+```csharp
+set.Add("Card declined", s => s
+    .Notes("**Review note.** Never echo the processor's decline code.")   // Markdown under the title and in the docs
+    .Design("https://www.figma.com/design/abc/Checkout?node-id=12-34")    // embedded in the Design panel
+    .Design("designs/checkout-declined.png", "Declined state"));          // image: also a pixel overlay
+```
+
+Images (`.png`, `.jpg`, `.svg`, `.webp`, ...) can be drawn over the preview from the **Design** panel. Figma URLs are embedded
+with Figma's viewer. Any other URL is a link. Only `http(s)` URLs and relative paths are allowed (`WB1023`).
+
 ## Scenario context
 
 Factories receive a `ScenarioContext` that is created for each activation:
@@ -110,6 +150,22 @@ s.Http(h => h.Get("/api/items").RespondJson(items).Delay(TimeSpan.FromMillisecon
 
 For details, see [environment simulation](environment.md).
 
+## States, storage and media
+
+```csharp
+s.ForceState(PseudoState.FocusVisible, ".btn")      // force :focus-visible on matching elements (every element without a selector)
+ .LocalStorage("prefs", new { Dense = true })       // written before the component starts; objects as JSON
+ .SessionStorage("wizard-step", "2")
+ .Media(m => m.ForcedColors().Print());             // automated runs emulate forced-colors: active and print
+```
+
+- Forced states apply in the preview, in screenshots and in accessibility scans. See [tools](tools.md#forced-states).
+- The preview clears `localStorage` and `sessionStorage` before every scenario (Workbench keeps its own preferences), then
+  writes the scenario's entries, so a value written by one scenario never leaks into the next. Turn the clearing off with
+  `options.IsolateBrowserStorage = false`. The **Storage** panel shows and edits the values.
+- Browsers cannot emulate media features inside the Workbench's preview frame, so `.Media(...)` affects automated runs only.
+  Automated runs always emulate `prefers-reduced-motion: reduce`.
+
 ## Layout and readiness
 
 - `.Layout(ScenarioLayout.Padded | Centered | Fullscreen)`. Use `Fullscreen` for overlays and dialogs. Visual checks then capture the viewport instead of the root element.
@@ -141,9 +197,13 @@ Locators are strict: an action fails when a locator matches more than one elemen
 ```csharp
 s.Visual(v => v.Viewports("mobile", "laptop").Themes("light", "dark").Threshold(0.15).Ignore(".timestamp").FullPage())
  .Accessibility(a => a.DisableRule("color-contrast", "Brand palette approved by design review #123"))
+ .Accessibility(a => a.Todo("Fix tracked in #456"))   // report violations without failing the run
  .Budget(readyWithin: TimeSpan.FromSeconds(1), interactionWithin: TimeSpan.FromSeconds(2), maxDomUpdates: 20)
  .SkipTests("Intentionally failing demo");
 ```
+
+`Accessibility(a => a.Todo(reason))` keeps the scan but reports violations in a passed check with a `todo:` message, so a
+team can adopt accessibility checks one component at a time (Storybook's `todo` mode). `Skip(reason)` does not scan at all.
 
 ## Custom scenario providers
 

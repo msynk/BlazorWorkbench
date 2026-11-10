@@ -137,6 +137,7 @@ public static class CatalogBuilder
                     Remedy: $"Add a ScenarioSet<{metadata.Name}> to document meaningful states."));
             }
 
+            var componentDesigns = componentSets.SelectMany(s => s.Designs).Distinct().ToArray();
             var usedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var scenario in scenarios)
             {
@@ -151,7 +152,12 @@ public static class CatalogBuilder
 
                 scenario.ComponentId = id;
                 scenario.Id = $"{id}--{key}";
+                if (componentDesigns.Length > 0)
+                    scenario.Designs = [.. componentDesigns, .. scenario.Designs.Where(d => !componentDesigns.Contains(d))];
             }
+
+            var deprecation = componentSets.Select(s => s.DeprecationMessage).FirstOrDefault(d => d is not null) ?? metadata.ObsoleteMessage
+                              ?? (metadata.IsObsolete ? "This component is obsolete." : null);
 
             entries.Add(new ComponentEntry
             {
@@ -162,8 +168,9 @@ public static class CatalogBuilder
                 Category = componentSets.Select(s => s.Category).FirstOrDefault(c => c is not null) ?? (title.Contains('/') ? title.Split('/')[0] : null),
                 Tags = componentSets.SelectMany(s => s.Tags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
                 Documentation = string.Join("\n\n", componentSets.Select(s => s.Documentation).OfType<string>()) is { Length: > 0 } md ? md : null,
-                DeprecationMessage = componentSets.Select(s => s.DeprecationMessage).FirstOrDefault(d => d is not null) ?? metadata.ObsoleteMessage
-                                     ?? (metadata.IsObsolete ? "This component is obsolete." : null),
+                DeprecationMessage = deprecation,
+                Status = componentSets.Select(s => s.Status).FirstOrDefault(s => s is not null) ?? (deprecation is not null ? ComponentStatus.Deprecated : null),
+                Designs = componentDesigns,
                 Fixtures = componentSets.SelectMany(s => s.Fixtures).ToArray(),
                 Scenarios = scenarios,
             });
@@ -178,7 +185,52 @@ public static class CatalogBuilder
                 issues.AddRange(ScenarioValidator.Validate(scenario, entry, options, isServiceAvailable));
         }
 
+        // 5. Relationships: which catalog components render which (read from the compiled render code).
+        try
+        {
+            var byType = entries.GroupBy(e => e.ComponentType).ToDictionary(g => g.Key, g => g.First());
+            var uses = ComponentRelations.FindRenderedComponents(byType.Keys.ToArray());
+            var usedBy = ComponentRelations.Invert(uses);
+            foreach (var entry in entries)
+            {
+                entry.Uses = uses.TryGetValue(entry.ComponentType, out var u) ? u.Select(t => byType[t].Id).ToArray() : [];
+                entry.UsedBy = usedBy.TryGetValue(entry.ComponentType, out var b) ? b.Select(t => byType[t].Id).ToArray() : [];
+            }
+        }
+        catch (Exception ex)
+        {
+            issues.Add(new(IssueSeverity.Info, "WB0010", $"Component relationships could not be read: {ex.Message}"));
+        }
+
+        // 6. Documentation directives ({{scenario:id}} and friends) in pages and component documentation.
+        var catalog = new WorkbenchCatalog(entries, issues, options);
+        foreach (var page in options.Pages)
+            issues.AddRange(ValidateDirectives(page.Markdown, catalog, $"Page '{page.Title}'", null));
+        foreach (var entry in entries.Where(e => e.Documentation is not null))
+            issues.AddRange(ValidateDirectives(entry.Documentation, catalog, $"The documentation of {entry.Title}", entry.Id));
+        foreach (var duplicate in options.Pages.GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+            issues.Add(new(IssueSeverity.Warning, "WB1025", $"{duplicate.Count()} documentation pages share the id '{duplicate.Key}'; only the first is reachable.",
+                Remedy: "Give every page a unique title."));
+
         return new WorkbenchCatalog(entries, issues, options);
+    }
+
+    private static IEnumerable<CatalogIssue> ValidateDirectives(string? markdown, WorkbenchCatalog catalog, string where, string? componentId)
+    {
+        foreach (var segment in Documentation.MarkdownDirectives.Split(markdown).Where(s => s.IsDirective))
+        {
+            var argument = segment.Argument;
+            var missing = segment.Directive switch
+            {
+                "scenario" => argument is null || catalog.FindScenario(argument) is null,
+                "scenarios" or "parameters" => argument is null || catalog.FindComponent(argument) is null,
+                _ => false,
+            };
+            if (missing)
+                yield return new CatalogIssue(IssueSeverity.Warning, "WB1025",
+                    $"{where} embeds {{{{{segment.Directive}:{argument}}}}}, but no {(segment.Directive == "scenario" ? "scenario" : "component")} has the id '{argument}'.",
+                    componentId, Remedy: "Use an id from the explorer's URL: scenario/{id} or docs/{id}.");
+        }
     }
 
     /// <summary>Adds dependency validation (WB1005) using the host's service registrations.</summary>

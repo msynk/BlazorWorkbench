@@ -1,0 +1,44 @@
+@inject IJSRuntime JS
+
+<div class="wb-html">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">The markup the scenario renders right now, formatted, without Blazor's internal comments and scoped-CSS attributes.</span>
+        <span>
+            <button type="button" class="wb-button" @onclick="() => OnRefresh.InvokeAsync()">Refresh</button>
+            <button type="button" class="wb-button" disabled="@string.IsNullOrEmpty(Html)" @onclick="Copy">@(_copied ? "Copied" : "Copy")</button>
+        </span>
+    </div>
+    @if (Html is null)
+    {
+        <p class="wb-empty" role="status">Reading the rendered markup…</p>
+    }
+    else if (Html.Length == 0)
+    {
+        <p class="wb-empty">The scenario renders no markup.</p>
+    }
+    else
+    {
+        <pre class="wb-pre wb-html-code"><code>@Html</code></pre>
+    }
+</div>
+
+@code {
+    private bool _copied;
+
+    [Parameter] public string? Html { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+
+    protected override void OnParametersSet() => _copied = false;
+
+    private async Task Copy()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
+            _copied = await module.InvokeAsync<bool>("copy", Html ?? "");
+        }
+        catch (JSException)
+        {
+        }
+    }
+}
