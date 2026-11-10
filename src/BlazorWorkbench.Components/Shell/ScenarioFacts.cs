@@ -117,6 +117,14 @@ public static class ScenarioFacts
         if (a11y.TodoReason is { } todo)
             Verifies("Accessibility", $"todo: reported, not failing ({todo})", "accessibility");
 
+        var responsive = scenario.Responsive;
+        if (responsive.Skip)
+            Verifies("Responsive", "excluded from the responsive check", panel: null);
+        else if (responsive.Widths.Count > 0)
+            Verifies("Responsive", "no sideways scrolling at " + string.Join(", ", responsive.Widths.Select(w => w.ToString(CultureInfo.InvariantCulture))) + " px", panel: null);
+        foreach (var selector in responsive.AllowOverflow)
+            Verifies("Responsive", $"{selector} may overflow", panel: null);
+
         var budget = scenario.Budget;
         if (budget.ReadyWithin is { } ready)
             Verifies("Budget", $"ready within {Milliseconds(ready)}", panel: null);

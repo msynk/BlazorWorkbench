@@ -21,25 +21,6 @@
         {
             <div class="wb-toolbar" role="toolbar" aria-label="Preview environment">
                 <label class="wb-field">
-                    <span>Viewport</span>
-                    <select id="wb-viewport" @bind="ViewportName" @bind:after="OnViewportChanged">
-                        <option value="">Responsive</option>
-                        @foreach (var v in Options.Viewports)
-                        {
-                            <option value="@v.Name">@v.Name (@v.Width×@v.Height)</option>
-                        }
-                        <option value="@CustomViewport">Custom…</option>
-                    </select>
-                </label>
-                @if (ViewportName == CustomViewport)
-                {
-                    <span class="wb-field wb-custom-size">
-                        <label><span class="wb-visually-hidden">Width</span><input id="wb-viewport-width" type="number" min="120" max="3840" @bind="_customWidth" @bind:after="OnCustomSize" /></label>
-                        ×
-                        <label><span class="wb-visually-hidden">Height</span><input id="wb-viewport-height" type="number" min="120" max="3840" @bind="_customHeight" @bind:after="OnCustomSize" /></label>
-                    </span>
-                }
-                <label class="wb-field">
                     <span>Theme</span>
                     <select id="wb-theme" @bind="ThemeName" @bind:after="OnThemeChanged">
                         @foreach (var t in Options.Themes)
@@ -198,18 +179,36 @@
                 @switch (_mode)
                 {
                     case "compare":
-                        <CompareView Scenario="_scenario" Options="Options" BuildUrl="CompareUrl" Viewport="EffectiveViewport" InitialAxis="@CompareQuery" />
+                        <ViewportBar Options="Options" ViewportName="@ViewportName" Width="CurrentWidth" Height="CurrentHeight" Rotate="_tools.Rotate" Touch="EffectiveTouch"
+                                     Canvas="false" OnViewport="OnViewportPreset" OnSize="OnViewportSize" OnSetWidth="SetWidth" OnRotate="RotateViewport" OnTouch="SetTouch" />
+                        <CompareView Scenario="_scenario" Options="Options" BuildUrl="CompareUrl" Viewport="EffectiveViewport" InitialAxis="@CompareQuery" Breakpoints="_marks" />
                         break;
                     case "gallery":
                         <GalleryView Component="_component!" SelectedScenarioId="@_scenario.Id" PreviewTheme="@ShellMatchedTheme" />
                         break;
                     default:
                         <CanvasToolbar Tools="_tools" Options="Options" ToolsChanged="OnToolsChanged" OnLayout="OnLayout"
-                                       CanRotate="@(EffectiveViewport is not null)" PanelRight="_panelRight" FocusMode="_focusMode" />
+                                       CanFit="@(EffectiveViewport is not null)" OnFit="FitZoom" PanelRight="_panelRight" FocusMode="_focusMode" />
+                        <ViewportBar Options="Options" ViewportName="@ViewportName" Width="CurrentWidth" Height="CurrentHeight" Rotate="_tools.Rotate" Touch="EffectiveTouch"
+                                     Breakpoints="_marks" Layout="_layout" OnViewport="OnViewportPreset" OnSize="OnViewportSize" OnSetWidth="SetWidth"
+                                     OnRotate="RotateViewport" OnTouch="SetTouch" OnHighlightOverflow="HighlightOverflow" />
                         <div class="wb-frame-area @(EffectiveViewport is null ? "wb-frame-responsive" : "")">
-                            <div class="wb-zoom @(EffectiveViewport is null ? "wb-zoom-fill" : "")" style="@ZoomStyle">
-                                <iframe id="wb-preview-frame" title="Preview of @_scenario.Name" src="@_frameSrc"
-                                        style="@FrameStyle" class="wb-frame"></iframe>
+                            <div class="wb-device-stack">
+                                <BreakpointRuler Marks="_marks" Presets="Options.Viewports" Zoom="_tools.Zoom" CurrentWidth="CurrentWidth" OnSelect="SetWidth" />
+                                <div class="wb-device" data-zoom="@Z" data-width="@CurrentWidth" data-height="@CurrentHeight">
+                                    <div class="wb-zoom @(EffectiveViewport is null ? "wb-zoom-fill" : "")" style="@ZoomStyle">
+                                        <iframe id="wb-preview-frame" title="Preview of @_scenario.Name" src="@_frameSrc"
+                                                style="@FrameStyle" class="wb-frame"></iframe>
+                                    </div>
+                                    @* Drag to resize; the arrow keys change the size by 1 px (Shift: 10 px). The resize runs in workbench-shell.js. *@
+                                    <div class="wb-resize wb-resize-e" data-resize="e" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Viewport width"
+                                         aria-valuenow="@CurrentWidth" aria-valuemin="@BreakpointPreset.MinViewportWidth" aria-valuemax="@BreakpointPreset.MaxViewportSize"
+                                         title="Drag to change the width. Arrow keys: 1 px, Shift: 10 px."></div>
+                                    <div class="wb-resize wb-resize-s" data-resize="s" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="Viewport height"
+                                         aria-valuenow="@CurrentHeight" aria-valuemin="@BreakpointPreset.MinViewportWidth" aria-valuemax="@BreakpointPreset.MaxViewportSize"
+                                         title="Drag to change the height. Arrow keys: 1 px, Shift: 10 px."></div>
+                                    <div class="wb-resize wb-resize-se" data-resize="se" aria-hidden="true" title="Drag to change the size"></div>
+                                </div>
                             </div>
                         </div>
                         break;
@@ -327,6 +326,12 @@
     private bool _themeFollowsShell = true;
     private ViewportPreset? _viewport;
     private int _customWidth = 390, _customHeight = 844;
+    // Touch emulation chosen in the viewport bar; null follows the preset (mobile presets emulate touch).
+    private bool? _touch;
+    private bool _sentTouch;
+    private LayoutReport? _layout;
+    private List<DetectedBreakpoint> _detected = [];
+    private IReadOnlyList<BreakpointMark> _marks = [];
     private string? _loadedScenarioId;
     private PreviewTools _tools = PreviewTools.None;
     private bool _focusMode;
@@ -348,6 +353,7 @@
     [SupplyParameterFromQuery(Name = "panel")] public string? PanelQuery { get; set; }
     [SupplyParameterFromQuery(Name = "mode")] public string? ModeQuery { get; set; }
     [SupplyParameterFromQuery(Name = "compare")] public string? CompareQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "touch")] public string? TouchQuery { get; set; }
 
     private WorkbenchCatalog Catalog => Catalogs.Catalog;
     private WorkbenchOptions Options => Catalogs.Options;
@@ -390,6 +396,14 @@
         }
     }
 
+    /// <summary>The viewport width shown in the viewport bar: the fixed width, or the measured width of a responsive preview.</summary>
+    private int? CurrentWidth => EffectiveViewport?.Width ?? (_layout is { Width: > 0 } l ? (int)Math.Round(l.Width) : null);
+
+    private int? CurrentHeight => EffectiveViewport?.Height ?? (_layout is { Height: > 0 } l ? (int)Math.Round(l.Height) : null);
+
+    /// <summary>Touch emulation as chosen, else on for mobile presets.</summary>
+    private bool EffectiveTouch => _touch ?? (ViewportName != CustomViewport && _viewport?.IsMobile == true);
+
     private string Z => _tools.Zoom.ToString("0.###", CultureInfo.InvariantCulture);
 
     private string ZoomStyle => EffectiveViewport is { } v
@@ -422,6 +436,7 @@
     protected override void OnInitialized()
     {
         Catalogs.Changed += OnCatalogChanged;
+        _marks = ResponsiveLayout.Merge(Options.Breakpoints, _detected);
     }
 
     protected override void OnParametersSet()
@@ -455,6 +470,7 @@
             _viewport = Options.FindViewport(ViewportName);
         }
 
+        _touch = TouchQuery switch { "1" => true, "0" => false, _ => null };
         ApplyDeclaredTheme();
         CultureName = CultureQuery ?? "";
         Direction = DirQuery is "ltr" or "rtl" ? DirQuery : "";
@@ -465,6 +481,7 @@
         if (ModeQuery is { } mode && Modes.Any(m => m.Key == mode))
             _mode = mode;
         _frameSrc = BuildPreviewUrl(includeArgs: true);
+        _sentTouch = EffectiveTouch;
         RememberRecent(_scenario.Id);
     }
 
@@ -538,6 +555,8 @@
         _scenarioIssues = [];
         _facts = [];
         _mode = "canvas";
+        // Breakpoints belong to the stylesheets, which scenarios share: they stay until the next preview reports its own.
+        _layout = null;
     }
 
     private static Dictionary<string, string> ParseQuery(string uri)
@@ -582,6 +601,8 @@
         if (dir.Length > 0) query.Add("dir=" + dir);
         if (user.Length > 0) query.Add("user=" + Uri.EscapeDataString(user));
         if (network.Length > 0) query.Add("network=" + Uri.EscapeDataString(network));
+        var touch = cell?.Axis == "viewport" ? _touch ?? Options.FindViewport(cell.Value)?.IsMobile == true : EffectiveTouch;
+        if (touch) query.Add("touch=1");
         var tools = cell is null ? _tools : cell.Axis == "state" ? _tools with { Pseudo = cell.Value.Length > 0 ? [cell.Value] : [] } : _tools;
         query.AddRange(tools.PreviewQuery(BackgroundValue));
         return $"_workbench/preview/{Uri.EscapeDataString(_scenario!.Id)}" + (query.Count > 0 ? "?" + string.Join('&', query) : "");
@@ -597,6 +618,7 @@
         if (_overrides.Count > 0) query.Add("args=" + Uri.EscapeDataString(ArgsCodec.Encode(_overrides)));
         if (ViewportName == CustomViewport) query.Add($"viewport={_customWidth}x{_customHeight}");
         else if (ViewportName.Length > 0) query.Add("viewport=" + Uri.EscapeDataString(ViewportName));
+        if (_touch is { } touch) query.Add("touch=" + (touch ? "1" : "0"));
         if (!_themeFollowsShell && ThemeName.Length > 0 && ThemeName != Options.FindTheme(_scenario.Environment.Theme)?.Name)
             query.Add("theme=" + Uri.EscapeDataString(ThemeName));
         if (CultureName.Length > 0) query.Add("culture=" + Uri.EscapeDataString(CultureName));
@@ -629,6 +651,7 @@
         _recording = false;
         _assertMode = false;
         var url = BuildPreviewUrl(keepArgs);
+        _sentTouch = EffectiveTouch;
         _frameSrc = url + (url.Contains('?') ? "&" : "?") + "r=" + System.Environment.TickCount64;
         StateHasChanged();
         if (_module is not null)
@@ -648,6 +671,7 @@
         Direction = "";
         UserName = "";
         NetworkName = "";
+        _touch = null;
         _tools = PreviewTools.None;
         ApplyDeclaredTheme(useQuery: false);
         await ReloadFrame(keepArgs: false);
@@ -689,6 +713,7 @@
             case "zoom-in": await OnToolsChanged(_tools with { Zoom = PreviewTools.ZoomLevels.FirstOrDefault(l => l > _tools.Zoom + 0.001, PreviewTools.ZoomLevels[^1]) }); break;
             case "zoom-out": await OnToolsChanged(_tools with { Zoom = PreviewTools.ZoomLevels.LastOrDefault(l => l < _tools.Zoom - 0.001, PreviewTools.ZoomLevels[0]) }); break;
             case "zoom-reset": await OnToolsChanged(_tools with { Zoom = 1 }); break;
+            case "zoom-fit": await FitZoom(); break;
         }
 
         StateHasChanged();
@@ -726,18 +751,98 @@
         UpdateAddress();
     }
 
-    private void OnViewportChanged()
+    private async Task OnViewportPreset(string name)
     {
-        _viewport = Options.FindViewport(ViewportName);
+        if (name == CustomViewport)
+        {
+            // Custom starts from the size on screen.
+            (_customWidth, _customHeight) = (CurrentWidth ?? _customWidth, CurrentHeight ?? _customHeight);
+            KeepPresetTouch();
+            ViewportName = CustomViewport;
+            _viewport = null;
+            _tools = _tools with { Rotate = false };
+        }
+        else
+        {
+            // A preset brings its own input: touch for mobile presets, a mouse otherwise.
+            _touch = null;
+            _viewport = Options.FindViewport(name);
+            ViewportName = _viewport?.Name ?? "";
+            if (_viewport is null)
+                _tools = _tools with { Rotate = false };
+        }
+
+        await SyncDeviceAsync();
         UpdateAddress();
     }
 
-    private void OnCustomSize()
+    /// <summary>Fixes the viewport at a size: a drag, the size fields, the ruler or the Breakpoints menu.</summary>
+    private async Task ApplySize(int width, int height)
     {
-        _customWidth = Math.Clamp(_customWidth, 120, 3840);
-        _customHeight = Math.Clamp(_customHeight, 120, 3840);
+        KeepPresetTouch();
+        ViewportName = CustomViewport;
+        _viewport = null;
+        _customWidth = Math.Clamp(width, BreakpointPreset.MinViewportWidth, BreakpointPreset.MaxViewportSize);
+        _customHeight = Math.Clamp(height, BreakpointPreset.MinViewportWidth, BreakpointPreset.MaxViewportSize);
+        _tools = _tools with { Rotate = false };
+        await SyncDeviceAsync();
         UpdateAddress();
     }
+
+    /// <summary>A mobile preset turned into a custom size stays a touch device, as in browser developer tools.</summary>
+    private void KeepPresetTouch()
+    {
+        if (_touch is null && ViewportName != CustomViewport && _viewport?.IsMobile == true)
+            _touch = true;
+    }
+
+    private Task OnViewportSize((int Width, int Height) size) => ApplySize(size.Width, size.Height);
+
+    private Task SetWidth(int width) => ApplySize(width, CurrentHeight ?? 800);
+
+    /// <summary>Called by workbench-shell.js when a resize handle is dragged or moved with the keyboard.</summary>
+    [JSInvokable]
+    public Task OnViewportResized(int width, int height) => InvokeAsync(async () =>
+    {
+        if (_scenario is null)
+            return;
+        await ApplySize(width, height);
+        StateHasChanged();
+    });
+
+    private Task RotateViewport() => EffectiveViewport is null ? Task.CompletedTask : OnToolsChanged(_tools with { Rotate = !_tools.Rotate });
+
+    private async Task SetTouch(bool on)
+    {
+        // Back to automatic when the choice matches the preset.
+        _touch = on == (ViewportName != CustomViewport && _viewport?.IsMobile == true) && ViewportName != CustomViewport ? null : on;
+        await SyncDeviceAsync();
+        UpdateAddress();
+    }
+
+    /// <summary>Tells the preview about a change of touch emulation; it applies without reloading.</summary>
+    private async Task SyncDeviceAsync()
+    {
+        if (EffectiveTouch == _sentTouch)
+            return;
+        _sentTouch = EffectiveTouch;
+        if (_mode == "canvas")
+            await Post("device", new { touch = _sentTouch });
+    }
+
+    private async Task FitZoom()
+    {
+        if (_module is null || EffectiveViewport is not { } v)
+            return;
+        try
+        {
+            var zoom = await _module.InvokeAsync<double>("fitZoom", v.Width, v.Height);
+            await OnToolsChanged(_tools with { Zoom = Math.Clamp(zoom, 0.1, 1) });
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    private Task HighlightOverflow() => Post("highlight-overflow", null);
 
     private async Task OnToolsChanged(PreviewTools tools)
     {
@@ -777,7 +882,9 @@
         {
             // The canvas iframe is created again: load the preview with the current state.
             _previewState = "loading";
+            _layout = null;
             _frameSrc = BuildPreviewUrl(includeArgs: true);
+            _sentTouch = EffectiveTouch;
         }
 
         UpdateAddress();
@@ -1019,6 +1126,16 @@
                 _a11y = payload.Deserialize<A11yOutcome>(WorkbenchJson.Options);
                 _a11yRunning = false;
                 break;
+            case "layout":
+                _layout = payload.Deserialize<LayoutReport>(WorkbenchJson.Options);
+                break;
+            case "breakpoints":
+                var detected = payload.Deserialize<List<DetectedBreakpoint>>(WorkbenchJson.Options) ?? [];
+                if (detected.SequenceEqual(_detected))
+                    return;
+                _detected = detected;
+                _marks = ResponsiveLayout.Merge(Options.Breakpoints, _detected);
+                break;
         }
 
         StateHasChanged();
@@ -1028,6 +1145,7 @@
     {
         // Hot reload: re-resolve the scenario and reload the preview.
         _loadedScenarioId = null;
+        _marks = ResponsiveLayout.Merge(Options.Breakpoints, _detected);
         OnParametersSet();
         StateHasChanged();
         if (_scenario is not null)

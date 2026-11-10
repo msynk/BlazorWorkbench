@@ -1,15 +1,12 @@
-@* The canvas toolbar above the preview: zoom and orientation, backgrounds, visual aids, forced pseudo-states and
+@* The canvas toolbar above the preview: zoom, backgrounds, visual aids, forced pseudo-states and
    accessibility simulations. Every change is reported as a new PreviewTools value; the shell applies it and keeps it in the URL. *@
 <div class="wb-canvas-bar" role="toolbar" aria-label="Canvas tools">
     <div class="wb-tool-group" role="group" aria-label="Zoom">
         <button type="button" class="wb-icon-button" title="Zoom out (Alt+-)" aria-label="Zoom out" disabled="@(Tools.Zoom <= PreviewTools.ZoomLevels[0])" @onclick="() => ZoomBy(-1)">−</button>
         <button type="button" class="wb-icon-button wb-zoom-value" title="Reset zoom (Alt+0)" aria-label="@($"Zoom {Percent(Tools.Zoom)}, reset to 100%")" @onclick="() => Set(Tools with { Zoom = 1 })">@Percent(Tools.Zoom)</button>
         <button type="button" class="wb-icon-button" title="Zoom in (Alt+=)" aria-label="Zoom in" disabled="@(Tools.Zoom >= PreviewTools.ZoomLevels[^1])" @onclick="() => ZoomBy(1)">+</button>
+        <button type="button" id="wb-zoom-fit" class="wb-icon-button" title="Zoom out until the whole viewport fits the canvas (Alt+9)" disabled="@(!CanFit)" @onclick="() => OnFit.InvokeAsync()">Fit</button>
     </div>
-    @if (CanRotate)
-    {
-        <button type="button" class="wb-icon-button @(Tools.Rotate ? "active" : "")" aria-pressed="@(Tools.Rotate ? "true" : "false")" title="Rotate the viewport (landscape)" @onclick="() => Set(Tools with { Rotate = !Tools.Rotate })">⟲ Rotate</button>
-    }
     <span class="wb-tool-separator" aria-hidden="true"></span>
     <label class="wb-field" title="Preview background">
         <span class="wb-visually-hidden">Background</span>
@@ -85,7 +82,10 @@
     /// <summary>Raised with <c>panel</c> or <c>focus</c> to change the shell layout.</summary>
     [Parameter] public EventCallback<string> OnLayout { get; set; }
 
-    [Parameter] public bool CanRotate { get; set; }
+    /// <summary>True for a fixed viewport, which can be zoomed to fit the canvas.</summary>
+    [Parameter] public bool CanFit { get; set; }
+
+    [Parameter] public EventCallback OnFit { get; set; }
     [Parameter] public bool PanelRight { get; set; }
     [Parameter] public bool FocusMode { get; set; }
 

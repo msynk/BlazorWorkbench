@@ -37,6 +37,8 @@ Validates every scenario without rendering it ([codes](diagnostics-codes.md)). E
 | `-f, --filter` | Scenario filter. |
 | `--a11y` | Run axe-core scans. |
 | `--visual` | Compare screenshots with baselines. |
+| `--responsive` | Resize every scenario through a sweep of widths and fail when the page scrolls sideways (WCAG 1.4.10 Reflow). See [testing](testing.md#responsive-check). |
+| `--widths <px…>` | Widths of the responsive sweep (implies `--responsive`). Default: 320 and both sides of every breakpoint. |
 | `--no-interactions` | Skip interaction tests. |
 | `--no-budgets` | Do not check performance budgets. Ready time and DOM updates are still reported. |
 | `--viewport <names…>`, `--theme <names…>` | Variant matrix. |
@@ -96,7 +98,8 @@ Starts the MCP server on stdio; see [MCP](mcp.md).
   "retries": 0,
   "filter": null,
   "visual": { "threshold": 0.1, "maxDiffPixelRatio": 0, "ignoreAntiAliasing": true },
-  "accessibility": { "failOn": "serious", "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] }
+  "accessibility": { "failOn": "serious", "tags": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] },
+  "responsive": { "enabled": false, "widths": [] }                     // true: every run checks reflow; widths: [] = 320 + breakpoint edges
 }
 ```
 

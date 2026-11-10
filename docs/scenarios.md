@@ -198,9 +198,14 @@ Locators are strict: an action fails when a locator matches more than one elemen
 s.Visual(v => v.Viewports("mobile", "laptop").Themes("light", "dark").Threshold(0.15).Ignore(".timestamp").FullPage())
  .Accessibility(a => a.DisableRule("color-contrast", "Brand palette approved by design review #123"))
  .Accessibility(a => a.Todo("Fix tracked in #456"))   // report violations without failing the run
+ .Responsive(r => r.Widths(320, 768).AllowOverflow(".orders-table"))   // see testing.md#responsive-check
  .Budget(readyWithin: TimeSpan.FromSeconds(1), interactionWithin: TimeSpan.FromSeconds(2), maxDomUpdates: 20)
  .SkipTests("Intentionally failing demo");
 ```
+
+`Responsive(...)` configures the responsive check of `workbench test --responsive`: the widths to check instead of the
+run's sweep (320 px and both sides of every breakpoint), elements that may scroll sideways because they need two
+dimensions (data tables, code, maps), or `Skip(reason)`.
 
 `Accessibility(a => a.Todo(reason))` keeps the scan but reports violations in a passed check with a `todo:` message, so a
 team can adopt accessibility checks one component at a time (Storybook's `todo` mode). `Skip(reason)` does not scan at all.

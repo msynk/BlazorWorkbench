@@ -122,20 +122,22 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         return Json(new { suggestions, code = ScenarioSkeletonGenerator.GenerateSet(component, suggestions), note = "Generated code is a starting point; run validate_scenarios after adding it." });
     }
 
-    [McpServerTool(Name = "run_tests"), Description("Runs scenario tests in a headless browser (render health, interactions; optionally accessibility and visual comparison) and returns a summary with failures. Never modifies baselines.")]
+    [McpServerTool(Name = "run_tests"), Description("Runs scenario tests in a headless browser (render health, interactions; optionally accessibility, visual comparison and a responsive sweep for horizontal overflow) and returns a summary with failures. Never modifies baselines.")]
     public async Task<string> RunTests(
         [Description("Scenario filter (glob on ids/titles, tag:name)")] string? filter = null,
         [Description("Run axe-core accessibility scans")] bool accessibility = false,
         [Description("Compare screenshots against approved baselines")] bool visual = false,
+        [Description("Resize each scenario through 320 px and every breakpoint edge, failing on horizontal scrolling")] bool responsive = false,
         CancellationToken ct = default)
     {
-        connection.Audit("run_tests", new { filter, accessibility, visual });
+        connection.Audit("run_tests", new { filter, accessibility, visual, responsive });
         var host = await connection.GetAsync(ct);
         // Same workbench.json settings as 'workbench test' (browser, timeout, retries, filter, anti-aliasing, axe tags).
         var options = settings.Context.CreateTestRunOptions(settings.OutputDirectory, settings.BaselineDirectory);
         options.Filter = filter ?? options.Filter;
         options.Accessibility = accessibility;
         options.Visual = visual;
+        options.Responsive |= responsive;
         var report = await new WorkbenchTestRunner(host, options).RunAsync(ct);
         return Summarize(report);
     }

@@ -36,6 +36,10 @@ public sealed class CatalogDto
     public IReadOnlyList<ComponentDto> Components { get; init; } = [];
     public IReadOnlyList<CatalogIssue> Issues { get; init; } = [];
     public IReadOnlyList<ViewportPreset> Viewports { get; init; } = [];
+
+    /// <summary>Named breakpoints declared by the host (<c>options.Breakpoints</c>).</summary>
+    public IReadOnlyList<BreakpointPreset> Breakpoints { get; init; } = [];
+
     public IReadOnlyList<ThemeDto> Themes { get; init; } = [];
     public IReadOnlyList<string> Cultures { get; init; } = [];
 
@@ -116,6 +120,7 @@ public sealed class ScenarioDto
     public IReadOnlyList<InteractionTest> Interactions { get; init; } = [];
     public VisualOptions Visual { get; init; } = new();
     public AccessibilityOptions Accessibility { get; init; } = new();
+    public ResponsiveOptions Responsive { get; init; } = new();
     public PerformanceBudgetDto Budget { get; init; } = new();
     public string? SkipReason { get; init; }
     public string? Notes { get; init; }
@@ -188,7 +193,8 @@ public static class CatalogMapper
         Components = catalog.Components.Select(c => ToDto(c, sourcePathMapper)).ToArray(),
         Issues = catalog.Issues,
         Viewports = catalog.Options.Viewports.ToArray(),
-        Themes = catalog.Options.Themes.Select(t => new ThemeDto(t.Name, t.ColorScheme, t.CssClass)).ToArray(),
+        Breakpoints = catalog.Options.Breakpoints.ToArray(),
+        Themes =catalog.Options.Themes.Select(t => new ThemeDto(t.Name, t.ColorScheme, t.CssClass)).ToArray(),
         Cultures = catalog.Options.Cultures.ToArray(),
         Pages = catalog.Options.Pages.Select(p => new PageDto(p.Id, p.Title, p.Markdown)).ToArray(),
         Users = catalog.Options.Users.Select(u => u.Name).ToArray(),
@@ -271,6 +277,7 @@ public static class CatalogMapper
             Interactions = s.Interactions,
             Visual = s.Visual,
             Accessibility = s.Accessibility,
+            Responsive = s.Responsive,
             Budget = new PerformanceBudgetDto
             {
                 ReadyWithinMs = s.Budget.ReadyWithin?.TotalMilliseconds,

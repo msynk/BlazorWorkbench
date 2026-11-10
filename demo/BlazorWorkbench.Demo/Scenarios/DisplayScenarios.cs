@@ -117,6 +117,22 @@ public sealed class CardScenarios : ScenarioSet<Card>
             .Fragment(c => c.Footer, IconActions(labeled: false), "Edit + Delete icon buttons without aria-label")
             .Description("Deliberate misuse: the icon-only buttons have no accessible name. Open Accessibility and press Run scan.")
             .Accessibility(a => a.Skip("Deliberately inaccessible example of misuse; run the scan in the Accessibility panel to see the findings.")));
+
+        set.Add("Don't: an unbreakable link", s => s
+            .Key("dont-unbreakable-link")
+            .Tags("dont")
+            .Viewport("mobile")
+            .Parameter(c => c.Title, "Trail conditions")
+            .ChildContent("Full report: https://trailhead.example/LakeLoopTrailConditionsAfterTheStormOfMarch20th")
+            .Description("Deliberate misuse: a long URL cannot wrap, so on a phone the page scrolls sideways. The viewport bar flags it; click the flag to see the culprit.")
+            .Notes("""
+                The card is 420 px wide at most, but the URL is wider than a phone. Text cannot break inside a word unless the
+                stylesheet allows it (`overflow-wrap: anywhere`), so the card's content sticks out and the whole page scrolls
+                horizontally, which WCAG 1.4.10 (Reflow) forbids at 320 px. Drag the edge of the preview to find the width where
+                it starts. `workbench test --responsive` reports this; the scenario opts out with `.Responsive(r => r.Skip(...))`
+                so the deliberate mistake does not fail CI.
+                """)
+            .Responsive(r => r.Skip("Deliberate example of a reflow failure; resize the preview to see it.")));
     }
 }
 

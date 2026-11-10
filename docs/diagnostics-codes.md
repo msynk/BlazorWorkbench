@@ -42,6 +42,7 @@ Codes are stable. Errors fail `workbench validate` and make the scenario's rende
 | WB1023 | Error | A design reference is not an `http(s)` URL or a relative path (`javascript:`, `data:` and protocol-relative URLs are rejected). |
 | WB1024 | Error | `ForceState(...)` was given an empty selector; pass `null` to force the state on every element. |
 | WB1025 | Warning | A documentation page or a component's documentation embeds `{{scenario:...}}`, `{{scenarios:...}}` or `{{parameters:...}}` with an id that does not exist, or two pages share an id. |
+| WB1026 | Error | A responsive width is outside 120–3840 px, or `AllowOverflow(...)` was given an empty selector. |
 
 ## Runtime diagnostics
 

@@ -532,6 +532,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
                 storage = Scenario.Environment.Storage.Select(e => new { area = e.Area.ToString().ToLowerInvariant(), key = e.Key, value = e.Value }),
                 isolateStorage = options.IsolateBrowserStorage,
                 gridSize = options.GridSize,
+                overflowAllow = Scenario.Responsive.AllowOverflow,
             });
             _bridgeAttached = true;
 

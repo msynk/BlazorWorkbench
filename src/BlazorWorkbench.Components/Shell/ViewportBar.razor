@@ -1,0 +1,117 @@
+@* The device toolbar above the preview, like the device mode of browser developer tools: the viewport preset, its exact
+   size, rotation and touch input, the breakpoints of the preview stylesheets, and whether the page scrolls sideways. *@
+<div class="wb-viewport-bar" role="toolbar" aria-label="Viewport">
+    <label class="wb-field" title="Responsive fills the canvas; drag the edges of the preview to resize it">
+        <span class="wb-visually-hidden">Viewport</span>
+        <select id="wb-viewport" @onchange="OnPreset">
+            <option value="" selected="@(ViewportName == "")">Responsive</option>
+            @foreach (var v in Options.Viewports)
+            {
+                <option value="@v.Name" selected="@(string.Equals(ViewportName, v.Name, StringComparison.OrdinalIgnoreCase))">@v.Name (@v.Width×@v.Height)</option>
+            }
+            <option value="custom" selected="@(ViewportName == "custom")">Custom</option>
+        </select>
+    </label>
+    <span class="wb-field wb-custom-size" title="@(IsResponsive ? "The current size of the canvas; type a size to fix it" : "Viewport size in CSS pixels")">
+        <label><span class="wb-visually-hidden">Width</span><input id="wb-viewport-width" type="number" inputmode="numeric" min="@BreakpointPreset.MinViewportWidth" max="@BreakpointPreset.MaxViewportSize" value="@Width" @onchange="OnWidth" /></label>
+        <span aria-hidden="true">×</span>
+        <label><span class="wb-visually-hidden">Height</span><input id="wb-viewport-height" type="number" inputmode="numeric" min="@BreakpointPreset.MinViewportWidth" max="@BreakpointPreset.MaxViewportSize" value="@Height" @onchange="OnHeight" /></label>
+    </span>
+    <button type="button" id="wb-rotate" class="wb-icon-button @(Rotate ? "active" : "")" aria-pressed="@(Rotate ? "true" : "false")" disabled="@IsResponsive"
+            title="Rotate: swap the width and the height" @onclick="() => OnRotate.InvokeAsync()">⟲ Rotate</button>
+    <button type="button" id="wb-touch" class="wb-icon-button @(Touch ? "active" : "")" aria-pressed="@(Touch ? "true" : "false")"
+            title="Touch screen: (hover: none) and (pointer: coarse) match, as on a phone. On by default for mobile presets." @onclick="() => OnTouch.InvokeAsync(!Touch)">Touch</button>
+    @if (Canvas)
+    {
+        <span class="wb-tool-separator" aria-hidden="true"></span>
+        <details class="wb-menu" id="wb-breakpoints">
+            <summary class="wb-icon-button" title="Breakpoints of the preview stylesheets and options.Breakpoints">Breakpoints@(Breakpoints.Count > 0 ? $" ({Breakpoints.Count})" : "")</summary>
+            <div class="wb-menu-body wb-breakpoint-menu" role="group" aria-label="Breakpoints">
+                @if (Breakpoints.Count == 0)
+                {
+                    <p class="wb-muted wb-small">No width media queries were found in the preview stylesheets. Name your design system's breakpoints with <code>options.Breakpoints.Add(new("md", 768))</code>.</p>
+                }
+                else
+                {
+                    <table class="wb-table">
+                        <thead><tr><th scope="col">Breakpoint</th><th scope="col">Last width before, first width at</th></tr></thead>
+                        <tbody>
+                            @foreach (var mark in Breakpoints)
+                            {
+                                <tr>
+                                    <th scope="row" title="@mark.Source"><span class="wb-param-name">@mark.Label</span>@if (!mark.Detected) { <span class="wb-muted wb-small"> declared</span> }</th>
+                                    <td>
+                                        <span class="wb-inline-actions">
+                                            <button type="button" class="wb-button wb-button-small" aria-label="@($"Set the width to {mark.Width - 1} px")" @onclick="() => OnSetWidth.InvokeAsync(mark.Width - 1)">@(mark.Width - 1)</button>
+                                            <button type="button" class="wb-button wb-button-small" aria-label="@($"Set the width to {mark.Width} px")" @onclick="() => OnSetWidth.InvokeAsync(mark.Width)">@mark.Width</button>
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <p class="wb-muted wb-small">Read from the media queries of the preview stylesheets (cross-origin stylesheets cannot be read). Layouts most often break on either side of a breakpoint. <button type="button" class="wb-link-button" @onclick="() => OnSetWidth.InvokeAsync(BreakpointPreset.ReflowWidth)">320 px</button> is the WCAG reflow width.</p>
+                }
+            </div>
+        </details>
+        @if (Range is { } range)
+        {
+            <span class="wb-muted wb-range" id="wb-breakpoint-range" title="The breakpoint range of the current width">@range</span>
+        }
+    }
+    <span class="wb-toolbar-spacer"></span>
+    @if (Canvas && Layout is { } layout && layout.Overflow >= 1)
+    {
+        <button type="button" id="wb-overflow" class="wb-chip @(layout.Overflows ? "wb-chip-failed" : "")" title="@OverflowTitle(layout)" @onclick="() => OnHighlightOverflow.InvokeAsync()">
+            ↔ @(layout.Overflows ? $"Scrolls sideways: {Px(layout.Overflow)} px too wide" : "Allowed overflow")
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public WorkbenchOptions Options { get; set; } = default!;
+
+    /// <summary>Empty for responsive, a preset name, or <c>custom</c>.</summary>
+    [Parameter] public string ViewportName { get; set; } = "";
+
+    /// <summary>The viewport size shown in the size fields: the fixed size, or the measured size of a responsive preview.</summary>
+    [Parameter] public int? Width { get; set; }
+
+    [Parameter] public int? Height { get; set; }
+    [Parameter] public bool Rotate { get; set; }
+    [Parameter] public bool Touch { get; set; }
+
+    /// <summary>True on the canvas; the Compare view shows only the size controls.</summary>
+    [Parameter] public bool Canvas { get; set; } = true;
+
+    [Parameter] public IReadOnlyList<BreakpointMark> Breakpoints { get; set; } = [];
+    [Parameter] public LayoutReport? Layout { get; set; }
+
+    [Parameter] public EventCallback<string> OnViewport { get; set; }
+    [Parameter] public EventCallback<(int Width, int Height)> OnSize { get; set; }
+    [Parameter] public EventCallback<int> OnSetWidth { get; set; }
+    [Parameter] public EventCallback OnRotate { get; set; }
+    [Parameter] public EventCallback<bool> OnTouch { get; set; }
+    [Parameter] public EventCallback OnHighlightOverflow { get; set; }
+
+    private bool IsResponsive => ViewportName.Length == 0;
+
+    private string? Range => Width is { } w ? ResponsiveLayout.Describe(Breakpoints, w) : null;
+
+    private static string Px(double value) => value.ToString("0", CultureInfo.InvariantCulture);
+
+    private static string OverflowTitle(LayoutReport layout)
+    {
+        var lines = new List<string> { $"The content is {Px(layout.ContentWidth)} px wide, so the page scrolls horizontally (WCAG 1.4.10 Reflow). Click to highlight:" };
+        lines.AddRange((layout.Offenders ?? []).Select(o => $"{o.Selector} (+{Px(o.By)} px){(o.Allowed ? ", allowed" : "")}"));
+        return string.Join('\n', lines);
+    }
+
+    private Task OnPreset(ChangeEventArgs e) => OnViewport.InvokeAsync(e.Value?.ToString() ?? "");
+
+    private Task OnWidth(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var w) && Height is { } h ? OnSize.InvokeAsync((w, h)) : Task.CompletedTask;
+
+    private Task OnHeight(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var h) && Width is { } w ? OnSize.InvokeAsync((w, h)) : Task.CompletedTask;
+}

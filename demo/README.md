@@ -77,7 +77,7 @@ dotnet run --project demo/BlazorWorkbench.Demo.Maui -f net10.0-windows10.0.19041
 
 ## One definition, every test
 
-The 181 scenarios are also the test suite: render checks, 80 interaction tests, axe-core scans and visual comparisons
+The 182 scenarios are also the test suite: render checks, 80 interaction tests, axe-core scans, visual comparisons and a reflow sweep
 in Chromium, in WebAssembly and in the MAUI WebView, plus a bUnit smoke test per scenario. From the repository root:
 
 ```bash
@@ -105,6 +105,8 @@ baseline, current and difference images.
 | Cascading values (`.Cascade(...)`, validated by `WB1004`) | [PriceTagScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs) |
 | Culture, calendars, currencies and right-to-left | Price tag, checkout, revenue chart (`fa-IR`), app header (`ar-SA`), `DateLabel`, `Toolbar` |
 | Viewports, mobile emulation, themes, a custom theme | App header, dashboard *Phone* and *Evening, dark theme*, [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
+| Device mode: resizing, breakpoints from `demo.css`, touch emulation, sideways scrolling | App header (menu below 721 px), dashboard (grid stacks below 901 px), card *Don't: an unbreakable link*, buttons 44 px tall on touch screens |
+| Responsive check: `AllowOverflow` for data tables, `Skip` for a deliberate failure | [PeopleTableScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs), [SalesDashboardScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs), [CardScenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |
 | Seeded data and fixtures | Revenue chart (`.Seed(7)`), [PeopleTableScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs), checkout cart fixtures |
 | Interaction tests: forms, keyboard, focus, drag and drop, upload, checkpoints | Onboarding wizard, checkout, `SortableList`, `AvatarUpload`, `Dialog`, `Counter` |
 | Accessibility: a do/don't pair, a scan skipped with a reason | [CardScenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |

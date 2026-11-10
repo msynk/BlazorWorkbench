@@ -14,6 +14,7 @@ Scenarios can simulate the conditions a component depends on, without changing p
 | `IJSRuntime` | Real | The browser runs your component's JavaScript. |
 | Culture | Simulated per session | Applied to every circuit activity (events, rendering, JS interop callbacks). |
 | Theme, direction, viewport | Simulated | Attributes on the preview document and iframe size. CLI runs also emulate `prefers-color-scheme`. |
+| Touch input | Simulated | Media queries on `hover` and `pointer` (and `matchMedia`) answer like a phone for mobile presets or the **Touch** switch. CLI runs emulate real touch input. |
 | .NET MAUI Essentials (`IConnectivity`, `IGeolocation`, `IShare`, ...) | Real in a MAUI app, or **simulated** with `.Device(...)` | `BlazorWorkbench.Maui.Essentials`; works in every hosting model and in bUnit. See [device simulation](#device-simulation-net-maui-essentials). |
 
 The **Environment** panel lists the source of each service for the current session (*Scenario override*, *Simulated*, *Host registration*).
@@ -164,6 +165,23 @@ options.Themes.Add(new ThemeDefinition("dark", ColorScheme.Dark, CssClass: "them
 A theme sets `data-theme` and `color-scheme` on the preview `<html>`, adds its optional class and loads its stylesheets. Switching themes in the UI does not reload the preview. Unless the scenario, the URL or the toolbar picks a theme, the preview uses the theme matching the Workbench theme (the first theme with the same color scheme), and the Workbench theme follows the operating system until you toggle it. Media-query based dark mode (`prefers-color-scheme`) is emulated only in automated runs; browsers cannot emulate it inside an iframe.
 
 The viewport presets are `mobile` (375×667), `tablet` (768×1024), `laptop` (1280×800) and `desktop` (1440×900). You can add your own with `options.Viewports.Add(new ViewportPreset("wide", 1920, 1080))`. In automated runs, presets with `IsMobile` (such as `mobile`) emulate a phone: a mobile viewport and touch input, so `(hover: none)`, `(pointer: coarse)` and touch events apply. Firefox gets touch input only, because Playwright cannot emulate a mobile viewport there.
+
+In the Workbench, mobile presets emulate touch too: the preview rewrites the media queries of its stylesheets that test
+`hover`, `any-hover`, `pointer` or `any-pointer` to what a phone answers, and `matchMedia()` answers the same way, so the
+canvas shows what automated runs screenshot. The **Touch** switch in the viewport bar turns it on or off for any size
+(`?touch=1`, `?touch=0`). Touch *events* and `navigator.maxTouchPoints` are not emulated in the canvas, and cross-origin
+stylesheets cannot be rewritten.
+
+Breakpoints are read from the media queries of the preview's stylesheets. Name your design system's breakpoints to see
+the names on the canvas ruler and to add them to responsive sweeps even where no stylesheet uses them:
+
+```csharp
+options.Breakpoints.Add(new BreakpointPreset("sm", 640));
+options.Breakpoints.Add(new BreakpointPreset("md", 768));   // the first width at which "md" applies
+```
+
+See [device mode](tools.md#device-mode-and-responsive-design) for resizing the preview and
+[the responsive check](testing.md#responsive-check) for testing every scenario across widths.
 
 ## Cleanup and isolation
 

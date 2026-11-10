@@ -1,5 +1,6 @@
-@* Shows the current scenario several times side by side, one frame per value of an axis: every theme, viewport, culture,
-   direction, user, forced state, vision simulation or network profile. Each frame is an independent preview session. *@
+@* Shows the current scenario several times side by side, one frame per value of an axis: every theme, viewport, breakpoint
+   edge, culture, direction, user, forced state, vision simulation or network profile. Each frame is an independent preview
+   session. *@
 <div class="wb-compare">
     <div class="wb-inspector-actions">
         <label class="wb-field"><span>Compare</span>
@@ -36,12 +37,16 @@
             </figure>
         }
     </div>
+    @if (_axis == "width" && Breakpoints.Count == 0)
+    {
+        <p class="wb-muted wb-small" role="status">Looking for breakpoints in the preview stylesheets… When none are found, declare your design system's breakpoints with <code>options.Breakpoints</code>.</p>
+    }
     <p class="wb-muted wb-small">Every frame is a separate preview session with the current controls. Up to @MaxFrames frames are shown.</p>
 </div>
 
 @code {
     private const int MaxFrames = 12;
-    private static readonly string[] Axes = ["theme", "viewport", "culture", "direction", "user", "state", "vision", "network"];
+    private static readonly string[] Axes = ["theme", "viewport", "width", "culture", "direction", "user", "state", "vision", "network"];
     private string _axis = "theme";
     private readonly HashSet<string> _hidden = new(StringComparer.Ordinal);
     private double _zoom = 0.5;
@@ -55,6 +60,9 @@
     /// <summary>The viewport of the canvas, used for frames that do not compare viewports.</summary>
     [Parameter] public ViewportPreset? Viewport { get; set; }
 
+    /// <summary>Breakpoints of the preview stylesheets and options; the <c>width</c> axis shows both edges of each.</summary>
+    [Parameter] public IReadOnlyList<BreakpointMark> Breakpoints { get; set; } = [];
+
     /// <summary>The initial axis (for deep links: <c>?compare=viewport</c>).</summary>
     [Parameter] public string? InitialAxis { get; set; }
 
@@ -62,13 +70,16 @@
     {
         if (InitialAxis is { } axis && Axes.Contains(axis))
             _axis = axis;
-        _zoom = _axis == "viewport" ? 0.25 : 0.5;
+        _zoom = WideFrames ? 0.25 : 0.5;
     }
+
+    private bool WideFrames => _axis is "viewport" or "width";
 
     private static string Label(string axis) => axis switch
     {
         "theme" => "Themes",
         "viewport" => "Viewports",
+        "width" => "Breakpoints",
         "culture" => "Cultures",
         "direction" => "Directions",
         "user" => "Users",
@@ -81,6 +92,8 @@
     {
         "theme" => Options.Themes.Select(t => (t.Name, t.Name)),
         "viewport" => Options.Viewports.Select(v => (v.Name, $"{v.Name} ({v.Width}×{v.Height})")),
+        // Until breakpoints are known, one frame at the canvas size loads the stylesheets and reports them.
+        "width" => Breakpoints.Count > 0 ? ResponsiveLayout.CompareWidths(Breakpoints) : [("", "Current size")],
         "culture" => Options.Cultures.Select(c => (c, c)),
         "direction" => [("ltr", "Left to right"), ("rtl", "Right to left")],
         "user" => [("", "Scenario user"), ("anonymous", "Signed out"), .. Options.Users.Select(u => (u.Id, u.Name))],
@@ -93,6 +106,8 @@
 
     private (int Width, int Height) FrameSize(string value)
     {
+        if (_axis == "width" && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var width))
+            return (width, Viewport?.Height ?? 800);
         var viewport = _axis == "viewport" ? Options.FindViewport(value) : Viewport;
         return viewport is null ? (1024, 640) : (viewport.Width, viewport.Height);
     }
@@ -104,7 +119,7 @@
     {
         _axis = e.Value?.ToString() ?? "theme";
         _hidden.Clear();
-        _zoom = _axis == "viewport" ? 0.25 : 0.5;
+        _zoom = WideFrames ? 0.25 : 0.5;
     }
 
     private void Flip(string key)

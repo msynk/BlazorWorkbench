@@ -11,6 +11,9 @@ public enum CheckKind
     Accessibility,
     Visual,
     Performance,
+
+    /// <summary>The page does not scroll horizontally at any width of the responsive sweep (WCAG 1.4.10 Reflow).</summary>
+    Responsive,
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<CheckStatus>))]
@@ -98,6 +101,11 @@ public sealed class RunSettings
     public bool Accessibility { get; init; }
     public bool Visual { get; init; }
     public bool Performance { get; init; } = true;
+    public bool Responsive { get; init; }
+
+    /// <summary>Widths of the responsive sweep set for the run; empty uses 320 px and the edges of every breakpoint.</summary>
+    public IReadOnlyList<int> ResponsiveWidths { get; init; } = [];
+
     public IReadOnlyList<string> Viewports { get; init; } = [];
     public IReadOnlyList<string> Themes { get; init; } = [];
     public int Workers { get; init; } = 1;

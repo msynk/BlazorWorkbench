@@ -22,6 +22,8 @@ workbench test --a11y --fail-on moderate
 - Rules run by WCAG tag. The default set is `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa, best-practice`; change it with `accessibility.tags` in `workbench.json`.
 - A violation fails the check when its impact is at or above `failOn` (`minor` < `moderate` < `serious` < `critical`, default `serious`). Lower-impact violations are reported but do not fail the check. *Needs review* items never fail it.
 - Findings in `report.json` include the rule id, impact, help URL, WCAG tags and target selectors. Element HTML is truncated and redacted.
+- axe-core does not check reflow. `workbench test --responsive` does: it fails a scenario whose page scrolls sideways at
+  320 px (WCAG 1.4.10) or on either side of a breakpoint. See [the responsive check](testing.md#responsive-check).
 
 ## Adopting checks gradually
 

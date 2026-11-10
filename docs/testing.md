@@ -9,6 +9,7 @@ Workbench does not add a new test framework. It reuses [Playwright](https://play
 | **interaction** | `--no-interactions` not set | A step fails. Each test starts from a fresh activation. |
 | **accessibility** | `--a11y` (or `workbench a11y`) | axe-core reports violations at or above `--fail-on` (default `serious`). |
 | **visual** | `--visual` | Screenshots differ from approved baselines, or the baseline is missing. |
+| **responsive** | `--responsive` | The page scrolls sideways at a width of the sweep: 320 px and both sides of every breakpoint (WCAG 1.4.10 Reflow). |
 
 ## Running tests
 
@@ -17,6 +18,7 @@ workbench test                                   # render + interactions for eve
 workbench test --changed-since origin/main       # only scenarios affected by changed files
 workbench test -f "inputs-*,tag:forms"           # filter by id/title glob or tag
 workbench test --a11y --visual -j 4 --retries 1  # parallel workers; retries mark flaky passes
+workbench test --responsive                      # no sideways scrolling at 320 px and around every breakpoint
 workbench test --only-failed                     # rerun failures from the last report
 workbench test --url http://localhost:5000       # use a running host instead of starting one
 ```
@@ -99,6 +101,9 @@ await page.WaitForFunctionAsync("() => window.__workbench?.ready");
 | `runInteraction(test)` | The in-browser runner (best effort). |
 | `applyTools(tools)`, `highlight(selector)` | Canvas tools (grid, outline, forced states, ...) and element highlighting, as the shell uses them. |
 | `html()`, `storage()`, `tokens()` | The formatted markup of the preview root, the preview's storage, and the CSS custom properties of the stylesheets. |
+| `breakpoints()` | `[{ width, min, max }]`: every width at which a media query of the stylesheets starts (`min`) or stops (`max`) applying, given as the first width of the new layout. |
+| `layout({ allow })` | `{ width, height, contentWidth, overflow, allowedOnly, offenders }`: the viewport size and how far the page is wider than it, with the outermost elements that stick out. `allow` lists selectors that may overflow. |
+| `touch` | True while touch input is emulated (`?touch=1`). |
 
 This surface is part of the public contract and follows the versioning policy in [compatibility](compatibility.md).
 
@@ -108,6 +113,29 @@ Automated runs emulate `prefers-reduced-motion: reduce` for every scenario. A sc
 (Windows high contrast) and the `print` media type with `.Media(m => m.ForcedColors().Print())`; its screenshots then show
 that rendering. A scenario with `.Accessibility(a => a.Todo("reason"))` is scanned, and its violations are listed in the
 report with a `todo:` message, but they do not fail the run.
+
+### Responsive check
+
+`workbench test --responsive` resizes every scenario's page through a sweep of widths and measures the layout at each
+one. A width fails when the page is wider than the viewport, so it scrolls sideways; WCAG 1.4.10 (Reflow) requires that
+content fits 320 CSS pixels without it. The check names the outermost elements that stick out, or the innermost block
+whose text does (a long word or URL).
+
+The sweep is 320 px plus both sides of every breakpoint: the last width before it and the first width at it. Layouts
+break most often right there, for example a two-column grid that only fits from 1000 px while its media query switches
+at 901 px. The breakpoints come from `options.Breakpoints` and from the media queries of the preview's stylesheets, which
+the runner reads from the page; `(min-width: 768px)`, `(max-width: 767.98px)` and `(width < 48em)` all mean 768. Change
+the sweep for a run with `--widths 320 768 1280` or `responsive.widths` in `workbench.json`, and per scenario:
+
+```csharp
+s.Responsive(r => r.Widths(320, 1024))                // these widths instead of the sweep
+s.Responsive(r => r.AllowOverflow(".orders-table"))   // two-dimensional content (tables, code, maps) may scroll sideways
+s.Responsive(r => r.Skip("A fixed-size poster."))     // no responsive check
+```
+
+The page is resized in place, without reloading, so the component keeps its state and reacts as it would to a resized
+window. The sweep runs after the other checks of the primary variant, at its height, and keeps its emulation (a mobile
+preset stays a touch device). Each width is a step of the check in the reports.
 
 ### Results in the Workbench UI
 

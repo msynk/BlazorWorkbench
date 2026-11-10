@@ -101,13 +101,57 @@ nav > .wb-tree > li:first-child > details > .wb-node-group { margin-top: 0; }
 .wb-issue.wb-sev-error { border-left-color: var(--wb-error); }
 
 .wb-frame-area { flex: 1; overflow: auto; border: 1px solid var(--wb-border); border-radius: 6px; background:
-  repeating-conic-gradient(var(--wb-bg) 0% 25%, var(--wb-surface) 0% 50%) 50% / 16px 16px; display: flex; align-items: flex-start; justify-content: center; padding: .5rem; min-height: 200px; }
+  repeating-conic-gradient(var(--wb-bg) 0% 25%, var(--wb-surface) 0% 50%) 50% / 16px 16px; padding: .5rem 0 0; min-height: 200px; }
 /* No border: a preset of 375 px must give the preview a 375 px wide viewport. The outline is a shadow instead. */
 .wb-frame { border: 0; background: var(--wb-surface); box-shadow: 0 0 0 1px var(--wb-border), 0 1px 4px rgba(0,0,0,.08); }
 .wb-frame-responsive { padding: 0; }
 .wb-frame-responsive .wb-frame { width: 100%; height: 100%; min-height: 240px; border: 0; }
 
-.wb-panel { flex: 1 1 40%; min-height: 220px; display: flex; flex-direction: column; border-top: 1px solid var(--wb-border); background: var(--wb-surface); }
+/* Device mode: the ruler and the preview share a column at least as wide as the canvas, so both are centered on the same
+   axis, also when the preview is wider than the canvas. The preview has a gutter on each side for the resize handles. */
+.wb-device-stack { --wb-handle: 14px; min-width: 100%; width: max-content; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wb-device { position: relative; flex: none; padding: 0 var(--wb-handle) var(--wb-handle); }
+.wb-frame-responsive .wb-device-stack { height: 100%; width: 100%; }
+.wb-frame-responsive .wb-device { flex: 1; align-self: stretch; display: flex; min-height: 240px; }
+.wb-device.wb-device-resizing { flex: none; align-self: center; display: block; min-height: 0; }
+.wb-device.wb-device-resizing .wb-zoom, .wb-device.wb-device-resizing .wb-frame { flex: none; min-height: 0; }
+.wb-resize { position: absolute; z-index: 2; touch-action: none; display: flex; align-items: center; justify-content: center; border-radius: 4px; }
+.wb-resize::after { content: ""; border-radius: 2px; background: var(--wb-muted); opacity: .55; }
+.wb-resize:hover::after, .wb-resize:focus-visible::after, .wb-device-resizing .wb-resize::after { background: var(--wb-accent); opacity: 1; }
+.wb-resize:hover, .wb-resize:focus-visible { background: var(--wb-accent-soft); }
+.wb-resize-e { top: 0; bottom: var(--wb-handle); right: 0; width: var(--wb-handle); cursor: ew-resize; }
+.wb-resize-e::after { width: 4px; height: 32px; max-height: 60%; }
+.wb-resize-s { left: var(--wb-handle); right: var(--wb-handle); bottom: 0; height: var(--wb-handle); cursor: ns-resize; }
+.wb-resize-s::after { height: 4px; width: 32px; max-width: 60%; }
+.wb-resize-se { right: 0; bottom: 0; width: var(--wb-handle); height: var(--wb-handle); cursor: nwse-resize; }
+.wb-resize-se::after { width: 7px; height: 7px; background: none; border-right: 2px solid var(--wb-muted); border-bottom: 2px solid var(--wb-muted); border-radius: 0 0 2px 0; }
+html.wb-resizing, html.wb-resizing * { user-select: none; }
+html.wb-resizing iframe { pointer-events: none; }
+.wb-size-label { position: fixed; z-index: 100; pointer-events: none; font: 600 12px/1.6 system-ui, sans-serif; font-variant-numeric: tabular-nums; padding: 0 .45rem;
+  border-radius: 4px; background: #1d1d22; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.25); white-space: nowrap; }
+
+/* Breakpoint ruler: nested bands centered on the preview, each as wide as the viewport at its breakpoint. */
+.wb-ruler { position: relative; align-self: stretch; height: 18px; flex: none; overflow: hidden; }
+.wb-ruler-band { position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); padding: 0; margin: 0; font: 600 10.5px/18px system-ui, sans-serif;
+  border: 1px solid color-mix(in srgb, var(--wb-accent) 45%, var(--wb-border)); border-radius: 3px; background: color-mix(in srgb, var(--wb-accent) 10%, var(--wb-surface));
+  color: var(--wb-muted); cursor: pointer; overflow: hidden; }
+.wb-ruler-band > span { position: absolute; right: 5px; top: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wb-ruler-band:hover { background: color-mix(in srgb, var(--wb-accent) 22%, var(--wb-surface)); color: var(--wb-text); }
+.wb-ruler-band.wb-ruler-in { background: color-mix(in srgb, var(--wb-accent) 30%, var(--wb-surface)); color: var(--wb-text); }
+.wb-ruler-band.wb-ruler-at { border-color: var(--wb-accent); }
+.wb-ruler-presets .wb-ruler-band { border-color: var(--wb-border); background: var(--wb-surface); }
+.wb-ruler-presets .wb-ruler-band.wb-ruler-in { background: var(--wb-code); }
+
+/* Viewport bar */
+.wb-stage > .wb-viewport-bar { flex-shrink: 0; }
+.wb-viewport-bar { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; font-size: 12.5px; }
+.wb-range { font-variant-numeric: tabular-nums; }
+.wb-breakpoint-menu { min-width: 20rem; }
+.wb-breakpoint-menu .wb-table th, .wb-breakpoint-menu .wb-table td { padding: .2rem .4rem; }
+.wb-link-button { font: inherit; border: 0; padding: 0; background: none; color: var(--wb-accent); text-decoration: underline; cursor: pointer; }
+
+/* Above the stage: a tall scenario header must not push the preview over the tabs. */
+.wb-panel { flex: 1 1 40%; min-height: 220px; display: flex; flex-direction: column; border-top: 1px solid var(--wb-border); background: var(--wb-surface); position: relative; z-index: 1; }
 .wb-tabs { display: flex; gap: .1rem; padding: 0 .5rem; border-bottom: 1px solid var(--wb-border); overflow-x: auto; flex-shrink: 0; }
 .wb-tab { font: inherit; border: 0; background: none; color: var(--wb-muted); padding: .5rem .7rem; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
 .wb-tab.active { color: var(--wb-text); border-bottom-color: var(--wb-accent); font-weight: 600; }
@@ -232,7 +276,7 @@ button.wb-fact:hover, a.wb-fact:hover { border-color: var(--wb-accent); backgrou
 
 /* Zoom: the frame is scaled inside a box of the scaled size. */
 .wb-zoom { position: relative; flex: none; }
-.wb-zoom-fill { flex: 1; width: 100%; height: 100%; min-height: 240px; }
+.wb-zoom-fill { flex: 1; width: 100%; min-height: 240px; }
 .wb-zoom-fill .wb-frame { width: 100%; height: 100%; min-height: 240px; border: 0; display: block; }
 .wb-zoom .wb-frame { display: block; }
 

@@ -60,6 +60,8 @@ public sealed class CliContext
         VisualThreshold = Config.Visual.Threshold,
         MaxDiffPixelRatio = Config.Visual.MaxDiffPixelRatio,
         IgnoreAntiAliasing = Config.Visual.IgnoreAntiAliasing,
+        Responsive = Config.Responsive.Enabled,
+        ResponsiveWidths = Config.Responsive.Widths,
         ReadyTimeout = TimeSpan.FromSeconds(Config.TimeoutSeconds),
     };
 

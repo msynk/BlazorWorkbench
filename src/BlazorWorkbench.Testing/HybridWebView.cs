@@ -118,6 +118,16 @@ internal sealed class HybridWebView
 
     public void Release() => _lock.Release();
 
+    /// <summary>Changes the emulated viewport size of the acquired page, keeping the variant's scale factor and mobile mode.</summary>
+    public Task ResizeAsync(ViewportPreset viewport, int width, int height) =>
+        SendAsync("Emulation.setDeviceMetricsOverride", new()
+        {
+            ["width"] = width,
+            ["height"] = height,
+            ["deviceScaleFactor"] = viewport.DeviceScaleFactor,
+            ["mobile"] = viewport.IsMobile,
+        });
+
     private async Task SendAsync(string method, Dictionary<string, object> args)
     {
         try

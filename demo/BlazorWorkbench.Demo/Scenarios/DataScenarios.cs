@@ -40,7 +40,10 @@ public sealed class PeopleTableScenarios : ScenarioSet<DataTable<Person>>
         set.Setup(s => s
             .Fragment(t => t.HeaderTemplate, Header, "Name/Email/Age/Country headers")
             .Template(t => t.RowTemplate, Row, "Person row")
-            .Parameter(t => t.Caption, "Team members"));
+            .Parameter(t => t.Caption, "Team members")
+            // A data table is two-dimensional content, which WCAG 1.4.10 lets scroll sideways on narrow screens; the rest of
+            // the page must still reflow. `workbench test --responsive` checks that at 320 px and around every breakpoint.
+            .Responsive(r => r.AllowOverflow(".table")));
 
         set.Add("Few rows", s => s
             .Fixture(t => t.Items, "Three people")

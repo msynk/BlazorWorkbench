@@ -7,9 +7,10 @@ What sets it apart from Storybook-style galleries:
 - **Reproducible scenarios.** Scenarios are strongly typed C# definitions. Each one has a stable id, a deep link, seeded data and a fixed clock.
 - **Environment simulation.** Each scenario can override services, use a fake HTTP backend (latency, failures, timeouts, offline), simulate users and roles, and set culture, RTL direction, theme and viewport. The overrides never touch production registrations.
 - **Deterministic async.** *Gates* hold requests or fake services in a loading state until a developer or a test releases them. Readiness is based on tracked activity and DOM quiescence, not on sleeps.
-- **Integrated testing.** One scenario serves as an interactive preview, a bUnit render test, a Playwright interaction test, an axe-core accessibility scan and a visual regression check.
+- **Integrated testing.** One scenario serves as an interactive preview, a bUnit render test, a Playwright interaction test, an axe-core accessibility scan, a reflow sweep across breakpoints and a visual regression check.
 - **Actionable diagnostics.** Exceptions, console errors, failed requests, intercepted navigation, callbacks and focus changes are recorded with their scenario id, a timestamp and redacted data.
-- **Tools for looking closely.** Zoom, rotation and custom viewports; backgrounds, grid, outlines and a measure tool; forced `:hover` and `:focus-visible` states; color vision simulation, 200% text, text spacing and tab order; a design overlay with a difference blend; rendered HTML; browser storage; and **Compare** (one scenario across themes, viewports, cultures, users or states) and **Gallery** (every scenario, matrices as tables) views. Everything is in the URL.
+- **Responsive design, like device mode.** Drag the preview's edges or type a size; a ruler shows the breakpoints read from your stylesheets' media queries; mobile presets emulate touch (`hover`, `pointer`); the page is flagged when it scrolls sideways, with the element to blame. `workbench test --responsive` checks every scenario at 320 px and on both sides of every breakpoint (WCAG 1.4.10 Reflow).
+- **Tools for looking closely.** Zoom and rotation; backgrounds, grid, outlines and a measure tool; forced `:hover` and `:focus-visible` states; color vision simulation, 200% text, text spacing and tab order; a design overlay with a difference blend; rendered HTML; browser storage; and **Compare** (one scenario across themes, viewports, cultures, users or states) and **Gallery** (every scenario, matrices as tables) views. Everything is in the URL.
 - **Write less, cover more.** `set.Matrix(...)` turns parameter combinations into scenarios, with all-pairs reduction. The recorder turns clicks and typing into an interaction test, and the debugger steps through one. Lifecycle statuses, notes, design references, documentation pages with live embeds, design tokens read from your stylesheets, parameter value coverage and a "renders / rendered by" graph come with the catalog.
 - **Every hosting model.** The same scenarios run with Interactive Server, Interactive WebAssembly and in a .NET MAUI Blazor Hybrid app, inside the platform WebView. Simulated MAUI Essentials services (network, location, share, battery, ...) let you preview device-dependent components anywhere.
 
@@ -79,6 +80,7 @@ You can also set up a host by hand:
    workbench init                       # writes workbench.json
    workbench install-browsers           # Playwright Chromium
    workbench test --a11y --visual       # renders, interactions, axe, screenshots
+   workbench test --responsive          # no sideways scrolling at 320 px and around every breakpoint
    workbench approve                    # explicitly approve new or changed screenshots
    ```
 
@@ -86,7 +88,7 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 
 ## See it in action
 
-The [demo](demo/README.md) is *Trailhead UI*, a component library for a fictional outdoor store, with 181 scenarios that run in all three hosting models. Clone the repository and run `dotnet run --project demo/BlazorWorkbench.Demo`: the overview page is a guided tour, and every stop opens a scenario with the right panel already open. You will decline a payment without a payment provider, freeze a spinner and release it, fast-forward a session timeout with the fake clock, see one settings page through the eyes of six simulated users, take down one endpoint of a dashboard, watch axe-core catch a button without a name, overlay a design mockup on a button, see a form through deuteranopia at 200% text, and record a test by clicking. The chips under each scenario's title list what it simulates and verifies.
+The [demo](demo/README.md) is *Trailhead UI*, a component library for a fictional outdoor store, with 182 scenarios that run in all three hosting models. Clone the repository and run `dotnet run --project demo/BlazorWorkbench.Demo`: the overview page is a guided tour, and every stop opens a scenario with the right panel already open. You will decline a payment without a payment provider, freeze a spinner and release it, fast-forward a session timeout with the fake clock, see one settings page through the eyes of six simulated users, take down one endpoint of a dashboard, watch axe-core catch a button without a name, overlay a design mockup on a button, see a form through deuteranopia at 200% text, drag a header across its breakpoints, catch a card that scrolls sideways on a phone, and record a test by clicking. The chips under each scenario's title list what it simulates and verifies.
 
 ## Packages
 

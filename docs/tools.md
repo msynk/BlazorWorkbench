@@ -1,7 +1,7 @@
 # Workbench tools
 
-This guide covers the tools for looking at a component closely: the canvas toolbar, the accessibility simulations, forced
-states, the Compare and Gallery views, the Design, HTML and Storage panels, the interaction recorder and debugger, the
+This guide covers the tools for looking at a component closely: the canvas toolbar, device mode for responsive design, the
+accessibility simulations, forced states, the Compare and Gallery views, the Design, HTML and Storage panels, the interaction recorder and debugger, the
 explorer's filters and shortcuts, documentation pages and design tokens. Every tool works in Interactive Server and
 Interactive WebAssembly hosts. The .NET MAUI app has no shell, so these tools are not available there.
 
@@ -15,8 +15,7 @@ The canvas toolbar sits above the preview.
 | Tool | What it does | URL | Key |
 | --- | --- | --- | --- |
 | Zoom | 25% to 300%. The frame scales; the component still lays out at the viewport size. | `zoom=1.5` | Alt+= / Alt+- / Alt+0 |
-| Rotate | Swaps the width and height of a fixed viewport (landscape). | `rotate=1` | |
-| Custom viewport | **Viewport → Custom…** takes any width and height from 120 to 3840 px. | `viewport=390x844` | |
+| Fit | Zooms out until a fixed viewport fits the canvas (never above 100%). | `zoom=0.63` | Alt+9 |
 | Background | The theme's background, or one of `options.Backgrounds`: white, light gray, dark, black, transparent (checkerboard) and your own. | `bg=dark` | |
 | Grid | A layout grid with `options.GridSize` cells (8 px by default) and a major line every 8 cells. | `grid=1` | G |
 | Outline | Outlines every element, with a different color per nesting level. | `outline=1` | O |
@@ -37,6 +36,45 @@ The header toolbar also has two session switches. They reload the preview, becau
   signed out (`?user=admin`, `?user=anonymous`).
 - **Network** applies a network profile to the fake backend: *Fast 4G*, *Fast 3G* and *Slow 3G* add latency to every request,
   *Offline* fails them (`?network=slow-3g`). Add your own to `options.NetworkProfiles`.
+
+## Device mode and responsive design
+
+The viewport bar above the preview works like the device mode of browser developer tools. Everything in it is in the URL.
+
+| Control | What it does | URL |
+| --- | --- | --- |
+| Viewport | **Responsive** fills the canvas; a preset (`options.Viewports`) fixes the size; **Custom** keeps the size you set. | `viewport=mobile`, `viewport=390x844` |
+| Width × height | The size in CSS pixels, from 120 to 3840. A responsive preview shows its current size; typing a size fixes it. | |
+| Resize handles | Drag the right edge, the bottom edge or the corner of the preview. The size follows the pointer and is shown next to it. With a handle focused, the arrow keys change the size by 1 px, or 10 px with Shift. | `viewport=WxH` |
+| Rotate | Swaps the width and the height of a fixed viewport. | `rotate=1` |
+| Touch | Media queries on `hover` and `pointer` answer like a phone: `(hover: none)` and `(pointer: coarse)` match, and `matchMedia()` agrees. On for mobile presets, as in automated runs; the switch overrides it for any size. | `touch=1`, `touch=0` |
+| Breakpoints | Every width at which a media query of the preview's stylesheets starts or stops applying, named after `options.Breakpoints`. Each one offers its two edges: the last width before it and the first width at it. | |
+| Range | The breakpoint range of the current width, such as `md · 768–1023`. | |
+| Sideways scrolling | Shown when the page is wider than the viewport, so it scrolls horizontally (WCAG 1.4.10 Reflow). Click it to highlight the elements that stick out. Elements allowed with `.Responsive(r => r.AllowOverflow(...))` show *Allowed overflow*. | |
+
+The **ruler** above the preview has one band per breakpoint, centered on the preview and as wide as the viewport at that
+breakpoint, like the media query bar of browser developer tools: the preview's edges line up with a band when the width
+is that breakpoint, and the bands inside the edges are the ones that apply. Click a band to set its width, or Alt+click
+for one pixel less. Without breakpoints the ruler shows the viewport presets.
+
+Breakpoints are read from the media queries of every same-origin stylesheet of the preview, including `@import`ed ones
+and theme stylesheets: `(min-width: 768px)`, `(max-width: 767.98px)`, `(width >= 48em)` and `(600px < width)` are all
+understood, in `px`, `em` and `rem`. Container queries depend on the container, not the viewport, and are not listed;
+resizing the viewport still resizes containers that follow it. Declare your design system's breakpoints to name them:
+
+```csharp
+options.Breakpoints.Add(new BreakpointPreset("md", 768));
+```
+
+**Compare → Breakpoints** renders the scenario at 320 px and on both sides of every breakpoint, side by side. Layouts
+most often break on one side of a breakpoint, which this view shows at a glance.
+
+The same sweep runs in CI: `workbench test --responsive` fails a scenario when its page scrolls sideways at any of
+these widths. See [the responsive check](testing.md#responsive-check).
+
+What the canvas cannot emulate: the device pixel ratio (`devicePixelRatio`, `resolution` media queries, `srcset`
+choices), touch events, a mobile browser's viewport behavior and its user agent. Automated runs emulate all of them
+for presets with `DeviceScaleFactor` and `IsMobile`, so screenshots of a mobile preset are taken like on a phone.
 
 ## Accessibility simulations
 
@@ -68,8 +106,8 @@ set.Add("Hover", s => s.ChildContent("Save").ForceState(PseudoState.Hover));   /
 
 The **Canvas / Compare / Gallery** switch next to the scenario title changes the stage:
 
-- **Compare** renders the scenario once per value of an axis, side by side: themes, viewports, cultures, directions, users,
-  forced states, vision simulations or network profiles. Untick values to hide them; **Frame zoom** sizes the frames. Every
+- **Compare** renders the scenario once per value of an axis, side by side: themes, viewports, breakpoints (both sides of
+  each), cultures, directions, users, forced states, vision simulations or network profiles. Untick values to hide them; **Frame zoom** sizes the frames. Every
   frame is its own preview session with the current controls. Up to 12 frames are shown (`?mode=compare`).
 - **Gallery** shows every scenario of the component. A matrix with two axes (see [scenarios](scenarios.md#matrices)) is laid
   out as a table, rows by the first parameter and columns by the second (`?mode=gallery`).
@@ -127,6 +165,8 @@ Press **?** for the list. Shortcuts work while the Workbench, not the preview, h
 | R / Shift+R | Reload / reset the preview |
 | G, O, M | Grid, outline, measure |
 | Alt+= / Alt+- / Alt+0 | Zoom in, out, reset |
+| Alt+9 | Zoom a fixed viewport to fit the canvas |
+| ← → ↑ ↓ (Shift) | On a resize handle: resize the preview by 1 px (10 px) |
 | Alt+F / Alt+D | Focus mode / panel position |
 
 ## Documentation pages

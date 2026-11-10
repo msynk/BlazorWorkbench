@@ -99,6 +99,8 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                 Accessibility = options.Accessibility,
                 Visual = options.Visual,
                 Performance = options.Performance,
+                Responsive = options.Responsive,
+                ResponsiveWidths = options.ResponsiveWidths,
                 Viewports = options.Viewports,
                 Themes = options.Themes,
                 Workers = workers,
@@ -262,6 +264,10 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                         result.Checks.Add(await AccessibilityCheckAsync(page, scenario).ConfigureAwait(false));
                     if (options.Visual)
                         result.Checks.Add(await VisualCheckAsync(page, scenario, primary, primary.Name).ConfigureAwait(false));
+
+                    // Last on this page: the sweep resizes it.
+                    if (options.Responsive)
+                        result.Checks.Add(await ResponsiveCheckAsync(page, catalog, scenario, primary).ConfigureAwait(false));
                 }
             }
 
@@ -643,6 +649,72 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         check.Message = passed ? null : comparison.SizeMismatch
             ? $"Size changed from {baseline.Width}×{baseline.Height} to {actual.Width}×{actual.Height}."
             : $"{comparison.DiffPixels} pixels ({comparison.DiffRatio:P3}) differ (tolerance {maxRatio:P3}, threshold {threshold}).";
+        check.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
+        return check;
+    }
+
+    /// <summary>
+    /// Resizes the loaded preview through the responsive sweep and fails when the page scrolls horizontally at a width
+    /// (WCAG 1.4.10 Reflow). The sweep is the scenario's widths, else the run's, else 320 px and both edges of every
+    /// breakpoint: the declared ones and the ones the preview's stylesheets use. The same page is resized, so the
+    /// component keeps its state and reacts as it would to a resized window.
+    /// </summary>
+    private async Task<CheckResult> ResponsiveCheckAsync(IPage page, CatalogDto catalog, ScenarioDto scenario, Variant variant)
+    {
+        var check = new CheckResult { Kind = CheckKind.Responsive, Name = "reflow", Steps = [] };
+        if (scenario.Responsive.Skip)
+        {
+            check.Status = CheckStatus.Skipped;
+            check.Message = scenario.Responsive.SkipReason;
+            return check;
+        }
+
+        var watch = Stopwatch.StartNew();
+        IReadOnlyList<int> widths = scenario.Responsive.Widths.Count > 0 ? scenario.Responsive.Widths : options.ResponsiveWidths;
+        if (widths.Count == 0)
+        {
+            var detected = await page.EvaluateAsync<int[]>("() => window.__workbench.breakpoints ? window.__workbench.breakpoints().map(b => b.width) : []").ConfigureAwait(false);
+            widths = BreakpointPreset.SweepWidths(catalog.Breakpoints.Select(b => b.MinWidth).Concat(detected ?? []));
+        }
+
+        var failed = new List<string>();
+        foreach (var width in widths.Where(w => w is >= BreakpointPreset.MinViewportWidth and <= BreakpointPreset.MaxViewportSize).Distinct().Order())
+        {
+            var stepWatch = Stopwatch.StartNew();
+            if (_hybrid is { } hybrid)
+                await hybrid.ResizeAsync(variant.Viewport, width, variant.Viewport.Height).ConfigureAwait(false);
+            else
+                await page.SetViewportSizeAsync(width, variant.Viewport.Height).ConfigureAwait(false);
+
+            // Components that react to the size (resize listeners, ResizeObserver) settle before the layout is measured.
+            var layout = await page.EvaluateAsync<JsonElement>(
+                "async o => { await window.__workbench.waitForIdle(3000, 60); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); return window.__workbench.layout(o); }",
+                new { allow = scenario.Responsive.AllowOverflow }).ConfigureAwait(false);
+            var overflow = layout.GetProperty("overflow").GetDouble();
+            var allowedOnly = layout.TryGetProperty("allowedOnly", out var a) && a.ValueKind == JsonValueKind.True;
+            var culprits = layout.TryGetProperty("offenders", out var o) && o.ValueKind == JsonValueKind.Array
+                ? o.EnumerateArray().Where(e => !(e.TryGetProperty("allowed", out var al) && al.ValueKind == JsonValueKind.True))
+                    .Select(e => $"{e.GetProperty("selector").GetString()} ({e.GetProperty("by").GetDouble():0} px)").Take(3).ToList()
+                : [];
+            var passed = overflow < 1 || allowedOnly;
+            string? error = null;
+            if (!passed)
+            {
+                error = $"scrolls horizontally: content is {layout.GetProperty("contentWidth").GetDouble():0} px wide, {overflow:0} px too wide" +
+                        (culprits.Count > 0 ? $"; overflowing: {string.Join(", ", culprits)}" : "");
+                failed.Add($"{width} px");
+            }
+
+            check.Steps.Add(new StepOutcome(check.Steps.Count, $"{width} px" + (passed && overflow >= 1 ? " (allowed overflow)" : ""), passed ? CheckStatus.Passed : CheckStatus.Failed, error,
+                Math.Round(stepWatch.Elapsed.TotalMilliseconds)));
+        }
+
+        check.Status = failed.Count == 0 ? CheckStatus.Passed : CheckStatus.Failed;
+        check.Message = failed.Count == 0
+            ? null
+            : $"Scrolls horizontally at {string.Join(", ", failed)} (WCAG 1.4.10 Reflow): {check.Steps.First(s => s.Status == CheckStatus.Failed).Error}. " +
+              "Let the layout wrap, or allow two-dimensional content with .Responsive(r => r.AllowOverflow(selector)).";
+        check.Metrics = new Dictionary<string, double> { ["widths"] = check.Steps.Count };
         check.DurationMs = Math.Round(watch.Elapsed.TotalMilliseconds);
         return check;
     }

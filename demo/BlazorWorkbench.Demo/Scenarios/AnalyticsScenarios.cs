@@ -95,6 +95,10 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
                | Phone | The `mobile` viewport: the grid stacks into one column |
                | Evening, dark theme | A different clock and theme, nothing else changed |
 
+               **Responsive:** drag the edge of the preview, or pick **Breakpoints → 900** and **901**: the grid stacks below
+               901 px, where the stylesheet's `(max-width: 900px)` query starts. `workbench test --responsive` checks 320 px and
+               both sides of every breakpoint; the orders table is allowed to scroll sideways (`AllowOverflow`), the page is not.
+
                **Try it:** change **Period** to *Last 6 months*. The request goes to `api/dashboard/revenue?range=6m`, which
                a more specific fake rule answers (query parameters match as a subset).
                """);
@@ -102,6 +106,7 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
         set.Setup(s => s
             .Clock(StoreData.Now)
             .User("Ada Lovelace", "Admin")
+            .Responsive(r => r.AllowOverflow(".dashboard-panel .table"))
             .Http(h =>
             {
                 h.Get("/api/dashboard/kpis").RespondJson(StoreData.Kpis);

@@ -129,6 +129,11 @@ public static class ScenarioValidator
         foreach (var rule in env.PseudoStates.Where(p => p.Selector is not null && string.IsNullOrWhiteSpace(p.Selector)))
             Add(IssueSeverity.Error, "WB1024", $"Forced state {rule.PseudoClass} has an empty selector.", "Pass null to force the state on every element.");
 
+        foreach (var width in scenario.Responsive.Widths.Where(w => w is < BreakpointPreset.MinViewportWidth or > BreakpointPreset.MaxViewportSize))
+            Add(IssueSeverity.Error, "WB1026", $"Responsive width {width} is outside {BreakpointPreset.MinViewportWidth}–{BreakpointPreset.MaxViewportSize} px.");
+        if (scenario.Responsive.AllowOverflow.Any(string.IsNullOrWhiteSpace))
+            Add(IssueSeverity.Error, "WB1026", "Responsive AllowOverflow(...) was given an empty selector.", "Pass the CSS selector of the element that may overflow, such as \".orders-table\".");
+
         if (scenario.Visual.Threshold is < 0 or > 1 || scenario.Visual.MaxDiffPixelRatio is < 0 or > 1)
             Add(IssueSeverity.Error, "WB1020", "Visual thresholds must be between 0 and 1.");
         if (scenario.Accessibility.DisabledRules.Count > 0 && string.IsNullOrWhiteSpace(scenario.Accessibility.Justification))

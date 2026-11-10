@@ -139,6 +139,8 @@ namespace BlazorWorkbench.Cli
             var filter = new Option<string?>("--filter", "-f") { Description = "Glob filter on scenario ids/titles, 'tag:name', comma separated." };
             var accessibility = new Option<bool>("--a11y") { Description = "Run axe-core accessibility scans." };
             var visual = new Option<bool>("--visual") { Description = "Compare screenshots against approved baselines." };
+            var responsive = new Option<bool>("--responsive") { Description = "Resize every scenario through a sweep of widths and fail on horizontal scrolling (WCAG 1.4.10)." };
+            var widths = new Option<int[]>("--widths") { Description = "Widths of the responsive sweep (default: 320 and both edges of every breakpoint).", AllowMultipleArgumentsPerToken = true };
             var noInteractions = new Option<bool>("--no-interactions") { Description = "Skip interaction tests." };
             var noBudgets = new Option<bool>("--no-budgets") { Description = "Do not check performance budgets (timings are still reported)." };
             var viewport = new Option<string[]>("--viewport") { Description = "Viewport preset(s) (default: workbench.json).", AllowMultipleArgumentsPerToken = true };
@@ -160,7 +162,7 @@ namespace BlazorWorkbench.Cli
 
             var command = new Command(name, description)
             {
-                filter, accessibility, visual, noInteractions, noBudgets, viewport, theme, workers, retries, output, baselines, browser, headed,
+                filter, accessibility, visual, responsive, widths, noInteractions, noBudgets, viewport, theme, workers, retries, output, baselines, browser, headed,
                 onlyFailed, failOn, noTrace, allowMissing, timeout, includeAntiAliasing, changedSince,
             };
 
@@ -173,6 +175,8 @@ namespace BlazorWorkbench.Cli
                 options.Visual = !a11yOnly && r.GetValue(visual);
                 options.Interactions = !a11yOnly && !r.GetValue(noInteractions);
                 options.Performance = !r.GetValue(noBudgets);
+                options.Responsive = !a11yOnly && (r.GetValue(responsive) || options.Responsive || r.GetValue(widths) is { Length: > 0 });
+                if (r.GetValue(widths) is { Length: > 0 } w) options.ResponsiveWidths = w;
                 if (r.GetValue(viewport) is { Length: > 0 } v) options.Viewports = v;
                 if (r.GetValue(theme) is { Length: > 0 } t) options.Themes = t;
                 options.Workers = r.GetValue(workers) ?? options.Workers;

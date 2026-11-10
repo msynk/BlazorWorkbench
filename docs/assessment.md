@@ -23,6 +23,7 @@ The repository contained only `LICENSE` (MIT, 2026) and a one-line `README.md`. 
 | Auth/culture/RTL/clock simulation | partial (addons/globals) | – | manual | locale/timezone | ✔ per scenario + toolbar |
 | Interaction tests | ✔ play functions (Vitest) | – | ✔ (C#) | ✔ | ✔ serializable steps; Playwright runner + in-UI runner |
 | Accessibility | ✔ addon (axe) | – | – | via axe packages | ✔ axe in UI and CLI, severity gates, justifications |
+| Responsive design | viewport addon, resizable canvas | – | – | viewport per test | ✔ device mode with breakpoints read from the stylesheets, touch emulation, overflow detection, reflow sweep in CI |
 | Visual regression | Chromatic (commercial SaaS) | – | – | screenshots only (.NET) | ✔ built-in diff, per-platform baselines, explicit approval |
 | Diagnostics | console/actions | – | – | traces | ✔ correlated, redacted, bounded; traces on failure |
 | CLI/CI reports | test runner, JUnit | – | test frameworks | ✔ | ✔ JSON/JUnit/HTML, exit codes, retries/flaky |
@@ -56,6 +57,8 @@ repositories and release notes. The features most worth having in a developer-fa
 | Forced pseudo-states (storybook-addon-pseudo-states) | Done, also per scenario |
 | Props matrix with pairwise reduction (Histoire, Widgetbook v4, Compose `@PreviewParameter`) | Done |
 | Side-by-side modes (Chromatic modes, Playroom, Showkase permutations) | Done (Compare view) |
+| Device mode: drag-to-resize viewport, media query ruler, touch emulation, breakpoint edges (browser developer tools, Storybook resizable viewport, Polypane) | Done ([device mode](tools.md#device-mode-and-responsive-design)), with breakpoints read from the stylesheets |
+| Viewport sweeps in CI (Pattern Lab, Polypane breakpoint edges) | Done (`workbench test --responsive`, WCAG 1.4.10 reflow at 320 px and every breakpoint edge) |
 | Interaction step-through debugger and recorder (Storybook interactions) | Done |
 | HTML output panel (Lookbook, storybook-addon-html) | Done |
 | Design references and overlay (storybook-addon-designs, Widgetbook `designLink`) | Done |
@@ -73,7 +76,6 @@ repositories and release notes. The features most worth having in a developer-fa
 | Live Razor playground across themes and widths (Playroom) | Open: needs Razor compilation at run time |
 | JS interop fakes per scenario (bUnit `JSInterop`) | Open: `IJSRuntime` is bound to the circuit and cannot be overridden through DI |
 | Composition of several catalogs (Storybook refs) | Open |
-| Drag-to-resize viewport, viewport sweeps (Storybook 10.2, Pattern Lab) | Open |
 | Canvas comments for agents (Histoire) | Open |
 
 ## Dependency and licensing review

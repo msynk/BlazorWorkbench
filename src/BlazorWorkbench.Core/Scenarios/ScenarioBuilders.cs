@@ -145,6 +145,10 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private HttpStatusCode _unmatched = HttpStatusCode.NotFound;
     private bool _httpConfigured, _offline, _fullPage, _visualSkipSet, _a11ySkipSet, _forcedColors, _print;
     private string? _a11yTodo;
+    private readonly List<int> _responsiveWidths = [];
+    private readonly List<string> _allowOverflow = [];
+    private bool _responsiveSkipSet;
+    private string? _responsiveSkip;
     private DateTimeOffset? _clock;
     private int? _seed;
     private ScenarioLayout _layout = ScenarioLayout.Padded;
@@ -353,6 +357,20 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     }
 
     /// <summary>
+    /// Configures the responsive check of <c>workbench test --responsive</c>: the widths to check, elements allowed to
+    /// overflow horizontally (wide tables, code, maps), or a reason to skip it.
+    /// </summary>
+    public ScenarioBuilder<TComponent> Responsive(Action<ResponsiveOptionsBuilder> configure)
+    {
+        var b = new ResponsiveOptionsBuilder();
+        configure(b);
+        if (b.SkipSet) { _responsiveSkipSet = true; _responsiveSkip = b.SkipReasonValue; }
+        _responsiveWidths.AddRange(b.WidthValues);
+        _allowOverflow.AddRange(b.AllowOverflowValues);
+        return this;
+    }
+
+    /// <summary>
     /// Emulates CSS media features in automated runs: <c>forced-colors: active</c> (Windows high contrast) and the
     /// <c>print</c> media type. Automated runs always emulate <c>prefers-reduced-motion: reduce</c>.
     /// </summary>
@@ -439,7 +457,14 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
             Justification = _a11yJustification,
             TodoReason = _a11yTodo,
         },
-        Budget = new PerformanceBudget { ReadyWithin = _readyWithin, InteractionWithin = _interactionWithin, MaxDomUpdates = _maxDomUpdates },
+        Responsive = new ResponsiveOptions
+        {
+            Skip = _responsiveSkipSet,
+            SkipReason = _responsiveSkip,
+            Widths = _responsiveWidths.Distinct().Order().ToArray(),
+            AllowOverflow = _allowOverflow.Distinct(StringComparer.Ordinal).ToArray(),
+        },
+        Budget =new PerformanceBudget { ReadyWithin = _readyWithin, InteractionWithin = _interactionWithin, MaxDomUpdates = _maxDomUpdates },
     };
 }
 
@@ -617,6 +642,26 @@ public sealed class AccessibilityOptionsBuilder
         JustificationValue = JustificationValue is null ? $"{ruleId}: {justification}" : $"{JustificationValue}; {ruleId}: {justification}";
         return this;
     }
+}
+
+/// <summary>Responsive check settings (<see cref="ScenarioBuilder{TComponent}.Responsive"/>).</summary>
+public sealed class ResponsiveOptionsBuilder
+{
+    internal bool SkipSet { get; private set; }
+    internal string? SkipReasonValue { get; private set; }
+    internal List<int> WidthValues { get; } = [];
+    internal List<string> AllowOverflowValues { get; } = [];
+
+    public ResponsiveOptionsBuilder Skip(string reason) { SkipSet = true; SkipReasonValue = reason; return this; }
+
+    /// <summary>Checks these widths, in CSS pixels, instead of the run's sweep (320 px and the edges of every breakpoint).</summary>
+    public ResponsiveOptionsBuilder Widths(params int[] widths) { WidthValues.AddRange(widths); return this; }
+
+    /// <summary>
+    /// Lets elements matching <paramref name="cssSelector"/> overflow horizontally: content that needs two dimensions, such
+    /// as a wide data table, code or a map. Prefer a scroll container (<c>overflow-x: auto</c>) around such content.
+    /// </summary>
+    public ResponsiveOptionsBuilder AllowOverflow(string cssSelector) { AllowOverflowValues.Add(cssSelector); return this; }
 }
 
 /// <summary>CSS media features emulated by automated runs (<see cref="ScenarioBuilder{TComponent}.Media"/>).</summary>

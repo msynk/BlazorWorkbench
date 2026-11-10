@@ -31,6 +31,7 @@ public sealed class WorkbenchConfig
     public string? Filter { get; init; }
     public VisualConfig Visual { get; init; } = new();
     public AccessibilityConfig Accessibility { get; init; } = new();
+    public ResponsiveConfig Responsive { get; init; } = new();
 
     /// <summary>Full path of the loaded file (not serialized).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -74,6 +75,15 @@ public sealed class VisualConfig
 
     /// <summary>Ignore pixels that differ only because of anti-aliasing.</summary>
     public bool IgnoreAntiAliasing { get; init; } = true;
+}
+
+public sealed class ResponsiveConfig
+{
+    /// <summary>Run the responsive check in every <c>workbench test</c> (the same as <c>--responsive</c>).</summary>
+    public bool Enabled { get; init; }
+
+    /// <summary>Widths, in CSS pixels, to check. Empty checks 320 px and both edges of every breakpoint.</summary>
+    public IReadOnlyList<int> Widths { get; init; } = [];
 }
 
 public sealed class AccessibilityConfig

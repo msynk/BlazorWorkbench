@@ -131,6 +131,10 @@ public sealed class ScenarioDefinition
     public IReadOnlyList<InteractionTest> Interactions { get; init; } = [];
     public VisualOptions Visual { get; init; } = new();
     public AccessibilityOptions Accessibility { get; init; } = new();
+
+    /// <summary>Responsive (reflow) check settings (<c>workbench test --responsive</c>).</summary>
+    public ResponsiveOptions Responsive { get; init; } = new();
+
     public PerformanceBudget Budget { get; init; } = new();
 
     /// <summary>When set, automated test runs skip the scenario (it remains available for interactive preview).</summary>
@@ -242,6 +246,25 @@ public sealed class VisualOptions
     public IReadOnlyList<string> Themes { get; init; } = [];
 
     public bool FullPage { get; init; }
+}
+
+/// <summary>
+/// Responsive check settings for a scenario. <c>workbench test --responsive</c> resizes the preview through a sweep of widths
+/// (320 px and both edges of every breakpoint) and fails when the page scrolls horizontally at any of them (WCAG 1.4.10).
+/// </summary>
+public sealed class ResponsiveOptions
+{
+    public bool Skip { get; init; }
+    public string? SkipReason { get; init; }
+
+    /// <summary>Widths, in CSS pixels, checked instead of the run's sweep.</summary>
+    public IReadOnlyList<int> Widths { get; init; } = [];
+
+    /// <summary>
+    /// CSS selectors of elements allowed to overflow horizontally: content that needs two dimensions, such as a wide data
+    /// table, code or a map (the WCAG 1.4.10 exceptions). Overflow caused only by these elements passes.
+    /// </summary>
+    public IReadOnlyList<string> AllowOverflow { get; init; } = [];
 }
 
 /// <summary>Automated accessibility scan settings for a scenario.</summary>

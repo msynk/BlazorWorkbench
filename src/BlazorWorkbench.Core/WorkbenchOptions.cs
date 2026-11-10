@@ -51,6 +51,14 @@ public class WorkbenchOptions
     public string? Introduction { get; set; }
 
     public IList<ViewportPreset> Viewports { get; } = [.. ViewportPreset.Defaults];
+
+    /// <summary>
+    /// Named width breakpoints of the design system, such as <c>sm</c> at 640 px or <c>md</c> at 768 px. Breakpoints used in
+    /// the preview stylesheets' media queries are detected without being declared; declaring them names them on the canvas
+    /// ruler, offers them in the Compare view before a preview has loaded, and adds their edges to responsive sweeps.
+    /// </summary>
+    public IList<BreakpointPreset> Breakpoints { get; } = [];
+
     public IList<ThemeDefinition> Themes { get; } = [.. ThemeDefinition.Defaults];
 
     /// <summary>Cultures offered in the toolbar.</summary>
@@ -172,6 +180,44 @@ public sealed record ViewportPreset(string Name, int Width, int Height, double D
         new("laptop", 1280, 800),
         new("desktop", 1440, 900),
     ];
+}
+
+/// <summary>
+/// A named width breakpoint (<see cref="WorkbenchOptions.Breakpoints"/>): layouts change between <c>MinWidth - 1</c> and
+/// <paramref name="MinWidth"/> CSS pixels, as with <c>@media (min-width: 768px)</c> or <c>@media (max-width: 767.98px)</c>.
+/// </summary>
+/// <param name="Name">Short label, for example <c>md</c>.</param>
+/// <param name="MinWidth">The first width, in CSS pixels, at which the breakpoint applies.</param>
+public sealed record BreakpointPreset(string Name, int MinWidth)
+{
+    /// <summary>The WCAG 1.4.10 (Reflow) width: content must fit 320 CSS pixels without horizontal scrolling.</summary>
+    public const int ReflowWidth = 320;
+
+    /// <summary>Smallest viewport width the Workbench offers.</summary>
+    public const int MinViewportWidth = 120;
+
+    /// <summary>Largest viewport width or height the Workbench offers.</summary>
+    public const int MaxViewportSize = 3840;
+
+    /// <summary>Most widths a responsive sweep checks.</summary>
+    public const int MaxSweepWidths = 24;
+
+    /// <summary>
+    /// The widths a responsive sweep checks: <see cref="ReflowWidth"/>, then both edges of every breakpoint (the last width
+    /// before it, <c>t - 1</c>, and the first width at it, <c>t</c>), in ascending order, without duplicates.
+    /// </summary>
+    /// <param name="thresholds">Breakpoint widths (the first width at which each applies).</param>
+    public static IReadOnlyList<int> SweepWidths(IEnumerable<int> thresholds)
+    {
+        var widths = new SortedSet<int> { ReflowWidth };
+        foreach (var t in thresholds)
+        {
+            widths.Add(t - 1);
+            widths.Add(t);
+        }
+
+        return widths.Where(w => w is >= MinViewportWidth and <= MaxViewportSize).Take(MaxSweepWidths).ToArray();
+    }
 }
 
 /// <summary>A simulated user offered in the toolbar (<see cref="WorkbenchOptions.AddUser"/>).</summary>

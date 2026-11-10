@@ -121,7 +121,9 @@ public class ScenarioFactsTests
                     "vision" => PreviewTools.VisionModes.Any(v => v.Key == value),
                     "text" => PreviewTools.TextScales.Contains(int.Parse(value, System.Globalization.CultureInfo.InvariantCulture)),
                     "grid" or "outline" or "measure" or "tabs" or "spacing" or "updates" or "rotate" => value == "1",
-                    "viewport" => catalog.Options.FindViewport(value) is not null,
+                    "viewport" => catalog.Options.FindViewport(value) is not null || Regex.IsMatch(value, @"^\d{3,4}x\d{3,4}$"),
+                    "compare" => value is "theme" or "viewport" or "width" or "culture" or "direction" or "user" or "state" or "vision" or "network",
+                    "touch" => value is "0" or "1",
                     _ => false,
                 };
                 Assert.True(valid, $"The tour link '{link}' has an unknown or invalid parameter '{pair}'.");

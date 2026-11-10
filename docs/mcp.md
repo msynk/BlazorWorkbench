@@ -12,7 +12,7 @@ The tools call the same APIs as the UI and the CLI: the catalog API, the validat
 | `get_component(id)` | read-only | Parameters, docs, dependencies and scenarios with Razor usage. |
 | `validate_scenarios()` | read-only | Errors and warnings with remedies. |
 | `suggest_scenarios(id)` | read-only | Missing boundary cases (enum values, nulls, empty or long text, loading, error, offline, signed-in, RTL) and a C# `ScenarioSet` skeleton to review. |
-| `run_tests(filter?, accessibility?, visual?)` | runs browsers | A summary with failed steps, blocking findings and visual differences. Never changes baselines. |
+| `run_tests(filter?, accessibility?, visual?, responsive?)` | runs browsers | A summary with failed steps, blocking findings, visual differences and widths that scroll sideways. Never changes baselines. |
 | `get_last_report(filter?)` | read-only | Failures and diagnostics from the latest `report.json`. |
 | `approve_baselines(filter, confirm)` | **destructive** | Approves screenshots. Refused unless the server runs with `--allow-approve` **and** the call passes `confirm=true`. |
 

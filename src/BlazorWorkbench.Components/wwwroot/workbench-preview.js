@@ -154,6 +154,7 @@
     document.documentElement.setAttribute('data-workbench-state', value);
     if (value === 'ready') state.readyAt = performance.now();
     post('state', { state: value, detail, metrics: metrics() });
+    if (value !== 'loading') announceResponsive();
   }
 
   function metrics() {
@@ -189,6 +190,7 @@
     // Overlays drawn by the preview tools are not part of the scenario.
     if (records.every((r) => isToolNode(r.target))) return;
     state.lastMutation = performance.now();
+    if (state.state !== 'loading') scheduleLayout(250);
     if (state.state === 'loading') {
       state.domUpdates++;
       // Pages that fail before the scenario host attaches (unknown scenario, bad arguments) report errors immediately.
@@ -225,6 +227,8 @@
     (t.themeStylesheets || []).forEach((href) => {
       const link = document.createElement('link');
       link.rel = 'stylesheet'; link.href = href; link.setAttribute('data-workbench-theme', t.theme || '');
+      // A theme stylesheet can bring media queries of its own.
+      link.addEventListener('load', () => { if (state.state !== 'loading') announceResponsive(); });
       document.head.appendChild(link);
     });
   }
@@ -913,6 +917,212 @@
   // Redraw position-dependent tools when the layout changes.
   window.addEventListener('resize', () => { if (tools.current.overlay) applyOverlay(tools.current.overlay); });
 
+  // ---------- responsive design: breakpoints, layout and touch ----------
+  function ownSheets() {
+    return Array.from(document.styleSheets).filter((s) => !(s.ownerNode && s.ownerNode.hasAttribute && s.ownerNode.hasAttribute(TOOL_ATTR)));
+  }
+
+  // Touch emulation: media queries on hover and pointer are rewritten to what a phone reports (hover: none, pointer: coarse),
+  // so the canvas matches automated runs of mobile presets. matchMedia() answers the same way. Cross-origin stylesheets
+  // cannot be read and keep the real values.
+  const TOUCH_FEATURES = { hover: 'none', 'any-hover': 'none', pointer: 'coarse', 'any-pointer': 'coarse' };
+  const FEATURE_RE = /\(\s*(any-hover|hover|any-pointer|pointer)\s*(?::\s*([a-z-]+)\s*)?\)/gi;
+  const HAS_FEATURE = /\(\s*(any-hover|hover|any-pointer|pointer)\s*[:)]/i;
+  const ALWAYS = '(min-width: 0px)';
+  const NEVER = '(max-width: 0px)';
+  const emulation = { touch: new URLSearchParams(location.search).get('touch') === '1', lists: new Map() };
+
+  function emulateMedia(text) {
+    return String(text).replace(FEATURE_RE, (_, feature, value) => {
+      const actual = TOUCH_FEATURES[feature.toLowerCase()];
+      return (value ? actual === value.toLowerCase() : actual !== 'none') ? ALWAYS : NEVER;
+    });
+  }
+
+  function rewriteMediaList(list) {
+    if (!list) return;
+    const original = emulation.lists.has(list) ? emulation.lists.get(list) : list.mediaText;
+    if (!original || !HAS_FEATURE.test(original)) return;
+    const next = emulateMedia(original);
+    if (next === list.mediaText) return;
+    emulation.lists.set(list, original);
+    try { list.mediaText = next; } catch { emulation.lists.delete(list); }
+  }
+
+  function visitMediaRules(rules, visit) {
+    for (const rule of Array.from(rules)) {
+      if (rule.media) visit(rule.media);
+      if (rule.styleSheet) { try { visitMediaRules(rule.styleSheet.cssRules, visit); } catch { /* cross-origin import */ } }
+      if (rule.cssRules) visitMediaRules(rule.cssRules, visit);
+    }
+  }
+
+  function applyTouch(on) {
+    emulation.touch = !!on;
+    if (emulation.touch) document.documentElement.setAttribute('data-wb-touch', ''); else document.documentElement.removeAttribute('data-wb-touch');
+    for (const [list, original] of emulation.lists) { try { list.mediaText = original; } catch { /* stylesheet removed */ } }
+    emulation.lists.clear();
+    if (!emulation.touch) return;
+    for (const sheet of ownSheets()) {
+      rewriteMediaList(sheet.media);
+      try { visitMediaRules(sheet.cssRules, rewriteMediaList); } catch { /* cross-origin stylesheet */ }
+    }
+  }
+
+  if (window.matchMedia) {
+    const nativeMatchMedia = window.matchMedia.bind(window);
+    window.matchMedia = function (query) { return nativeMatchMedia(emulation.touch ? emulateMedia(query) : query); };
+  }
+  if (emulation.touch) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => applyTouch(true)); else applyTouch(true);
+  }
+
+  // Breakpoints: the widths at which a media query of the preview stylesheets starts or stops applying, each given as the
+  // first width of the new layout: (min-width: 768px), (max-width: 767.98px) and (width < 48em) all give 768.
+  const LENGTH = /^(-?\d*\.?\d+)(px|em|rem)?$/i;
+  const FLIP = { '<': '>', '<=': '>=', '>': '<', '>=': '<=' };
+
+  function toPx(text) {
+    const m = LENGTH.exec(String(text).trim());
+    if (!m || (!m[2] && parseFloat(m[1]) !== 0)) return null;
+    // em and rem in media queries are relative to the initial font size, 16px.
+    return (m[2] || 'px').toLowerCase() === 'px' ? parseFloat(m[1]) : parseFloat(m[1]) * 16;
+  }
+
+  function threshold(op, value) {
+    switch (op) {
+      case '>=': return { width: Math.ceil(value), kind: 'min' };
+      case '>': return { width: Math.floor(value) + 1, kind: 'min' };
+      case '<': return { width: Math.ceil(value), kind: 'max' };
+      case '<=': return { width: Math.floor(value) + 1, kind: 'max' };
+      default: return null;
+    }
+  }
+
+  function widthConditions(text) {
+    const found = [];
+    const t = String(text).toLowerCase();
+    let m;
+    const legacy = /\(\s*(min|max)-width\s*:\s*([^)]+?)\s*\)/g;
+    while ((m = legacy.exec(t))) { const v = toPx(m[2]); if (v !== null) found.push(threshold(m[1] === 'min' ? '>=' : '<=', v)); }
+    // Range syntax: (width >= 40em), (600px < width), (400px <= width < 700px).
+    const range = /\(([^():]*\bwidth\b[^():]*)\)/g;
+    while ((m = range.exec(t))) {
+      if (/(min|max|device)-width/.test(m[1])) continue;
+      const tokens = m[1].split(/(<=|>=|<|>|=)/).map((s) => s.trim()).filter(Boolean);
+      const i = tokens.indexOf('width');
+      if (i < 0) continue;
+      if (i >= 2 && FLIP[tokens[i - 1]]) { const v = toPx(tokens[i - 2]); if (v !== null) found.push(threshold(FLIP[tokens[i - 1]], v)); }
+      if (i + 2 < tokens.length && FLIP[tokens[i + 1]]) { const v = toPx(tokens[i + 2]); if (v !== null) found.push(threshold(tokens[i + 1], v)); }
+    }
+    return found.filter((f) => f && f.width >= 1 && f.width <= 10000);
+  }
+
+  function collectBreakpoints() {
+    const map = new Map();
+    const add = (list) => {
+      if (!list) return;
+      // Rules rewritten by touch emulation are read with their original text.
+      const text = emulation.lists.has(list) ? emulation.lists.get(list) : list.mediaText;
+      for (const f of widthConditions(text || '')) {
+        const b = map.get(f.width) || { width: f.width, min: 0, max: 0 };
+        b[f.kind]++;
+        map.set(f.width, b);
+      }
+    };
+    for (const sheet of ownSheets()) {
+      add(sheet.media);
+      try { visitMediaRules(sheet.cssRules, add); } catch { /* cross-origin stylesheet */ }
+    }
+    return Array.from(map.values()).sort((a, b) => a.width - b.width);
+  }
+
+  // Horizontal overflow: the page is wider than the viewport, so it scrolls sideways (WCAG 1.4.10 Reflow). The elements
+  // reported are the outermost ones that stick out, not their children, and not ones clipped or scrolled by an ancestor.
+  function overflowingElements(vw, allow) {
+    const rtl = getComputedStyle(document.body || document.documentElement).direction === 'rtl';
+    const sx = window.scrollX;
+    const beyond = (r, extra) => (rtl ? -(r.left + sx) + extra : r.right + sx + extra - vw);
+    const clipCache = new Map();
+    const clips = (el) => {
+      if (!clipCache.has(el)) clipCache.set(el, getComputedStyle(el).overflowX !== 'visible');
+      return clipCache.get(el);
+    };
+    const contained = (el) => {
+      for (let a = el.parentElement; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+        if (clips(a) && beyond(a.getBoundingClientRect(), 0) <= 0.5) return true;
+      }
+      return false;
+    };
+    const allowed = (el) => allow.some((s) => { try { return el.matches(s) || !!el.closest(s); } catch { return false; } });
+    const elements = document.body ? Array.from(document.body.getElementsByTagName('*')).slice(0, 5000) : [];
+    const flagged = new Set();
+    const found = [];
+    for (const el of elements) {
+      if (isToolNode(el)) continue;
+      if (el.parentElement && flagged.has(el.parentElement)) { flagged.add(el); continue; }
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 && r.height === 0) continue;
+      const by = beyond(r, 0);
+      if (by <= 0.5 || contained(el) || getComputedStyle(el).position === 'fixed') continue;
+      flagged.add(el);
+      found.push({ el, by: Math.round(by), allowed: allowed(el) });
+    }
+    if (found.length) return found;
+    // No box sticks out: text does (a long word or URL in a block that fits). Report the innermost such blocks.
+    const text = [];
+    for (const el of elements) {
+      if (isToolNode(el) || el.clientWidth === 0) continue;
+      const extra = el.scrollWidth - el.clientWidth;
+      if (extra <= 0.5 || clips(el) || contained(el)) continue;
+      const by = beyond(el.getBoundingClientRect(), extra);
+      if (by > 0.5) text.push({ el, by: Math.round(by), allowed: allowed(el) });
+    }
+    return text.filter((t) => !text.some((o) => o !== t && t.el.contains(o.el)));
+  }
+
+  function layoutInfo(options, keep) {
+    const de = document.documentElement;
+    // The viewport size media queries see (scrollbars included); overflow is measured against the area left for content.
+    const contentWidth = de.scrollWidth;
+    const overflow = Math.max(0, contentWidth - de.clientWidth);
+    const found = overflow > 0 ? overflowingElements(de.clientWidth, (options && options.allow) || []) : [];
+    if (keep) layoutState.elements = found.filter((f) => !f.allowed).map((f) => f.el);
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      contentWidth,
+      overflow,
+      allowedOnly: found.length > 0 && found.every((f) => f.allowed),
+      offenders: found.slice(0, 8).map((f) => ({ selector: cssPath(f.el) || f.el.tagName.toLowerCase(), label: describe(f.el), by: f.by, allowed: f.allowed })),
+    };
+  }
+
+  // The canvas shows the live size and overflow: reported when the preview is ready, resized or changed.
+  const layoutState = { allow: [], last: '', timer: 0, elements: [], breakpoints: '' };
+  function reportLayout() {
+    if (!inFrame || !state.attached || state.state === 'loading') return;
+    const info = layoutInfo({ allow: layoutState.allow }, true);
+    const json = JSON.stringify(info);
+    if (json !== layoutState.last) { layoutState.last = json; post('layout', info); }
+  }
+  function scheduleLayout(delay) {
+    clearTimeout(layoutState.timer);
+    layoutState.timer = setTimeout(reportLayout, delay == null ? 150 : delay);
+  }
+  function reportBreakpoints(force) {
+    if (!inFrame) return;
+    const list = collectBreakpoints();
+    const json = JSON.stringify(list);
+    if (force || json !== layoutState.breakpoints) { layoutState.breakpoints = json; post('breakpoints', list); }
+  }
+  function announceResponsive() {
+    if (emulation.touch) applyTouch(true);
+    reportBreakpoints();
+    scheduleLayout(0);
+  }
+  window.addEventListener('resize', () => scheduleLayout(60));
+
   // ---------- browser storage ----------
   const SHELL_KEY_PREFIX = 'blazor-workbench:';
   const seeded = new Set();
@@ -1140,6 +1350,14 @@
         case 'interaction': await runInteraction(payload.test || payload, payload.test ? payload : null); break;
         case 'interaction-continue': if (debug && debug.resume) { const r = debug.resume; debug.resume = null; r(payload || 'step'); } break;
         case 'tools': applyTools(payload); break;
+        case 'device': applyTouch(payload && payload.touch); scheduleLayout(0); break;
+        case 'responsive': reportBreakpoints(true); layoutState.last = ''; scheduleLayout(0); break;
+        case 'highlight-overflow': {
+          reportLayout();
+          const n = layoutState.elements.length;
+          highlight(layoutState.elements, n ? `${n === 1 ? 'Overflows' : `${n} elements overflow`} the viewport` : null);
+          break;
+        }
         case 'highlight': highlight(payload && payload.selector, payload && payload.label); break;
         case 'html': { const r = root(); post('html', { html: r ? formatHtml(r) : '' }); break; }
         case 'storage': {
@@ -1183,6 +1401,7 @@
       if (info.lang) document.documentElement.setAttribute('lang', info.lang);
       tools.gridSize = info.gridSize || 8;
       tools.declaredPseudo = info.pseudoStates || [];
+      layoutState.allow = info.overflowAllow || [];
       if (info.storage && info.storage.length && !document.getElementById('workbench-preview-config')) isolateAndSeed({ isolateStorage: info.isolateStorage, storage: info.storage });
       applyTools(Object.assign(toolsFromQuery(), tools.current));
       (info.diagnostics || []).forEach((d) => { if (!state.diagnostics.some((x) => x.timestamp === d.timestamp && x.message === d.message)) addDiagnostic(d); });
@@ -1239,5 +1458,8 @@
     html: () => (root() ? formatHtml(root()) : ''),
     storage: storageSnapshot,
     tokens: collectTokens,
+    breakpoints: collectBreakpoints,
+    layout: (options) => layoutInfo(options, false),
+    get touch() { return emulation.touch; },
   };
 })();

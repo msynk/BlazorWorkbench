@@ -1,0 +1,49 @@
+@* The ruler above the preview, like the media query bar of browser developer tools: one band per breakpoint, centered on
+   the preview and as wide as the viewport at that breakpoint, so the preview's edges line up with a band when its width
+   is that breakpoint. Click a band for its width; Alt+click for one pixel less. Without breakpoints, the bands are the
+   viewport presets. The Breakpoints menu offers the same widths to keyboard and screen reader users. *@
+@if (Items.Count > 0)
+{
+    <div class="wb-ruler @(Marks.Count == 0 ? "wb-ruler-presets" : "")" aria-hidden="true">
+        @foreach (var item in Items.OrderByDescending(i => i.Width))
+        {
+            var width = item.Width;
+            <button type="button" tabindex="-1" class="wb-ruler-band @(CurrentWidth >= width ? "wb-ruler-in" : "") @(CurrentWidth == width ? "wb-ruler-at" : "")"
+                    style="@($"width:{(width * Zoom).ToString("0.##", CultureInfo.InvariantCulture)}px")" title="@item.Title"
+                    @onclick="e => OnSelect.InvokeAsync(e.AltKey ? width - 1 : width)">
+                @if (item.ShowLabel) { <span>@item.Label</span> }
+            </button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<BreakpointMark> Marks { get; set; } = [];
+
+    /// <summary>Shown when there are no breakpoints.</summary>
+    [Parameter] public IEnumerable<ViewportPreset> Presets { get; set; } = [];
+
+    [Parameter] public double Zoom { get; set; } = 1;
+    [Parameter] public int? CurrentWidth { get; set; }
+    [Parameter] public EventCallback<int> OnSelect { get; set; }
+
+    private sealed record Item(int Width, string Label, string Title, bool ShowLabel);
+
+    private IReadOnlyList<Item> Items
+    {
+        get
+        {
+            var raw = Marks.Count > 0
+                ? Marks.Select(m => (m.Width, m.Label, Title: $"{m.Label} px: {m.Source}. Click for {m.Width} px, Alt+click for {m.Width - 1} px.")).ToList()
+                : Presets.GroupBy(p => p.Width).OrderBy(g => g.Key)
+                    .Select(g => (Width: g.Key, Label: $"{g.First().Name} {g.Key}", Title: $"{string.Join(", ", g.Select(p => p.Name))}: {g.Key} px wide. Click to set the width.")).ToList();
+            // A label sits at the right end of its band, in the strip the next narrower band leaves free; it is left out
+            // when the strip is too narrow for it (the tooltip still names the band).
+            return raw.Select((r, i) =>
+            {
+                var strip = (r.Width - (i == 0 ? 0 : raw[i - 1].Width)) * Zoom / 2;
+                return new Item(r.Width, r.Label, r.Title, strip >= r.Label.Length * 6.5 + 10);
+            }).ToList();
+        }
+    }
+}

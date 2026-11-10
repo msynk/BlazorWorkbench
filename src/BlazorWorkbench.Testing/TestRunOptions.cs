@@ -16,6 +16,17 @@ public sealed class TestRunOptions
     /// <summary>Check the scenarios' performance budgets (default true). Ready time and DOM updates are reported either way.</summary>
     public bool Performance { get; set; } = true;
 
+    /// <summary>
+    /// Resize every scenario through a sweep of widths and fail when the page scrolls horizontally (WCAG 1.4.10 Reflow).
+    /// </summary>
+    public bool Responsive { get; set; }
+
+    /// <summary>
+    /// Widths, in CSS pixels, of the responsive sweep. Empty checks 320 px and both edges of every breakpoint: the ones in
+    /// <c>options.Breakpoints</c> and the ones the preview's stylesheets use. A scenario's <c>.Responsive(r => r.Widths(...))</c> wins.
+    /// </summary>
+    public IReadOnlyList<int> ResponsiveWidths { get; set; } = [];
+
     /// <summary>Viewport preset names for visual and default runs. Empty uses the first viewport or the scenario's viewport.</summary>
     public IReadOnlyList<string> Viewports { get; set; } = [];
 
