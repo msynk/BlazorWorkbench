@@ -8,8 +8,8 @@ public static class DemoSetup
 {
     public static void Configure(WorkbenchOptions options)
     {
-        options.Title = "Demo Components (WebAssembly)";
         DemoCatalog.Configure(options);
+        options.Title = $"{DemoCatalog.Title} (WebAssembly)";
         // The scenarios are compiled into this client (linked from the Interactive Server demo).
         options.ScenarioAssemblies.Add(typeof(DemoSetup).Assembly);
     }

@@ -38,7 +38,7 @@ public class WebAssemblyTests(WorkbenchFixture browser, WebAssemblyFixture wasm)
     {
         var catalog = await wasm.Host.GetCatalogAsync();
         Assert.Equal("WebAssembly", catalog.HostingModel);
-        Assert.Equal("Demo Components (WebAssembly)", catalog.Title);
+        Assert.Equal("Trailhead UI (WebAssembly)", catalog.Title);
         Assert.True(catalog.Scenarios.Count() >= 60);
     }
 

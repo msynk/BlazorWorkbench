@@ -55,7 +55,7 @@ public class HybridTests(HybridFixture hybrid) : IClassFixture<HybridFixture>, I
 
         var catalog = await host.GetCatalogAsync(TestContext.Current.CancellationToken);
         Assert.Equal("Hybrid", catalog.HostingModel);
-        Assert.Equal("Demo Components (MAUI Blazor Hybrid)", catalog.Title);
+        Assert.Equal("Trailhead UI (MAUI Blazor Hybrid)", catalog.Title);
         Assert.Contains(catalog.Components, c => c.Title == "Device/Share card");
         Assert.Equal(0, (await host.ValidateAsync(TestContext.Current.CancellationToken)).Errors);
     }

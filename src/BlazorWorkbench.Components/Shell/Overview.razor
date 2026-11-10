@@ -1,5 +1,10 @@
 <section class="wb-overview">
     <h1 class="wb-title">@Catalog.Options.Title</h1>
+    @if (Catalog.Options.Introduction is { Length: > 0 } introduction)
+    {
+        <div class="wb-markdown wb-intro">@((MarkupString)SafeMarkdown.ToHtml(introduction))</div>
+        <h2 class="wb-h2">Catalog</h2>
+    }
     <div class="wb-stats">
         <div class="wb-stat"><span class="wb-stat-value">@Catalog.Components.Count</span><span>components</span></div>
         <div class="wb-stat"><span class="wb-stat-value">@Catalog.Scenarios.Count(s => !s.IsGenerated)</span><span>declared scenarios</span></div>

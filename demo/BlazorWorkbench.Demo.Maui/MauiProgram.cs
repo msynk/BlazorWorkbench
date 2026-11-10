@@ -17,8 +17,8 @@ public static class MauiProgram
         // .NET MAUI Essentials get the real platform services unless a scenario simulates them with .Device(...).
         builder.UseBlazorWorkbenchApp(options =>
         {
-            options.Title = "Demo Components (MAUI Blazor Hybrid)";
             DemoCatalog.Configure(options);
+            options.Title = $"{DemoCatalog.Title} (MAUI Blazor Hybrid)";
             options.PreviewStylesheets.Add("_content/BlazorWorkbench.Demo.Components/demo.css");
         });
 

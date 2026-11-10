@@ -1,0 +1,51 @@
+@* What a scenario simulates and verifies, as chips. In the shell a chip opens its panel; on documentation pages it links to
+   the scenario with that panel open. *@
+@if (Facts.Count > 0)
+{
+    <div class="wb-facts-block">
+        @foreach (var group in Facts.GroupBy(f => f.Group))
+        {
+            var label = group.Key == ScenarioFactGroup.Simulates ? "Simulates" : "Verifies";
+            <div class="wb-facts wb-facts-@label.ToLowerInvariant()">
+                <span class="wb-facts-label" id="@($"{IdPrefix}-{label}")">@label</span>
+                <ul aria-labelledby="@($"{IdPrefix}-{label}")">
+                    @foreach (var fact in group)
+                    {
+                        <li>
+                            @if (fact.Panel is { } panel && OnOpen.HasDelegate)
+                            {
+                                <button type="button" class="wb-fact" title="@($"Open {Title(panel)}")" @onclick="() => OnOpen.InvokeAsync(panel)">
+                                    <span class="wb-fact-kind">@fact.Kind</span> @fact.Text
+                                </button>
+                            }
+                            else if (fact.Panel is { } linkPanel && ScenarioId is not null)
+                            {
+                                <a class="wb-fact" href="@($"scenario/{Uri.EscapeDataString(ScenarioId)}?panel={linkPanel}")" title="@($"Open {Title(linkPanel)}")">
+                                    <span class="wb-fact-kind">@fact.Kind</span> @fact.Text
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="wb-fact"><span class="wb-fact-kind">@fact.Kind</span> @fact.Text</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ScenarioFact> Facts { get; set; } = [];
+
+    /// <summary>Opens a panel of the current scenario (shell). When not set, chips link to <see cref="ScenarioId"/>.</summary>
+    [Parameter] public EventCallback<string> OnOpen { get; set; }
+
+    [Parameter] public string? ScenarioId { get; set; }
+
+    /// <summary>Prefix for element ids, unique per list on the page.</summary>
+    [Parameter] public string IdPrefix { get; set; } = "wb-facts";
+
+    private static string Title(string panel) => panel.Length == 0 ? panel : char.ToUpperInvariant(panel[0]) + panel[1..];
+}

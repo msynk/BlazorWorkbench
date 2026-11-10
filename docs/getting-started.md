@@ -94,7 +94,9 @@ Scenario ids are stable and derived from the title and name. For example, `feedb
 
 | Area | What it does |
 | --- | --- |
+| Overview | The start page: your `options.Introduction` (Markdown, for example a guided tour), catalog statistics and catalog issues. |
 | Explorer | Groups components by title path. Press <kbd>/</kbd> to search names, tags, parameters and scenarios, then <kbd>Enter</kbd> to open the first result. |
+| Scenario header | The description, then chips that summarize what the scenario **simulates** (HTTP rules, user, clock, services, device, cascading values, culture, viewport, seed) and what it **verifies** (interaction tests, screenshots, accessibility rules, budgets). A chip opens the panel behind it. Documentation pages show the same chips for every scenario. |
 | Toolbar | Viewport presets, theme, culture and direction. **Reload** (<kbd>R</kbd>) keeps your edits; **Reset** (<kbd>Shift</kbd>+<kbd>R</kbd>) restores the declared scenario. |
 | Controls | Edits parameters live. Shows null, unset and fixture values separately. Invalid input is rejected with a reason. |
 | Environment | Simulated user, clock (with *advance* buttons), HTTP rules and exchanges, service sources and **gates** to release or fail. |
@@ -105,7 +107,16 @@ Scenario ids are stable and derived from the title and name. For example, `feedb
 | Visual | Baseline, current and difference images from the last `workbench test --visual` run. |
 | Code | Razor usage, the current controls exported as C# scenario code, and the arguments as JSON. |
 
-Every state is in the URL, so you can share a deep link.
+Every state is in the URL, so you can share a deep link. `?panel=environment` (or `controls`, `actions`, `diagnostics`, `interactions`, `accessibility`, `visual`, `code`) opens a panel, which is how the demo's tour links straight to the part of the UI that matters.
+
+To greet people on the overview page, set an introduction. It is rendered with the same safe Markdown subset as documentation, and relative links such as `scenario/{id}?panel=...` and `docs/{id}` open scenarios and documentation pages:
+
+```csharp
+options.Introduction = """
+    **Contoso UI** is our design system. Start with the [button](docs/inputs-button) or try a
+    [declined payment](scenario/commerce-checkout--card-declined?panel=diagnostics).
+    """;
+```
 
 ## 4. Automate
 

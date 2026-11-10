@@ -13,7 +13,6 @@ builder.Services.AddSimulatedDevice();
 
 builder.AddBlazorWorkbench(options =>
 {
-    options.Title = "Demo Components";
     DemoCatalog.Configure(options);
     options.PreviewStylesheets.Add("_content/BlazorWorkbench.Demo.Components/demo.css");
 });

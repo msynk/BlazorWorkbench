@@ -1,13 +1,49 @@
 # Blazor Workbench demo
 
-The demo is a small component library for a fictional outdoor store, **Trailhead**, plus the Workbench hosts that
-preview and test it. It is built to show what Workbench does that a demo page or a Storybook-style gallery does not:
-reach the states that are hard to reproduce in a running app, and turn every one of them into a test.
+**Trailhead UI** is the component library of a fictional outdoor store. The demo shows it in Blazor Workbench, which is
+built to do what a demo page or a Storybook-style gallery does not: reach the states that are hard to reproduce in a
+running app (a declined payment, a session about to expire, one failing endpoint, a phone without location access), and
+turn every one of them into a test.
+
+## Run it and take the tour
+
+```bash
+dotnet run --project demo/BlazorWorkbench.Demo     # http://localhost:5280
+```
+
+The overview page is a guided tour: sixteen stops, each one a link that opens a scenario with the relevant panel already
+open. On any scenario page, the chips under the title list what the scenario **simulates** (fake HTTP rules, the user,
+the clock, replaced services, the device, culture, viewport) and what it **verifies** (interaction tests, screenshots,
+accessibility rules, budgets). Click a chip to open the panel behind it.
+
+| Tour stop | What it shows | Code |
+| --- | --- | --- |
+| [A payment API that declines](http://localhost:5280/scenario/commerce-checkout--card-declined?panel=diagnostics) | Fake HTTP: `402`, `409`, `422` from a handler that reads the posted JSON, a timeout, a network error that clears on retry | [CheckoutScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs) |
+| [A spinner you can hold](http://localhost:5280/scenario/commerce-checkout--placing-order-gated?panel=environment) | Gates: a request waits until you, or a test step, release it | `.Hold("payment")`, `.ReleaseGate("payment")` |
+| [Fifteen minutes in one click](http://localhost:5280/scenario/account-session-timeout--active?panel=environment) | Fake clock: `TimeProvider` and its timers advance on demand | [SessionTimeout](BlazorWorkbench.Demo.Components/Account/SessionTimeout.razor) |
+| [Six users, no test accounts](http://localhost:5280/docs/account-workspace-settings) | Simulated users, roles and claims against the library's real authorization policies | [WorkspaceSettingsScenarios](BlazorWorkbench.Demo/Scenarios/AccountScenarios.cs) |
+| [A partial outage](http://localhost:5280/scenario/analytics-sales-dashboard--partial-outage?panel=environment) | One endpoint of a page fails; also gated, slow and offline variants | [SalesDashboardScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs) |
+| [A fake API you can explore](http://localhost:5280/scenario/commerce-product-search--start-typing?panel=diagnostics) | A custom handler that filters and sorts a fixed catalog | [FakeBackends](BlazorWorkbench.Demo/Fakes/FakeBackends.cs) |
+| [Services swapped per scenario](http://localhost:5280/scenario/layout-app-header--rewards-enabled?panel=environment) | `.Service<T>(...)`, `.Service<T, TImpl>()` and `.Services(...)` | [AppHeaderScenarios](BlazorWorkbench.Demo/Scenarios/AppShellScenarios.cs) |
+| [Phones, themes and right to left](http://localhost:5280/scenario/layout-app-header--phone) | Viewports with phone emulation, a custom `high-contrast` theme, `ar-SA` | [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
+| [Four stores, one price tag](http://localhost:5280/docs/commerce-price-tag) | Cascading values (validated by `WB1004`) and cultures | [PriceTagScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs) |
+| [A phone in the browser](http://localhost:5280/scenario/device-location-card--permission-denied?panel=environment) | Simulated .NET MAUI Essentials on any host | [DeviceScenarios](BlazorWorkbench.Demo/Scenarios/DeviceScenarios.cs) |
+| [Interaction tests](http://localhost:5280/scenario/forms-onboarding-wizard--start?panel=interactions) | Fill, select, check, keyboard, focus assertions, visual checkpoints | [OnboardingWizardScenarios](BlazorWorkbench.Demo/Scenarios/AppShellScenarios.cs) |
+| [Accessibility scans](http://localhost:5280/scenario/display-card--dont-icon-actions-without-names?panel=accessibility) | axe-core on a deliberate do/don't pair; the "don't" is skipped in CI with a reason | [CardScenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |
+| [Live controls and code](http://localhost:5280/scenario/display-badge--custom-accent?panel=controls) | Live parameters in the URL, a custom editor, export to Razor and C# | [HexColorEditor](BlazorWorkbench.Demo/Editors/HexColorEditor.razor) |
+| [Errors with context](http://localhost:5280/scenario/feedback-flaky-widget--throws-while-rendering?panel=diagnostics) | Exceptions captured with the scenario id instead of a blank page | [FlakyWidget](BlazorWorkbench.Demo.Components/Feedback/FlakyWidget.razor) |
+| [Screenshots that never flake](http://localhost:5280/scenario/analytics-revenue-chart--seeded-data?panel=visual) | Seeded random data, screenshots in both themes | [RevenueChartScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs) |
+| [Documentation for free](http://localhost:5280/docs/commerce-checkout) | Generated pages: parameters, dependencies, live previews, snippets | any component's **Docs** link |
+
+The tour itself is Markdown in [DemoTour.cs](BlazorWorkbench.Demo/DemoTour.cs), set with `options.Introduction`; a test in
+`tests/BlazorWorkbench.Components.Tests` fails if one of its links stops resolving.
+
+## The projects
 
 | Project | What it is |
 | --- | --- |
 | [BlazorWorkbench.Demo.Components](BlazorWorkbench.Demo.Components) | The component library: 32 components, from a `Button` to a checkout form and a sales dashboard. It knows nothing about Workbench. |
-| [BlazorWorkbench.Demo](BlazorWorkbench.Demo) | The Interactive Server host. It declares every scenario ([Scenarios](BlazorWorkbench.Demo/Scenarios)), the fake backends ([Fakes](BlazorWorkbench.Demo/Fakes)), a custom editor and a scenario provider. |
+| [BlazorWorkbench.Demo](BlazorWorkbench.Demo) | The Interactive Server host. It declares every scenario ([Scenarios](BlazorWorkbench.Demo/Scenarios)), the fake backends ([Fakes](BlazorWorkbench.Demo/Fakes)), a custom editor, a scenario provider and the tour. |
 | [BlazorWorkbench.Demo.Wasm](BlazorWorkbench.Demo.Wasm) + [.Client](BlazorWorkbench.Demo.Wasm.Client) | The same scenarios with Interactive WebAssembly. |
 | [BlazorWorkbench.Demo.Maui](BlazorWorkbench.Demo.Maui) | The same scenarios in a .NET MAUI Blazor Hybrid app, inside the platform WebView. |
 | [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests) | bUnit tests that reuse the scenarios: a smoke test per scenario and focused tests, without a browser. |
@@ -15,83 +51,33 @@ reach the states that are hard to reproduce in a running app, and turn every one
 The three hosts compile the same scenario files and call the same [DemoCatalog.Configure](BlazorWorkbench.Demo/DemoCatalog.cs),
 so one definition runs in every hosting model.
 
-## Run it
-
 ```bash
-# Interactive Server: http://localhost:5280
-dotnet run --project demo/BlazorWorkbench.Demo
 # Interactive WebAssembly: http://localhost:5281
 dotnet run --project demo/BlazorWorkbench.Demo.Wasm
 # .NET MAUI Blazor Hybrid (Windows, needs the maui-windows workload)
 dotnet run --project demo/BlazorWorkbench.Demo.Maui -f net10.0-windows10.0.19041.0
-
-# bUnit: every scenario plus focused tests, no browser
-dotnet test demo/BlazorWorkbench.Demo.Components.Tests
-
-# Render checks, interactions, axe-core and screenshots in Chromium (from the repository root)
-dotnet run --project src/BlazorWorkbench.Cli -- install-browsers
-dotnet run --project src/BlazorWorkbench.Cli -- test --a11y --visual
 ```
 
-## A ten-minute tour
+## One definition, every test
 
-Start the Interactive Server host and follow these stops. Each link opens the scenario in the Workbench UI.
+The 146 scenarios are also the test suite: render checks, 77 interaction tests, axe-core scans and visual comparisons
+in Chromium, in WebAssembly and in the MAUI WebView, plus a bUnit smoke test per scenario. From the repository root:
 
-1. **A payment API that declines on demand.**
-   [Checkout · Card declined](http://localhost:5280/scenario/commerce-checkout--card-declined): click **Place order**.
-   Every answer the payment service can give is a scenario: `402`, `409`, `422` from a custom handler that reads the
-   posted JSON, a timeout, a connection that fails once and then recovers. Requests never leave the process; open
-   **Diagnostics** to see each one with its matched rule.
+```bash
+dotnet test demo/BlazorWorkbench.Demo.Components.Tests                  # bUnit: every scenario plus focused tests, no browser
+dotnet run --project src/BlazorWorkbench.Cli -- install-browsers        # once
+dotnet run --project src/BlazorWorkbench.Cli -- test --a11y --visual    # render, interactions, axe-core, screenshots
+dotnet run --project src/BlazorWorkbench.Cli -- approve                 # accept reviewed screenshots as baselines
+```
 
-2. **Freeze a loading state, then release it.**
-   [Checkout · Placing order (gated)](http://localhost:5280/scenario/commerce-checkout--placing-order-gated): click
-   **Place order**, look at the spinner for as long as you like, then open **Environment** and release the `payment`
-   gate. Tests use the same gate (`.ReleaseGate("payment")`), so loading states are tested and screenshotted without sleeps.
-
-3. **Fifteen minutes in one click.**
-   [Session timeout · Active](http://localhost:5280/scenario/account-session-timeout--active): in **Environment**,
-   advance the clock by one minute at a time until the warning appears, then by one second to watch the countdown.
-   The component uses `TimeProvider` and its timers; the scenario freezes the clock with `.Clock(...)`. The
-   [flash sale banner](http://localhost:5280/scenario/commerce-flash-sale-banner--last-minute) works the same way.
-
-4. **Six users, no test accounts.**
-   [Workspace settings](http://localhost:5280/docs/account-workspace-settings) renders one component for a viewer, an
-   editor, an admin, an owner on the Pro plan, a billing contact (a claim, not a role) and a signed-out visitor. The
-   component's `AuthorizeView Policy="..."` blocks evaluate the real policies the library registers.
-
-5. **A page whose services fail one at a time.**
-   [Sales dashboard · Partial outage](http://localhost:5280/scenario/analytics-sales-dashboard--partial-outage): the
-   orders endpoint answers 500 and only that widget shows an error. Try *Loading (gated)*, *Slow network* (1.2 s
-   latency, and the preview still turns ready only when the data arrived) and *Phone*. Change **Period**: the request
-   goes to `?range=6m`, which a more specific fake rule answers.
-
-6. **A fake backend you can explore.**
-   [Product search · Start typing](http://localhost:5280/scenario/commerce-product-search--start-typing): type
-   `jacket` and sort by price. A custom handler filters a fixed catalog, so the component behaves as against a real API.
-
-7. **Breakpoints, phones and right-to-left.**
-   [App header · Phone](http://localhost:5280/scenario/layout-app-header--phone): open the menu. Switch the toolbar's
-   viewport, theme (including the custom `high-contrast` theme) and culture (`ar-SA` mirrors the layout) on any scenario.
-   Click a navigation link: the preview stays put and **Diagnostics** records the intercepted navigation.
-
-8. **Interaction tests as living documentation.**
-   [Onboarding wizard · Start](http://localhost:5280/scenario/forms-onboarding-wizard--start): open **Interactions** and
-   run *completes every step*. It fills, selects, checks, asserts focus moves to each step's heading, and records a
-   visual checkpoint per step in `--visual` runs.
-
-9. **Screenshots that never flake.**
-   [Revenue chart · Seeded data](http://localhost:5280/scenario/analytics-revenue-chart--seeded-data) draws random data
-   from the scenario's seeded `Random`: different per seed, identical on every run. *Light and dark* captures it in
-   both themes. Approve a `--visual` run with `workbench approve`, then open **Visual** to compare with the baseline.
-
-10. **One definition, every test.** Run the commands under [Run it](#run-it). The same 144 scenarios become render
-    checks, 76 interaction tests, axe-core scans and visual comparisons in Chromium, in WebAssembly and in the MAUI
-    WebView, and bUnit smoke tests in [BlazorWorkbench.Demo.Components.Tests](BlazorWorkbench.Demo.Components.Tests).
+The first `--visual` run reports every screenshot as missing; approve them, run again, and the **Visual** panel shows
+baseline, current and difference images.
 
 ## Where each feature is shown
 
 | Feature | Where to look |
 | --- | --- |
+| Guided tour on the overview page (`options.Introduction`) | [DemoTour](BlazorWorkbench.Demo/DemoTour.cs), [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
 | Fake HTTP: status codes, problem details, latency, timeouts, offline, `Times(n)` retries | [CheckoutScenarios](BlazorWorkbench.Demo/Scenarios/CommerceScenarios.cs), [WeatherScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs) |
 | Fake HTTP: custom handlers (`.Handle(...)`) that read the query string or the body | [FakeBackends](BlazorWorkbench.Demo/Fakes/FakeBackends.cs), used by product search and checkout |
 | Fake HTTP: query matching, shared rules in `set.Setup(...)`, `IHttpClientFactory` | [SalesDashboardScenarios](BlazorWorkbench.Demo/Scenarios/AnalyticsScenarios.cs), [ProductSearch](BlazorWorkbench.Demo.Components/Commerce/ProductSearch.razor) |
@@ -104,6 +90,7 @@ Start the Interactive Server host and follow these stops. Each link opens the sc
 | Viewports, mobile emulation, themes, a custom theme | App header, dashboard *Phone* and *Evening, dark theme*, [DemoCatalog](BlazorWorkbench.Demo/DemoCatalog.cs) |
 | Seeded data and fixtures | Revenue chart (`.Seed(7)`), [PeopleTableScenarios](BlazorWorkbench.Demo/Scenarios/DataScenarios.cs), checkout cart fixtures |
 | Interaction tests: forms, keyboard, focus, drag and drop, upload, checkpoints | Onboarding wizard, checkout, `SortableList`, `AvatarUpload`, `Dialog`, `Counter` |
+| Accessibility: a do/don't pair, a scan skipped with a reason | [CardScenarios](BlazorWorkbench.Demo/Scenarios/DisplayScenarios.cs) |
 | Device simulation (.NET MAUI Essentials) | [DeviceScenarios](BlazorWorkbench.Demo/Scenarios/DeviceScenarios.cs) |
 | Diagnostics: exceptions, failed requests, intercepted navigation | `FlakyWidget`, the app header's links, any scenario's **Diagnostics** panel |
 | Performance budgets | `Button · Primary`, `Sales dashboard · Loaded` |

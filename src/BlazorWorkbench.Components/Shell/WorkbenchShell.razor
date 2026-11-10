@@ -104,7 +104,8 @@
                             @if (_scenario.IsGenerated) { <span class="wb-badge" title="No scenarios are declared for this component">generated</span> }
                             @foreach (var tag in _scenario.Tags) { <span class="wb-badge">@tag</span> }
                         </h1>
-                        @if (_scenario.Description is { } description) { <p class="wb-muted">@description</p> }
+                        @if (_scenario.Description is { } description) { <p class="wb-muted wb-description">@description</p> }
+                        <ScenarioFactList Facts="_facts" OnOpen="SelectTab" IdPrefix="wb-stage-facts" />
                     </div>
                     <div class="wb-stage-status">
                         <span class="wb-state wb-state-@_previewState" role="status">@StateText</span>
@@ -186,6 +187,7 @@
     private ScenarioDefinition? _scenario;
     private ComponentEntry? _component;
     private List<CatalogIssue> _scenarioIssues = [];
+    private IReadOnlyList<ScenarioFact> _facts = [];
     private Dictionary<string, ArgOverride> _overrides = new(StringComparer.Ordinal);
     private Dictionary<string, string> _argErrors = new(StringComparer.Ordinal);
     private readonly List<DiagnosticDto> _diagnostics = [];
@@ -264,6 +266,7 @@
             return;
 
         _scenarioIssues = Catalog.IssuesFor(_scenario).Where(i => i.Severity != IssueSeverity.Info).ToList();
+        _facts = ScenarioFacts.Describe(_scenario, Options);
         try { _overrides = ArgsCodec.Decode(ArgsQuery); }
         catch (Exception ex) when (ex is JsonException or FormatException) { _overrides = new(StringComparer.Ordinal); }
 
@@ -333,6 +336,7 @@
         _metrics = null;
         _previewState = "loading";
         _scenarioIssues = [];
+        _facts = [];
     }
 
     private string BuildPreviewUrl(bool includeArgs)
@@ -526,6 +530,10 @@
                 _metrics = payload.TryGetProperty("metrics", out var m) ? m.Deserialize<PreviewMetrics>(WorkbenchJson.Options) : null;
                 if (_previewState is "ready" or "error")
                 {
+                    // Deep links such as ?panel=environment show the live services and requests without a click on Refresh.
+                    if (_tab == "environment")
+                        await Post("session", null);
+
                     if (_pendingInteraction is { } pending && _scenario.Interactions.FirstOrDefault(i => i.Name == pending) is { } test)
                     {
                         _pendingInteraction = null;

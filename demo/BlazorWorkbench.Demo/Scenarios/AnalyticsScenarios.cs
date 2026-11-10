@@ -55,12 +55,16 @@ public sealed class RevenueChartScenarios : ScenarioSet<RevenueChart>
         set.Setup(s => s.Parameter(c => c.Title, "Monthly revenue").Parameter(c => c.Points, StoreData.Revenue));
 
         set.Add("Twelve months", s => s
+            .Description("Twelve months of fixed data with a target line. Month names follow the culture: try fr-FR in the toolbar.")
             .Interaction("draws one bar per month", i => i.ExpectCount(By.Css(".chart-bar"), 12)));
         set.Add("Seeded data", s => s
             .Seed(7)
+            .Description("Random revenue from the scenario's seeded Random: another seed gives other data, every rerun gives the same.")
             .ParameterFrom(c => c.Points, ctx => StoreData.RandomRevenue(ctx.Random, 12), "Random revenue (seed 7)"));
-        set.Add("Light and dark", s => s.Visual(v => v.Themes("light", "dark")));
-        set.Add("Persian calendar", s => s.Culture("fa-IR"));
+        set.Add("Light and dark", s => s
+            .Visual(v => v.Themes("light", "dark"))
+            .Description("Visual runs capture this scenario in both themes. Toggle the Workbench theme (top right) to see the dark one."));
+        set.Add("Persian calendar", s => s.Culture("fa-IR").Description("fa-IR uses the Persian calendar for the period labels."));
         set.Add("Two years", s => s
             .Seed(24)
             .Parameter(c => c.Title, "Revenue, last 24 months")
@@ -107,6 +111,7 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
 
         set.Add("Loaded", s => s
             .Budget(readyWithin: TimeSpan.FromSeconds(3))
+            .Description("Three endpoints answered by the fake backend. Change Period: the request goes to ?range=6m, which a more specific rule answers.")
             .Interaction("shows every widget", i => i
                 .ExpectText(By.Css(".dashboard-title"), "Good morning, Ada")
                 .ExpectCount(By.TestId("kpi-value"), 4)
@@ -134,6 +139,7 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
 
         set.Add("Partial outage", s => s
             .Http(h => h.Get("/api/orders/recent").Fail(HttpStatusCode.InternalServerError))
+            .Description("GET /api/orders/recent answers 500: only the Recent orders widget shows an error, the rest of the page works.")
             .Interaction("only the orders widget fails", i => i
                 .ExpectText(By.Role("alert"), "Recent orders could not be loaded")
                 .ExpectCount(By.TestId("kpi-value"), 4)
@@ -143,12 +149,13 @@ public sealed class SalesDashboardScenarios : ScenarioSet<SalesDashboard>
             .Http(h => h.Latency(TimeSpan.FromMilliseconds(1200)))
             .Description("Every request takes 1.2 s. The preview turns ready only after the data arrived: no sleeps in tests."));
 
-        set.Add("Offline", s => s.Offline());
+        set.Add("Offline", s => s.Offline().Description("Every request fails with a connection error: each widget reports what is missing."));
 
-        set.Add("Phone", s => s.Viewport("mobile"));
+        set.Add("Phone", s => s.Viewport("mobile").Description("The mobile viewport: the grid stacks into one column."));
 
         set.Add("Evening, dark theme", s => s
             .Clock(StoreData.Now.AddHours(10))
+            .Description("Only the clock and the theme differ from Loaded: the greeting follows the time of day.")
             .Theme("dark")
             .Visual(v => v.Themes("dark")));
     }

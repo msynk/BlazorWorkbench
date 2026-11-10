@@ -113,8 +113,13 @@ public static partial class SafeMarkdown
                 {
                     var m = unordered.Success ? UnorderedRegex().Match(lines[i]) : OrderedRegex().Match(lines[i]);
                     if (!m.Success) break;
-                    html.Append("<li>").Append(Inline(m.Groups[1].Value.Trim())).Append("</li>");
+                    var item = m.Groups[1].Value.Trim();
                     i++;
+                    // Indented lines that do not start a new item continue the current one (a wrapped list item).
+                    while (i < lines.Length && lines[i].Length > 0 && char.IsWhiteSpace(lines[i][0]) && lines[i].Trim().Length > 0 &&
+                           !UnorderedRegex().IsMatch(lines[i]) && !OrderedRegex().IsMatch(lines[i]))
+                        item += " " + lines[i++].Trim();
+                    html.Append("<li>").Append(Inline(item)).Append("</li>");
                 }
 
                 html.Append("</").Append(tag).Append(">\n");

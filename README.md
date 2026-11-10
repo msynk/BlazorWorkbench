@@ -84,7 +84,7 @@ For a complete walkthrough, see [docs/getting-started.md](docs/getting-started.m
 
 ## See it in action
 
-The [demo](demo/README.md) is a component library for a fictional outdoor store, with 144 scenarios that run in all three hosting models. Clone the repository, run `dotnet run --project demo/BlazorWorkbench.Demo` and take the [ten-minute tour](demo/README.md#a-ten-minute-tour): a checkout whose payment API declines on demand, a session timeout you fast-forward with the fake clock, one settings page seen by six simulated users, and a dashboard whose services fail one at a time.
+The [demo](demo/README.md) is *Trailhead UI*, a component library for a fictional outdoor store, with 146 scenarios that run in all three hosting models. Clone the repository and run `dotnet run --project demo/BlazorWorkbench.Demo`: the overview page is a guided tour, and every stop opens a scenario with the right panel already open. You will decline a payment without a payment provider, freeze a spinner and release it, fast-forward a session timeout with the fake clock, see one settings page through the eyes of six simulated users, take down one endpoint of a dashboard, and watch axe-core catch a button without a name. The chips under each scenario's title list what it simulates and verifies.
 
 ## Packages
 

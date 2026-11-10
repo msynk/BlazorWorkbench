@@ -47,7 +47,7 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
             .Http(h => h.Post("/api/orders").RespondJson(StoreData.Confirmation, HttpStatusCode.Created).Delay(TimeSpan.FromMilliseconds(300))));
 
         set.Add("Ready to pay", s => s
-            .Description("Signed in, so name and email come from the simulated user's claims.")
+            .Description("Name and email come from the simulated user's claims. Click Place order: the fake backend answers 201 after 300 ms.")
             .Interaction("places the order", i => i
                 .Click(By.Role("button", "Place order"))
                 .ExpectVisible(By.Role("heading", "Order placed"))
@@ -61,6 +61,7 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
 
         set.Add("Guest checkout", s => s
             .Anonymous()
+            .Description("Signed out, below the free shipping threshold. Click Place order with empty fields to see client-side validation.")
             .Parameter(c => c.Initial, null)
             .Fixture(c => c.Lines, "Two mugs")
             .Interaction("requires contact details", i => i
@@ -86,6 +87,7 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
                 .Checkpoint("confirmed")));
 
         set.Add("Card declined", s => s
+            .Description("Click Place order: the payment API answers 402 with a problem response. The form keeps what the customer typed.")
             .Http(h => h.Post("/api/orders").RespondJson(new ProblemDetailsResponse("Card declined", "Insufficient funds."), HttpStatusCode.PaymentRequired))
             .Interaction("explains the decline and keeps the form", i => i
                 .Click(By.Role("button", "Place order"))
@@ -94,6 +96,7 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
                 .ExpectCallback("OnOrderPlaced", times: 0)));
 
         set.Add("Item sold out", s => s
+            .Description("Click Place order: 409 Conflict, and the server's explanation is shown as is.")
             .Http(h => h.Post("/api/orders").RespondJson(
                 new ProblemDetailsResponse("Out of stock", "Headlamp 400 sold out while you were checking out. Remove it to continue."),
                 HttpStatusCode.Conflict))
@@ -123,6 +126,7 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
                 .ExpectCallback("OnOrderPlaced", times: 1)));
 
         set.Add("Payment timeout", s => s
+            .Description("Click Place order: the request times out, and the message tells the customer they were not charged.")
             .Http(h => h.Post("/api/orders").Timeout())
             .Interaction("reassures the customer", i => i
                 .Click(By.Role("button", "Place order"))
@@ -130,12 +134,16 @@ public sealed class CheckoutScenarios : ScenarioSet<CheckoutForm>
 
         set.Add("Empty cart", s => s
             .Fixture(c => c.Lines, "Empty cart")
+            .Description("Nothing to pay for: Place order is disabled. Pick another cart under Lines in Controls.")
             .Interaction("cannot be submitted", i => i
                 .ExpectVisible(By.Text("Your cart is empty."))
                 .ExpectDisabled(By.Role("button", "Place order"))));
 
-        set.Add("Yen (Japanese)", s => s.Culture("ja-JP"));
-        set.Add("Euro (French)", s => s.Culture("fr-FR").Fixture(c => c.Lines, "Two mugs"));
+        set.Add("Yen (Japanese)", s => s.Culture("ja-JP").Description("The same cart in ja-JP: yen have no decimals, and every total follows."));
+        set.Add("Euro (French)", s => s
+            .Culture("fr-FR")
+            .Fixture(c => c.Lines, "Two mugs")
+            .Description("fr-FR: decimal comma, the euro sign after the amount, and shipping is charged below the threshold."));
     }
 }
 
@@ -162,6 +170,7 @@ public sealed class ProductSearchScenarios : ScenarioSet<ProductSearch>
             .Get("/api/products/search").Handle(FakeBackends.SearchProducts)));
 
         set.Add("Start typing", s => s
+            .Description("Type 'jacket', then sort by price. A custom handler answers every request; Diagnostics lists each one.")
             .Interaction("finds products by name or category", i => i
                 .Fill(By.Label("Search products"), "jacket")
                 .ExpectText(By.TestId("summary"), "4 results for “jacket”")
@@ -179,6 +188,7 @@ public sealed class ProductSearchScenarios : ScenarioSet<ProductSearch>
 
         set.Add("Results", s => s
             .Parameter(p => p.Query, "tent")
+            .Description("Starts with 'tent' typed. Click View on a product and check Actions for OnSelect.")
             .Interaction("opening a product raises OnSelect", i => i
                 .Click(By.Role("button", "View Summit 2P tent"))
                 .ExpectCallback("OnSelect", times: 1)));
@@ -187,10 +197,12 @@ public sealed class ProductSearchScenarios : ScenarioSet<ProductSearch>
 
         set.Add("No results", s => s
             .Parameter(p => p.Query, "kayak")
+            .Description("The store sells no kayaks: the handler returns an empty result.")
             .Interaction("suggests a broader term", i => i.ExpectText(By.TestId("summary"), "No results for “kayak”")));
 
         set.Add("Slow search (gated)", s => s
             .Parameter(p => p.Query, "headlamp")
+            .Description("The request waits at the 'search' gate, so 'Searching…' stays on screen. Release the gate in Environment.")
             .Http(h => h.Get("/api/products/search").Hold("search").Handle(FakeBackends.SearchProducts))
             .Interaction("shows progress, then results", i => i
                 .ExpectText(By.TestId("summary"), "Searching…")
@@ -199,13 +211,17 @@ public sealed class ProductSearchScenarios : ScenarioSet<ProductSearch>
 
         set.Add("Search unavailable", s => s
             .Parameter(p => p.Query, "stove")
+            .Description("The first request answers 503. Click Retry: the second one reaches the search handler.")
             .Http(h => h.Get("/api/products/search").Times(1).Fail(HttpStatusCode.ServiceUnavailable))
             .Interaction("recovers on retry", i => i
                 .ExpectText(By.Role("alert"), "Search is unavailable")
                 .Click(By.Role("button", "Retry"))
                 .ExpectCount(By.Css(".search-hit"), 1)));
 
-        set.Add("Swedish prices", s => s.Parameter(p => p.Query, "sleeping").Culture("sv-SE"));
+        set.Add("Swedish prices", s => s
+            .Parameter(p => p.Query, "sleeping")
+            .Culture("sv-SE")
+            .Description("sv-SE is not in the toolbar's culture list, but any culture works in a scenario: kronor, space as the group separator."));
     }
 }
 
@@ -234,11 +250,14 @@ public sealed class FlashSaleScenarios : ScenarioSet<FlashSaleBanner>
             .Parameter(b => b.EndsAt, StoreData.Now.AddHours(2)));
 
         set.Add("Live", s => s
+            .Description("Two hours left on a frozen clock. Press +1 h twice in Environment and the sale ends.")
             .Interaction("shop now raises OnShop", i => i
                 .ExpectText(By.TestId("countdown"), "02")
                 .Click(By.Role("button", "Shop the sale"))
                 .ExpectCallback("OnShop", times: 1)));
-        set.Add("Several days left", s => s.Parameter(b => b.EndsAt, StoreData.Now.AddDays(3).AddHours(5)));
+        set.Add("Several days left", s => s
+            .Parameter(b => b.EndsAt, StoreData.Now.AddDays(3).AddHours(5))
+            .Description("More than a day left: the countdown starts with days."));
         set.Add("Last minute", s => s
             .Parameter(b => b.EndsAt, StoreData.Now.AddSeconds(45))
             .Description("45 seconds left: the banner uses its urgent style. Advance the clock to end the sale."));
@@ -249,7 +268,8 @@ public sealed class FlashSaleScenarios : ScenarioSet<FlashSaleBanner>
                 .ExpectCount(By.Role("button", "Shop the sale"), 0)));
         set.Add("Starts tomorrow", s => s
             .Parameter(b => b.StartsAt, StoreData.Now.AddDays(1))
-            .Parameter(b => b.EndsAt, StoreData.Now.AddDays(3)));
+            .Parameter(b => b.EndsAt, StoreData.Now.AddDays(3))
+            .Description("Press +1 day in Environment: the sale goes live, and the component's own timer keeps running on the fake clock."));
         set.Add("Starts tomorrow (German)", s => s
             .Culture("de-DE")
             .Parameter(b => b.StartsAt, StoreData.Now.AddDays(1))
@@ -280,7 +300,10 @@ public sealed class PriceTagScenarios : ScenarioSet<PriceTag>
             .Interaction("adds 20 % VAT", i => i.ExpectText(By.TestId("price"), "154,80")));
         set.Add("Japan store (no decimals)", s => s.Cascade(StoreSettings.Japan).Culture("ja-JP").Parameter(p => p.Amount, 18_000m));
         set.Add("UK store", s => s.Cascade(StoreSettings.UnitedKingdom).Culture("en-GB"));
-        set.Add("UK store, German UI", s => s.Cascade(StoreSettings.UnitedKingdom).Culture("de-DE"));
+        set.Add("UK store, German UI", s => s
+            .Cascade(StoreSettings.UnitedKingdom)
+            .Culture("de-DE")
+            .Description("Pounds from the cascading store settings, decimal comma and symbol placement from the de-DE culture."));
         set.Add("On sale", s => s
             .Parameter(p => p.Amount, 90.30m)
             .Parameter(p => p.CompareAt, 129.00m)

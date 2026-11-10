@@ -41,6 +41,7 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
 
         set.Add("Desktop", s => s
             .Visual(v => v.Viewports("laptop", "tablet"))
+            .Description("Click a navigation link: the preview stays put, and Diagnostics records the intercepted navigation.")
             .Interaction("navigation stays inside the preview", i => i
                 .Click(By.Role("link", "Orders"))
                 .ExpectVisible(By.Role("link", "Orders"))
@@ -48,6 +49,7 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
 
         set.Add("Phone", s => s
             .Viewport("mobile")
+            .Description("Below 720 px the links collapse behind Menu. Automated runs emulate a real phone: touch input and a mobile viewport.")
             .Interaction("menu reveals the navigation", i => i
                 .ExpectHidden(By.Role("link", "Orders"))
                 .Click(By.Role("button", "Menu"))
@@ -58,12 +60,14 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
         set.Add("Signed out", s => s
             .Anonymous()
             .Parameter(h => h.CartCount, 0)
+            .Description("No user: a Sign in button instead of the account.")
             .Interaction("offers sign in", i => i
                 .Click(By.Role("button", "Sign in"))
                 .ExpectCallback("OnSignIn", times: 1)));
 
         set.Add("Rewards enabled", s => s
             .Service<IFeatureFlags>(_ => new StaticFeatureFlags(DemoFeatures.Rewards))
+            .Description("IFeatureFlags is replaced for this scenario only, and the Rewards link appears. Environment lists the override.")
             .Interaction("shows the flagged link", i => i.ExpectVisible(By.Role("link", "Rewards"))));
 
         set.Add("Every feature on", s => s
@@ -77,6 +81,7 @@ public sealed class AppHeaderScenarios : ScenarioSet<AppHeader>
 
         set.Add("Right to left", s => s
             .Culture("ar-SA")
+            .Description("ar-SA: the whole header mirrors, and the user and links are Arabic.")
             .User("ليلى أحمد")
             .Parameter(h => h.Brand, "ترِيل")
             .Parameter(h => h.Links, (IReadOnlyList<NavLinkItem>)[new("المتجر", "/shop"), new("المسارات", "/trails"), new("الطلبات", "/orders")])
@@ -103,6 +108,7 @@ public sealed class OnboardingWizardScenarios : ScenarioSet<OnboardingWizard>
                """);
 
         set.Add("Start", s => s
+            .Description("Open Interactions and run 'completes every step': fill, select, check, focus assertions and a checkpoint per step.")
             .Interaction("next is enabled once a name is entered", i => i
                 .ExpectDisabled(By.Role("button", "Next"))
                 .Fill(By.Label("Full name"), "Ada Lovelace")
@@ -132,11 +138,13 @@ public sealed class OnboardingWizardScenarios : ScenarioSet<OnboardingWizard>
                 .ExpectValue(By.Label("Full name"), "Grace Hopper")));
 
         set.Add("Prefilled", s => s
-            .Parameter(w => w.Initial, new OnboardingProfile("Grace Hopper", "Climbing", MeasurementUnits.Imperial, Newsletter: false)));
+            .Parameter(w => w.Initial, new OnboardingProfile("Grace Hopper", "Climbing", MeasurementUnits.Imperial, Newsletter: false))
+            .Description("A returning user's answers are already filled in."));
 
         set.Add("Review step", s => s
             .Parameter(w => w.Initial, new OnboardingProfile("Grace Hopper", "Climbing", MeasurementUnits.Imperial, Newsletter: false))
             .Parameter(w => w.StartStep, 3)
+            .Description("Starts on the last step, so reviewing it needs no clicking through.")
             .Interaction("finishes from the review", i => i
                 .Click(By.Role("button", "Finish"))
                 .ExpectCallback("OnCompleted", times: 1)));

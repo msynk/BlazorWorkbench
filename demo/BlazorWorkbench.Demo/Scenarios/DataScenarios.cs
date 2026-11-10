@@ -26,6 +26,14 @@ public sealed class PeopleTableScenarios : ScenarioSet<DataTable<Person>>
     protected override void Configure(ScenarioSetBuilder<DataTable<Person>> set)
     {
         set.Title("Data/Data table").Description("A generic, templated table: header and row templates, a caption and an empty state.").Tags("generic", "templates");
+        set.Documentation("""
+            `DataTable<TItem>` is generic, so the scenario set targets the closed type `DataTable<Person>`. The row template is
+            a `RenderFragment<Person>` passed with `.Template(...)`.
+
+            The rows come from **fixtures**: named data sets declared once with `set.Fixture(...)` and offered as a list in
+            **Controls**, so a reviewer can switch from three people to fifty without code. They are generated from the
+            scenario's seeded `Random`, so every run gets the same people.
+            """);
         set.Fixture<IReadOnlyList<Person>>("Three people", ctx => DemoData.People(ctx.Random, 3), "Seeded, deterministic sample");
         set.Fixture<IReadOnlyList<Person>>("Fifty people", ctx => DemoData.People(ctx.Random, 50));
         set.Fixture<IReadOnlyList<Person>>("Nobody", _ => []);
@@ -62,6 +70,7 @@ public sealed class WeatherScenarios : ScenarioSet<WeatherForecast>
 
         set.Add("Loaded", s => s
             .Http(h => h.Get("/api/weather?city=Tehran").RespondJson(Sunny).Delay(TimeSpan.FromMilliseconds(150)))
+            .Description("This rule matches the city in the query string; other cities fall through to the shared rule.")
             .Interaction("shows the temperature", i => i.ExpectText(By.TestId("temperature"), "31.5 °C").ExpectNoErrors()));
 
         set.Add("Loading", s => s
@@ -75,15 +84,18 @@ public sealed class WeatherScenarios : ScenarioSet<WeatherForecast>
         // Shared fallback response. Scenario rules are evaluated before shared (Setup) rules.
         set.Setup(s => s.Http(h => h.Get("/api/weather").RespondJson(Sunny)));
 
-        set.Add("Empty", s => s.Http(h => h.Get("/api/weather").Respond(HttpStatusCode.NoContent)));
+        set.Add("Empty", s => s
+            .Http(h => h.Get("/api/weather").Respond(HttpStatusCode.NoContent))
+            .Description("204 No Content: the service has no forecast for this city."));
 
         set.Add("Server error", s => s
             .Http(h => h.Get("/api/weather").Fail(HttpStatusCode.InternalServerError))
+            .Description("500 Internal Server Error: an error with a Retry button. Diagnostics lists the failed request.")
             .Interaction("shows an error with retry", i => i.ExpectVisible(By.Role("alert")).ExpectVisible(By.Role("button", "Retry"))));
 
-        set.Add("Timeout", s => s.Http(h => h.Get("/api/weather").Timeout()));
+        set.Add("Timeout", s => s.Http(h => h.Get("/api/weather").Timeout()).Description("The request times out, as with HttpClient.Timeout."));
 
-        set.Add("Offline", s => s.Offline());
+        set.Add("Offline", s => s.Offline().Description("Every request fails with a connection error."));
 
         set.Add("Recovers after retry", s => s
             .Http(h => h.Get("/api/weather").Times(1).Fail(HttpStatusCode.ServiceUnavailable))
@@ -109,6 +121,7 @@ public sealed class ProductListScenarios : ScenarioSet<ProductList>
 
         set.Add("In stock", s => s
             .Service<IProductService>(_ => new FakeProductService(DemoData.Products))
+            .Description("IProductService is replaced by an in-memory fake. Click Add and check Actions.")
             .Interaction("adding a product raises OnAdd", i => i
                 .Click(By.Role("button", "Add Mechanical keyboard to cart"))
                 .ExpectCallback("OnAdd", times: 1)));
@@ -117,6 +130,7 @@ public sealed class ProductListScenarios : ScenarioSet<ProductList>
 
         set.Add("Loading (gated)", s => s
             .Service<IProductService>(ctx => new FakeProductService(DemoData.Products, ctx.Gates, "products"))
+            .Description("A gate inside a fake service rather than an HTTP rule: release 'products' in Environment.")
             .Interaction("loads after the gate opens", i => i
                 .ExpectVisible(By.Text("Loading products"))
                 .ReleaseGate("products")

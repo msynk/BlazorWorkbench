@@ -43,6 +43,13 @@ public class WorkbenchOptions
     /// <summary>Title shown in the Workbench header and published catalogs.</summary>
     public string Title { get; set; } = "Blazor Workbench";
 
+    /// <summary>
+    /// Markdown shown at the top of the Overview page, for example what the library is, how to find your way around the
+    /// catalog, or a guided tour with links to scenarios (<c>scenario/{id}?panel=environment</c>) and documentation pages
+    /// (<c>docs/{id}</c>). Rendered with the safe Markdown subset: raw HTML is escaped.
+    /// </summary>
+    public string? Introduction { get; set; }
+
     public IList<ViewportPreset> Viewports { get; } = [.. ViewportPreset.Defaults];
     public IList<ThemeDefinition> Themes { get; } = [.. ThemeDefinition.Defaults];
 

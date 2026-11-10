@@ -27,7 +27,7 @@ public class ShellTests(WorkbenchFixture fixture)
     public async Task Overview_lists_catalog_and_explorer()
     {
         var page = await OpenAsync("");
-        await Expect(page.Locator(".wb-overview h1")).ToHaveTextAsync("Demo Components");
+        await Expect(page.Locator(".wb-overview h1")).ToHaveTextAsync("Trailhead UI");
         var catalog = await fixture.Host.GetCatalogAsync();
         await Expect(page.Locator(".wb-explorer-footer")).ToContainTextAsync($"{catalog.Components.Count} components · {catalog.Scenarios.Count()} scenarios");
         await Expect(page.Locator(".wb-node-component", new() { HasText = "Button" })).ToBeVisibleAsync();

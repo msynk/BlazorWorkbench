@@ -31,6 +31,7 @@ public sealed class SignupFormScenarios : ScenarioSet<SignupForm>
     protected override void Configure(ScenarioSetBuilder<SignupForm> set)
     {
         set.Title("Forms/Signup form").Description("A sign-up form with data annotation validation.").Tags("forms", "validation");
+        set.Documentation("The *Empty* interaction tests submit the form twice: once empty, to assert the three validation messages, and once filled in with `Fill` and `Check`. *Prefilled* starts from a fixture, so the model can be swapped in **Controls**.");
         set.Fixture<SignupModel>("Prefilled", _ => new SignupModel { Name = "Ada", Email = "ada@example.com", AcceptTerms = true });
 
         set.Add("Empty", s => s
@@ -56,6 +57,7 @@ public sealed class DialogScenarios : ScenarioSet<Dialog>
     protected override void Configure(ScenarioSetBuilder<Dialog> set)
     {
         set.Title("Overlays/Dialog").Description("A modal dialog that moves focus into itself when it opens and closes on Escape.").Tags("focus", "keyboard");
+        set.Documentation("`ExpectFocused` asserts where focus is, which screen reader and keyboard users depend on. The scenarios use the full-screen layout (`.Layout(ScenarioLayout.Fullscreen)`), and *Closed* opts out of screenshots because it renders nothing.");
         set.Setup(s => s
             .Parameter(d => d.Title, "Discard draft?")
             .ChildContent("Your unsaved changes will be lost.")
@@ -85,6 +87,7 @@ public sealed class AvatarUploadScenarios : ScenarioSet<AvatarUpload>
     protected override void Configure(ScenarioSetBuilder<AvatarUpload> set)
     {
         set.Title("Forms/Avatar upload").Description("Picks an image with InputFile, shows its name and size, and rejects files above a size limit.").Tags("forms", "files");
+        set.Documentation("Interaction tests upload files from bytes declared in the scenario (`Upload(By.Label(...), \"me.png\", bytes, \"image/png\")`), so file inputs are tested without files on disk.");
         set.Add("Default", s => s
             .Interaction("selecting a file shows its name", i => i
                 .Upload(By.Label("Profile picture"), "me.png", Pixel, "image/png")

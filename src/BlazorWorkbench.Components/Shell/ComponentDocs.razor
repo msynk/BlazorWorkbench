@@ -73,6 +73,7 @@
             <section class="wb-doc-scenario">
                 <h3 class="wb-h3"><a href="@($"scenario/{scenario.Id}")">@scenario.Name</a></h3>
                 @if (scenario.Description is { } description) { <p class="wb-muted">@description</p> }
+                <ScenarioFactList Facts="ScenarioFacts.Describe(scenario, Catalog.Options)" ScenarioId="@scenario.Id" IdPrefix="@($"wb-doc-facts-{index}")" />
                 @if (index < MaxLivePreviews)
                 {
                     <iframe class="wb-doc-frame" loading="lazy" title="Preview of @scenario.Name" src="@PreviewSource(scenario)"></iframe>

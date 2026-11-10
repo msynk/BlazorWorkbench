@@ -30,6 +30,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 
         set.Add("Viewer", s => s
             .User("Ada Lovelace", "Viewer")
+            .Description("The Viewer role: everything is read only.")
             .Interaction("settings are read only", i => i
                 .ExpectVisible(By.Text("Read only"))
                 .ExpectCount(By.Role("button", "Invite people"), 0)
@@ -37,6 +38,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 
         set.Add("Editor", s => s
             .User("Linus Torvalds", "Editor")
+            .Description("The Editor role can rename the workspace. Change the name and click Save.")
             .Interaction("renames the workspace", i => i
                 .ExpectDisabled(By.Role("button", "Save"))
                 .Fill(By.Label("Workspace name"), "Summit Crew")
@@ -45,6 +47,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 
         set.Add("Admin", s => s
             .User("Margaret Hamilton", "Admin")
+            .Description("Admins can also invite people, but billing stays with the owner.")
             .Interaction("invites people", i => i
                 .Click(By.Role("button", "Invite people"))
                 .ExpectCallback("OnInvite", times: 1)
@@ -52,6 +55,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 
         set.Add("Owner on Pro", s => s
             .User(u => u.Name("Grace Hopper").Role("Owner").Claim("plan", "pro"))
+            .Description("The Owner role and a plan=pro claim: billing, the Pro plan limits and the danger zone.")
             .Interaction("can delete the workspace", i => i
                 .ExpectVisible(By.Text("Unlimited projects"))
                 .Click(By.Role("button", "Delete workspace"))
@@ -67,6 +71,7 @@ public sealed class WorkspaceSettingsScenarios : ScenarioSet<WorkspaceSettings>
 
         set.Add("Signed out", s => s
             .Anonymous()
+            .Description("No user at all: the component asks to sign in.")
             .Interaction("asks to sign in", i => i
                 .Click(By.Role("button", "Sign in"))
                 .ExpectCallback("OnSignIn", times: 1)));
@@ -103,6 +108,7 @@ public sealed class SessionTimeoutScenarios : ScenarioSet<SessionTimeout>
 
         set.Add("Expiry warning", s => s
             .Parameter(t => t.LastActivity, Now.AddMinutes(-14))
+            .Description("One minute left: focus moves into the warning. Click Stay signed in and check Actions for OnExtended.")
             .Interaction("moves focus into the warning", i => i
                 .ExpectFocused(By.Role("alertdialog"))
                 .ExpectText(By.TestId("countdown"), "1:00"))
@@ -118,6 +124,7 @@ public sealed class SessionTimeoutScenarios : ScenarioSet<SessionTimeout>
 
         set.Add("Signed out", s => s
             .Parameter(t => t.LastActivity, Now.AddMinutes(-20))
+            .Description("Idle for 20 minutes: the session is over before the first render.")
             .Interaction("reports the sign-out once", i => i
                 .ExpectVisible(By.Role("heading", "You have been signed out"))
                 .ExpectCallback("OnSignedOut", times: 1)

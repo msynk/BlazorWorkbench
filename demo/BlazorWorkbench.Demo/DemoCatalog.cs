@@ -7,13 +7,21 @@ namespace BlazorWorkbench.Demo;
 
 /// <summary>
 /// Catalog configuration shared by every demo host (Interactive Server, WebAssembly and .NET MAUI Blazor Hybrid), so the
-/// three hosts show the same components, editors and themes. Each host adds its own title and stylesheets.
+/// three hosts show the same components, editors, themes and tour. Each host adds its stylesheets and a title suffix.
 /// </summary>
 public static class DemoCatalog
 {
+    /// <summary>The catalog title. Hosts other than Interactive Server append their hosting model.</summary>
+    public const string Title = "Trailhead UI";
+
     public static void Configure(WorkbenchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        options.Title = Title;
+
+        // The overview page opens with a guided tour of what Workbench does, with links into the scenarios.
+        options.Introduction = DemoTour.Markdown;
 
         // Components come from the library; scenarios come from the host's own assembly (discovered automatically).
         options.AddAssemblyOf<Button>();

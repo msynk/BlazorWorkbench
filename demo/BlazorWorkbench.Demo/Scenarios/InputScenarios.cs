@@ -18,6 +18,11 @@ public sealed class ButtonScenarios : ScenarioSet<Button>
                | `Primary` | The main action |
                | `Secondary` | Alternative actions |
                | `Danger` | Destructive actions |
+
+               **Workbench features here:** *Primary* has a performance budget (`.Budget(readyWithin: 3 s, maxDomUpdates: 20)`)
+               that `workbench test` enforces, and an interaction test that asserts the `OnClick` callback. *Large icon-only*
+               sets `aria-label`, an attribute captured by `CaptureUnmatchedValues`, with `.Parameter("aria-label", ...)`.
+               Open **Code** on any scenario to get the Razor markup for its current state.
                """);
 
         set.Add("Primary", s => s
@@ -53,6 +58,11 @@ public sealed class CounterScenarios : ScenarioSet<Counter>
     protected override void Configure(ScenarioSetBuilder<Counter> set)
     {
         set.Title("Inputs/Counter").Description("A numeric stepper with optional bounds and arrow-key support.").Tags("inputs", "keyboard");
+        set.Documentation("""
+            The interaction tests click, focus and press keys (`Press("ArrowUp")`), then assert text, focus and how often
+            `OnChanged` was raised. Click the buttons yourself and watch **Actions** count the callbacks; change **Start** or
+            **Step** in **Controls** and the URL keeps the new state, ready to share.
+            """);
 
         set.Add("Default", s => s
             .Interaction("increment and decrement", i => i
@@ -87,6 +97,10 @@ public sealed class TextFieldScenarios : ScenarioSet<TextField>
     protected override void Configure(ScenarioSetBuilder<TextField> set)
     {
         set.Title("Inputs/Text field").Description("A labeled text input with helper text, validation styling and two-way binding.").Tags("inputs", "forms");
+        set.Documentation("""
+            `Value` is two-way bound. Type into the preview: Workbench records `ValueChanged` in **Actions** and copies the new
+            value back into **Controls** and the URL, so the state you reached by typing survives a reload.
+            """);
         set.Setup(s => s.Parameter(t => t.Label, "Email address").Parameter(t => t.InputType, "email"));
 
         set.Add("Empty", s => s

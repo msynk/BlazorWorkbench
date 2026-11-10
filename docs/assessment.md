@@ -77,7 +77,7 @@ MPL-2.0 for axe-core is a file-level copyleft. Workbench redistributes the unmod
 
 | Measurement | Value |
 | --- | --- |
-| Demo catalog (32 components, 144 scenarios, 76 interaction tests) | built at startup in well under 1 s |
+| Demo catalog (32 components, 146 scenarios, 77 interaction tests) | built at startup in well under 1 s |
 | Synthetic catalog, 1,000 components × 10 parameters | build ≈ 0.75 s, filter ≈ 1 ms, catalog JSON ≈ 3 MB serialized in ≈ 0.25 s |
 | Explorer with 1,000 components (bUnit) | 25 collapsed groups; children render only when opened |
 | `workbench test --a11y --visual`, Interactive Server (144 scenarios, 4 workers) | ≈ 36 s after host start |

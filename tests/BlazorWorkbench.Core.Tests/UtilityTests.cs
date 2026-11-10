@@ -234,6 +234,18 @@ public class MarkdownTests
     }
 
     [Fact]
+    public void Indented_lines_continue_a_list_item()
+    {
+        var html = SafeMarkdown.ToHtml("- Open *Active* and press **+1 min**, then\n  **+1 s** to watch.\n- Second\n\nAfter");
+        Assert.Contains("<ul><li>Open <em>Active</em> and press <strong>+1 min</strong>, then <strong>+1 s</strong> to watch.</li><li>Second</li></ul>", html);
+        Assert.Contains("<p>After</p>", html);
+    }
+
+    [Fact]
+    public void Unindented_lines_end_a_list() =>
+        Assert.Contains("<ul><li>one</li></ul>\n<p>text</p>", SafeMarkdown.ToHtml("- one\ntext"));
+
+    [Fact]
     public void Allows_safe_links() =>
         Assert.Contains("<a href=\"https://example.com\" rel=\"noopener noreferrer\" target=\"_blank\">site</a>", SafeMarkdown.ToHtml("[site](https://example.com)"));
 }
