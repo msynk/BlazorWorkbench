@@ -22,7 +22,7 @@
 
     @if (_matches is not null)
     {
-        var total = _matches.Count + _pageMatches.Count;
+        var total = _matches.Count + _pageMatches.Count + _refMatches.Count;
         <p class="wb-muted wb-small" role="status">@total result@(total == 1 ? "" : "s")@(_matches.Count > MaxResults ? $", showing the first {MaxResults} scenarios; refine the search to see the rest" : "")</p>
         <ul class="wb-results">
             @foreach (var docPage in _pageMatches)
@@ -31,6 +31,15 @@
                     <a href="@($"pages/{docPage.Id}")" class="@(docPage.Id == SelectedPageId ? "active" : "")">
                         <span class="wb-result-component">Page</span>
                         <span>@docPage.Title</span>
+                    </a>
+                </li>
+            }
+            @foreach (var (reference, component) in _refMatches.Take(MaxResults))
+            {
+                <li>
+                    <a href="@RefHref(reference, component)" class="@(IsSelectedRef(reference, component) ? "active" : "")">
+                        <span class="wb-result-component">@reference.Reference.Title</span>
+                        <span>@component.Title</span>
                     </a>
                 </li>
             }
@@ -77,6 +86,30 @@
                 </details>
             }
             @RenderGroup(_tree, 0)
+            @foreach (var reference in _references)
+            {
+                var refOpen = IsExpanded("ref:" + reference.Reference.Id, SelectedRefId == reference.Reference.Id);
+                <details class="wb-ref" open="@refOpen">
+                    <summary class="wb-node-group" @onclick='() => Flip("ref:" + reference.Reference.Id, refOpen)' @onclick:preventDefault
+                             title="@($"Published catalog at {reference.Folder}")">
+                        <span class="wb-icon" aria-hidden="true">⧉</span>@reference.Reference.Title <span class="wb-muted wb-small">@reference.Components.Count</span>
+                    </summary>
+                    @if (refOpen)
+                    {
+                        @if (reference.Error is { } refError)
+                        {
+                            <p class="wb-muted wb-small wb-ref-error" role="note">@refError</p>
+                        }
+                        <ul class="wb-tree">
+                            @foreach (var component in reference.Components)
+                            {
+                                <li><a href="@RefHref(reference, component)" class="@(IsSelectedRef(reference, component) ? "active" : "")"
+                                       aria-current="@(IsSelectedRef(reference, component) ? "page" : null)">@component.Title.Replace("/", " / ")</a></li>
+                            }
+                        </ul>
+                    }
+                </details>
+            }
         </nav>
     }
 
@@ -134,6 +167,29 @@
     [Parameter] public string? SelectedComponentId { get; set; }
     [Parameter] public string? SelectedPageId { get; set; }
 
+    /// <summary>The referenced catalog and component on screen (<c>refs/{id}/{component}</c>).</summary>
+    [Parameter] public string? SelectedRefId { get; set; }
+
+    [Parameter] public string? SelectedRefComponentId { get; set; }
+
+    private IReadOnlyList<ReferencedCatalog> _references = [];
+    private List<(ReferencedCatalog Reference, ReferencedComponent Component)> _refMatches = [];
+
+    private static string RefHref(ReferencedCatalog reference, ReferencedComponent component) =>
+        $"refs/{Uri.EscapeDataString(reference.Reference.Id)}/{Uri.EscapeDataString(component.Id)}";
+
+    private bool IsSelectedRef(ReferencedCatalog reference, ReferencedComponent component) =>
+        SelectedRefId == reference.Reference.Id && SelectedRefComponentId == component.Id;
+
+    private async Task LoadReferencesAsync()
+    {
+        if (Catalog.Options.CatalogReferences.Count == 0 || Services.GetService(typeof(CatalogReferenceLoader)) is not CatalogReferenceLoader loader)
+            return;
+        _references = await loader.LoadAllAsync(Catalog.Options, new Uri(Navigation.BaseUri));
+        if (_query.Length > 0)
+            Refresh();
+    }
+
     /// <summary>Recently opened scenario ids, most recent first.</summary>
     [Parameter] public IReadOnlyList<string> Recent { get; set; } = [];
 
@@ -178,6 +234,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadReferencesAsync();
         await LoadChangesAsync();
         if (Services.GetService(typeof(ITestResultsProvider)) is ITestResultsProvider provider)
         {
@@ -271,10 +328,12 @@
         {
             _matches = null;
             _pageMatches = [];
+            _refMatches = [];
             return;
         }
 
         (_matches, _pageMatches) = Search(_query.Trim());
+        _refMatches = SearchReferences(_query.Trim());
     }
 
     private void ToggleFilter(string token)
@@ -313,6 +372,20 @@
             .ToList();
         var pages = filters.Length > 0 ? [] : Catalog.Pages.Where(p => terms.All(t => Has(p.Title, t) || Has(p.Markdown, t))).ToList();
         return (scenarios, pages);
+    }
+
+    /// <summary>Components of referenced catalogs whose title, name, summary, tags, parameters or scenarios contain every term. Filters exclude them.</summary>
+    private List<(ReferencedCatalog, ReferencedComponent)> SearchReferences(string text)
+    {
+        var all = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (all.Any(t => t.IndexOf(':') > 0))
+            return [];
+        static bool Has(string? value, string term) => value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+        return _references
+            .SelectMany(r => r.Components.Select(c => (r, c)))
+            .Where(x => all.All(t => Has(x.c.Title, t) || Has(x.c.Name, t) || Has(x.c.Summary, t) || x.c.Tags.Any(g => Has(g, t)) ||
+                                     x.c.Parameters.Any(p => Has(p, t)) || x.c.Scenarios.Any(s => Has(s, t))))
+            .ToList();
     }
 
     private bool Matches(ComponentEntry c, ScenarioDefinition s, string filter)
@@ -357,6 +430,8 @@
             Navigation.NavigateTo($"pages/{_pageMatches[0].Id}");
         else if (_matches is { Count: > 0 })
             Navigation.NavigateTo($"scenario/{_matches[0].Scenario.Id}");
+        else if (_refMatches.Count > 0)
+            Navigation.NavigateTo(RefHref(_refMatches[0].Reference, _refMatches[0].Component));
     }
 
     private bool IsOpen(Node node) =>

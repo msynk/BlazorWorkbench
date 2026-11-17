@@ -104,6 +104,7 @@ public static class WorkbenchRuntimeServiceCollectionExtensions
         });
         services.TryAddScoped<ScenarioSession>();
         services.TryAddScoped<ViewerTimeZone>();
+        services.TryAddSingleton<CatalogReferenceLoader>();
         services.TryAddScoped(sp => sp.GetRequiredService<ScenarioSession>().Gates);
         services.TryAddScoped(sp => sp.GetRequiredService<ScenarioSession>().Context
                                     ?? throw new InvalidOperationException("ScenarioContext is available only while a scenario is active."));

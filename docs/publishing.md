@@ -23,6 +23,23 @@ The catalog also contains `llms.txt` ([llmstxt.org](https://llmstxt.org/)): the 
 grouped by category, with a link to its page, its summary, its parameters and its scenarios. Coding agents and AI search
 read it to find the right component without crawling every page.
 
+## Composing catalogs
+
+A Workbench can list other teams' published catalogs next to its own components, like Storybook's composition:
+
+```csharp
+options.AddCatalogReference("Design system", "https://design.example.com/catalog/");
+options.AddCatalogReference("Icons", "catalogs/icons/");          // a folder served by this host
+```
+
+Each reference becomes a group at the end of the explorer tree, its components appear in search results, and opening one
+shows its published page inside the Workbench, with a link to open it on its own. Workbench reads only the catalog's
+`search.json` (at most 4 MB and 5,000 components, cached for five minutes) and frames the page with a sandbox that runs no
+scripts. A catalog that cannot be loaded shows the reason in its group; a host that refuses framing still offers the link.
+In WebAssembly hosts the browser fetches `search.json`, so a catalog on another origin must allow it with CORS (GitHub
+Pages and most static hosts do); Interactive Server hosts fetch it on the server. The server demo references a small
+stand-in catalog in `demo/BlazorWorkbench.Demo/wwwroot/catalogs/trail-icons`.
+
 ## What is published, and what is not
 
 The publisher works from the catalog API and screenshots. It never includes:

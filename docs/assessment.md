@@ -144,13 +144,13 @@ Features added:
 | Panels and toolbar items of your own (Storybook addon API, Lookbook panels) | Done: `options.AddPanel<T>(title)`, `options.AddToolbarItem<T>()`, `WorkbenchExtensionContext` with `EvaluateAsync` in the preview ([extensibility](extensibility.md#panels-and-toolbar-items-of-your-own)) |
 | JSON editor for complex parameters (Storybook object control) | Done: records, classes and collections of plain data, deserialized into the declared type only |
 | Synchronized interaction across Compare frames (Polypane synced panes) | Done: **Sync interactions** in the Compare view |
+| Catalog composition (Storybook refs) | Done: `options.AddCatalogReference(title, url)` lists published catalogs in the explorer and search, with their pages framed without scripts ([publishing](publishing.md#composing-catalogs)) |
 
 Still open, with the reason:
 
 | Gap | Why |
 | --- | --- |
-| Live Razor playground (Playroom) | Still needs Razor compilation in the browser (now feasible on WebAssembly only). |
-| Catalog composition (Storybook refs) | Still open; composing manifests for MCP first is the cheaper step. |
+| Live Razor playground (Playroom) | Needs Razor and Roslyn compilation at run time. In the browser that means shipping the compiler (tens of MB) to WebAssembly hosts only; on the server it means compiling and running code typed into a web page, which would turn every reachable Workbench into a remote code execution endpoint. Decorators, the JSON editor and the Code panel cover the composition use cases without either. |
 
 Problems found by the audit and fixed:
 

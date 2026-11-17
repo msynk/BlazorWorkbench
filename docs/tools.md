@@ -191,6 +191,9 @@ options.ExplorerOrder.Add("Inputs/Button");         // a component within its gr
 
 Alt+arrows follow the same order.
 
+**Referenced catalogs.** Catalogs published by other teams and added with `options.AddCatalogReference(title, url)` are
+listed as groups at the end of the tree and appear in search; see [composing catalogs](publishing.md#composing-catalogs).
+
 **Edit links.** Next to **Docs** above the preview, **Edit scenario** opens the line of `set.Add(...)` that declares the
 scenario, and **Edit component** the component's source file, in your editor. ASP.NET Core hosts offer them in Development
 when remote access is off, with Visual Studio Code; set `options.EditorUrlTemplate` for another editor

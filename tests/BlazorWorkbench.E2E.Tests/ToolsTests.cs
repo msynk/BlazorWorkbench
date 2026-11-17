@@ -375,4 +375,20 @@ public class ToolsTests(WorkbenchFixture fixture)
         await Expect(second.Locator(".counter")).Not.ToHaveTextAsync(before, new() { Timeout = 10_000 });
         Assert.Equal(await first.Locator(".counter").InnerTextAsync(), await second.Locator(".counter").InnerTextAsync());
     }
+
+    [Fact]
+    public async Task Referenced_catalogs_appear_in_the_explorer_search_and_main_area()
+    {
+        var page = await OpenAsync("");
+        var group = page.Locator("details.wb-ref", new() { HasText = "Trail icons" });
+        await Expect(group).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await group.Locator("summary").ClickAsync();
+        await group.GetByRole(AriaRole.Link, new() { Name = "Icons / Trail marker" }).ClickAsync();
+        await Expect(page).ToHaveURLAsync(new Regex("refs/trail-icons/icons-trail-marker"));
+        await Expect(page.Locator(".wb-ref-page h1")).ToContainTextAsync("Trail marker");
+        await Expect(page.FrameLocator(".wb-ref-frame").Locator("h1")).ToHaveTextAsync("Trail marker");
+
+        await page.Locator("#wb-search").FillAsync("summit");
+        await Expect(page.Locator(".wb-results a", new() { HasText = "Icons/Summit" })).ToBeVisibleAsync();
+    }
 }

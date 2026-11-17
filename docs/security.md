@@ -20,6 +20,7 @@ Workbench is a development tool that runs next to application code. It is secure
 | Simulated device data | `.Device(...)` fakes never call platform APIs. Secure storage values are never written to diagnostics. |
 | Editor links | **Edit scenario** and **Edit component** contain absolute paths of the machine running the Workbench. ASP.NET Core hosts offer them only in Development with remote access off; setting `EditorUrlTemplate` yourself shows them to everyone who can open the Workbench. Published catalogs never contain them. |
 | Preview commands | A preview obeys messages only from the window that embeds it (the shell), so script in a sibling frame (another preview, the Gallery, the test runner) cannot change its arguments, storage or gates. |
+| Referenced catalogs | Only `search.json` of a referenced catalog is read (size and count limits, ids restricted to URL-safe characters), and its pages are framed with `sandbox` without `allow-scripts` and with `referrerpolicy="no-referrer"`. References come from your code, never from requests. |
 | Browser storage | Each preview gets its own in-memory `localStorage` and `sessionStorage` (`IsolateBrowserStorage`); what components store never reaches the browser's real storage. |
 
 ## Remote access

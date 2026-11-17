@@ -1,0 +1,2 @@
+[{"id":"icons-trail-marker","title":"Icons/Trail marker","name":"TrailMarker","summary":"A blaze painted on trees and rocks: the color says which trail you are on.","tags":["icons"],"parameters":["Color","Size"],"scenarios":["Red","Blue","Small"]},
+ {"id":"icons-summit","title":"Icons/Summit","name":"Summit","summary":"A peak with an optional elevation label.","tags":["icons"],"parameters":["Elevation"],"scenarios":["Default","With elevation"]}]

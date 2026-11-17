@@ -3,6 +3,7 @@
 @page "/docs/{ComponentId}"
 @page "/pages/{PageId}"
 @page "/tokens"
+@page "/refs/{RefId}/{RefComponentId}"
 @implements IAsyncDisposable
 @inject WorkbenchCatalogAccessor Catalogs
 @inject NavigationManager Navigation
@@ -119,16 +120,21 @@
 
     <aside class="wb-sidebar" aria-label="Component explorer">
         <Explorer Catalog="Catalog" SelectedScenarioId="@_scenario?.Id" SelectedComponentId="@ComponentId" SelectedPageId="@PageId" Recent="_recent" Pinned="_pinned"
+                  SelectedRefId="@RefId" SelectedRefComponentId="@RefComponentId"
                   UiRun="_uiRun" OnRunTests="RunTests" OnStopTests="StopTests" />
     </aside>
 
     <main class="wb-main" id="wb-main" tabindex="-1">
-        <ErrorBoundary @key="@($"{ScenarioId}|{ComponentId}|{PageId}|{IsTokensPage}")" @ref="_mainBoundary">
+        <ErrorBoundary @key="@($"{ScenarioId}|{ComponentId}|{PageId}|{IsTokensPage}|{RefId}|{RefComponentId}")" @ref="_mainBoundary">
         <ErrorContent Context="mainError">
             <ShellError Error="mainError" What="This page" OnRecover="() => _mainBoundary?.Recover()" />
         </ErrorContent>
         <ChildContent>
-        @if (ComponentId is not null)
+        @if (RefId is not null && RefComponentId is not null)
+        {
+            <ReferencedComponentView RefId="@RefId" ComponentId="@RefComponentId" Options="Options" />
+        }
+        else if (ComponentId is not null)
         {
             @if (Catalog.FindComponent(ComponentId) is { } docComponent)
             {
@@ -419,6 +425,8 @@
     [Parameter] public string? ScenarioId { get; set; }
     [Parameter] public string? ComponentId { get; set; }
     [Parameter] public string? PageId { get; set; }
+    [Parameter] public string? RefId { get; set; }
+    [Parameter] public string? RefComponentId { get; set; }
     [SupplyParameterFromQuery(Name = "args")] public string? ArgsQuery { get; set; }
     [SupplyParameterFromQuery(Name = "viewport")] public string? ViewportQuery { get; set; }
     [SupplyParameterFromQuery(Name = "theme")] public string? ThemeQuery { get; set; }
@@ -514,7 +522,9 @@
         _evaluations.Clear();
     }
 
-    private string PageTitleText => ComponentId is not null
+    private string PageTitleText => RefComponentId is not null
+        ? $"{RefComponentId} · {Options.CatalogReferences.FirstOrDefault(r => r.Id == RefId)?.Title ?? "Reference"} · {Options.Title}"
+        : ComponentId is not null
         ? $"{Catalog.FindComponent(ComponentId)?.DisplayName ?? "Docs"} · {Options.Title}"
         : PageId is not null ? $"{Catalog.FindPage(PageId)?.DisplayName ?? "Page"} · {Options.Title}"
         : IsTokensPage ? $"Design tokens · {Options.Title}"

@@ -1,0 +1,57 @@
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+
+@* A component of a referenced catalog (options.AddCatalogReference): its published page, framed without scripts. *@
+@if (_catalog is null)
+{
+    <p class="wb-muted" role="status">Loading the referenced catalog…</p>
+}
+else if (_component is null)
+{
+    <div class="wb-empty" role="alert">
+        <h2>@(_catalog.Error ?? $"'{ComponentId}' is not in {_catalog.Reference.Title}.")</h2>
+        <p>The referenced catalog is published at <a href="@_catalog.Folder" target="_blank" rel="noopener noreferrer">@_catalog.Folder</a>.</p>
+    </div>
+}
+else
+{
+    var pageUrl = _catalog.PageUrl(_component.Id);
+    <article class="wb-docs wb-ref-page">
+        <div class="wb-crumbs">@_catalog.Reference.Title / @string.Join(" / ", _component.Title.Split('/').SkipLast(1))</div>
+        <h1 class="wb-title">@_component.Title.Split('/')[^1] <span class="wb-badge" title="From a referenced catalog">@_catalog.Reference.Title</span></h1>
+        @if (_component.Summary is { } summary) { <p class="wb-lead">@summary</p> }
+        <p class="wb-muted wb-small">
+            <code>@_component.Name</code>
+            @if (_component.Scenarios.Count > 0) { <span> · @_component.Scenarios.Count scenario@(_component.Scenarios.Count == 1 ? "" : "s")</span> }
+            · <a href="@pageUrl" target="_blank" rel="noopener noreferrer">Open the published page ↗</a>
+        </p>
+        @* No scripts: the page is another team's static catalog. Hosts that refuse framing show nothing; the link above still works. *@
+        <iframe class="wb-ref-frame" title="@($"{_component.Title} in {_catalog.Reference.Title}")" src="@pageUrl"
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" loading="lazy"></iframe>
+    </article>
+}
+
+@code {
+    private ReferencedCatalog? _catalog;
+    private ReferencedComponent? _component;
+
+    [Parameter, EditorRequired] public string RefId { get; set; } = "";
+    [Parameter, EditorRequired] public string ComponentId { get; set; } = "";
+    [Parameter, EditorRequired] public WorkbenchOptions Options { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var reference = Options.CatalogReferences.FirstOrDefault(r => r.Id == RefId);
+        if (reference is null)
+        {
+            _catalog = new ReferencedCatalog(new CatalogReference(RefId, ""), new Uri(Navigation.BaseUri), [], $"No catalog reference named '{RefId}'.");
+            _component = null;
+            return;
+        }
+
+        if (Services.GetService(typeof(CatalogReferenceLoader)) is not CatalogReferenceLoader loader)
+            return;
+        _catalog = await loader.LoadAsync(reference, new Uri(Navigation.BaseUri));
+        _component = _catalog.Components.FirstOrDefault(c => c.Id == ComponentId);
+    }
+}

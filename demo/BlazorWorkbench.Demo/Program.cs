@@ -15,6 +15,8 @@ builder.AddBlazorWorkbench(options =>
 {
     DemoCatalog.Configure(options);
     options.PreviewStylesheets.Add("_content/BlazorWorkbench.Demo.Components/demo.css");
+    // Another team's published catalog, listed in the explorer next to this one (wwwroot/catalogs/trail-icons is a stand-in).
+    options.AddCatalogReference("Trail icons", "catalogs/trail-icons/");
 });
 
 var app = builder.Build();

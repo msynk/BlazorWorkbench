@@ -87,7 +87,15 @@ public class HybridTests(HybridFixture hybrid) : IClassFixture<HybridFixture>, I
         var host = Host;
         using var playwright = await Playwright.CreateAsync();
         await using var browser = await playwright.Chromium.ConnectOverCDPAsync(host.Info.DevToolsEndpoint!.ToString());
-        var page = browser.Contexts.SelectMany(c => c.Pages).First(p => p.Url.StartsWith("https://0.0.0.1/", StringComparison.Ordinal));
+        // When this test runs first, the app may still be loading its first document: wait for the WebView's page.
+        IPage? page = null;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        while ((page = browser.Contexts.SelectMany(c => c.Pages).FirstOrDefault(p => p.Url.StartsWith("https://0.0.0.1/", StringComparison.Ordinal))) is null)
+        {
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(30), "The app's WebView never navigated to its page: " +
+                string.Join(", ", browser.Contexts.SelectMany(c => c.Pages).Select(p => p.Url)));
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
 
         await page.GotoAsync(new Uri(host.Info.AppOrigin!, "_workbench/scenarios").ToString());
         await Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Device/Share card" })).ToBeVisibleAsync();

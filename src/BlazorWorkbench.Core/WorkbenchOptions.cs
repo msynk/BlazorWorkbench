@@ -137,6 +137,13 @@ public class WorkbenchOptions
     /// </summary>
     public IList<WorkbenchPanel> Panels { get; } = [];
 
+    /// <summary>
+    /// Other teams' component catalogs, published with <c>workbench publish</c>, listed in the explorer next to your own
+    /// (Storybook's composition): their components appear in a group and in search, and their pages open inside the
+    /// Workbench. Add them with <see cref="AddCatalogReference"/>.
+    /// </summary>
+    public IList<CatalogReference> CatalogReferences { get; } = [];
+
     /// <summary>Components of your own in the header toolbar while a scenario is open. Add them with <see cref="AddToolbarItem{TItem}"/>.</summary>
     public IList<Type> ToolbarItems { get; } = [];
 
@@ -284,6 +291,24 @@ public class WorkbenchOptions
         return this;
     }
 
+    /// <summary>
+    /// Lists a published catalog (the folder <c>workbench publish</c> writes, with its <c>search.json</c>) in the explorer.
+    /// </summary>
+    /// <param name="title">Group label in the explorer, for example <c>Design system</c>.</param>
+    /// <param name="url">The catalog folder: an absolute <c>http(s)</c> URL or a path relative to the Workbench host.</param>
+    public WorkbenchOptions AddCatalogReference(string title, string url)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        var reference = new CatalogReference(title, url);
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absolute) && absolute.Scheme is not ("http" or "https"))
+            throw new ArgumentException("A catalog reference must be an http(s) URL or a relative path.", nameof(url));
+        if (CatalogReferences.Any(r => r.Id == reference.Id))
+            throw new ArgumentException($"A catalog reference with the id '{reference.Id}' already exists.", nameof(title));
+        CatalogReferences.Add(reference);
+        return this;
+    }
+
     /// <summary>Adds a toolbar menu (see <see cref="Globals"/>).</summary>
     /// <param name="label">Menu label, for example <c>Density</c>; its kebab-case form is the id (<c>density</c>).</param>
     /// <param name="values">The values offered.</param>
@@ -380,6 +405,23 @@ public sealed record BreakpointPreset(string Name, int MinWidth)
         }
 
         return widths.Where(w => w is >= MinViewportWidth and <= MaxViewportSize).Take(MaxSweepWidths).ToArray();
+    }
+}
+
+/// <summary>A published catalog listed in the explorer (<see cref="WorkbenchOptions.AddCatalogReference"/>).</summary>
+/// <param name="Title">Group label.</param>
+/// <param name="Url">The catalog folder (absolute <c>http(s)</c> URL or a path relative to the host).</param>
+public sealed record CatalogReference(string Title, string Url)
+{
+    /// <summary>Kebab-case id used in the URL (<c>refs/{id}/{component}</c>).</summary>
+    public string Id => Naming.ToSlug(Title);
+
+    /// <summary>The catalog folder as an absolute URL, resolved against <paramref name="baseUri"/>, ending with a slash.</summary>
+    public Uri Resolve(Uri baseUri)
+    {
+        ArgumentNullException.ThrowIfNull(baseUri);
+        var folder = Url.EndsWith('/') ? Url : Url + "/";
+        return new Uri(baseUri, folder);
     }
 }
 
