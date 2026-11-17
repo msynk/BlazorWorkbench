@@ -246,6 +246,13 @@ Workbench found real defects in the demo library, which shows it works as intend
 - Demo overhaul (feature-level components): `AppHeader` named its cart "Cart, 128 items" while the badge showed "99+" (axe `label-content-name-mismatch` in the *Busy cart* scenario).
 - Pending-count race: when several fake requests finished at once (a dashboard releasing three requests from one gate), the preview could receive the activity counts out of order and keep a stale non-zero value. Interaction steps then waited for their 5 s idle limit, and a Blazor Hybrid run timed out waiting for readiness. Fixed by sending the current count when the message goes out.
 
+- Round 4, Blazor Hybrid: the flash sale banner's "Shop the sale" button lost its light background on hover (the generic
+  `.btn-primary:hover` rule is more specific), leaving dark text on a dark background. It surfaced in the MAUI app, whose
+  WebView sat under the real mouse pointer, once a runner bug was fixed: axe-core shares a rule's `tags` array between
+  violations and incomplete results, and Playwright serialized the repeated reference as an object, which ended the scan
+  with an infrastructure error. Hybrid runs now also move the synthetic pointer to a corner, so `:hover` never depends on
+  where the mouse happens to be.
+
 ## Remaining gaps
 
 | Gap | Why it remains | Next step |

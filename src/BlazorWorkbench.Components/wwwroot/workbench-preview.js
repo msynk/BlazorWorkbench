@@ -412,7 +412,7 @@
     if (k === 'Tab') {
       const list = tabbables();
       const index = list.indexOf(document.activeElement);
-      const next = list[(index + (shift ? -1 : 1) + list.length) % list.length];
+      const next = index < 0 ? list[shift ? list.length - 1 : 0] : list[(index + (shift ? -1 : 1) + list.length) % list.length];
       key(el, 'Tab', 'keydown');
       if (next) next.focus();
       key(next || el, 'Tab', 'keyup');
@@ -522,24 +522,28 @@
 
   // Step-through debugging: the runner pauses before each step until the shell sends 'interaction-continue'.
   let debug = null;
-  function waitForContinue(test, index, step) {
+  function waitForContinue(run, test, index, step) {
     let elements = [];
     try { if (step.target) elements = resolve(step.target); } catch { elements = []; }
     highlight(elements, `${index + 1}. ${describeStep(step)}`, true);
     post('interaction-paused', { name: test.name, index });
-    return new Promise((resolveContinue) => { debug.resume = resolveContinue; });
+    return new Promise((resolveContinue) => { run.resume = resolveContinue; });
   }
 
   async function runInteraction(test, options) {
     const results = [];
     let failed = false;
-    debug = options && options.step ? { mode: 'step', resume: null } : null;
+    // A new run stops one that is paused in the debugger, so its promise settles instead of waiting forever.
+    if (debug && debug.resume) debug.resume('stop');
+    const run = options && options.step ? { mode: 'step', resume: null } : null;
+    debug = run;
     for (let i = 0; i < test.steps.length; i++) {
       const step = test.steps[i];
-      if (!failed && debug && debug.mode === 'step') {
-        const command = await waitForContinue(test, i, step);
+      if (!failed && run && run.mode === 'step') {
+        const command = await waitForContinue(run, test, i, step);
+        run.resume = null;
         if (command === 'stop') failed = true;
-        else if (command === 'run') debug.mode = 'run';
+        else if (command === 'run') run.mode = 'run';
       }
       const started = performance.now();
       if (failed) { results.push({ index: i, description: describeStep(step), status: 'skipped' }); continue; }
@@ -554,13 +558,13 @@
       post('interaction-progress', { name: test.name, results });
     }
     const outcome = { name: test.name, passed: !results.some((r) => r.status === 'failed') && results.every((r) => r.status === 'passed'), results };
-    if (debug) {
+    if (run && debug === run) {
       const failedStep = results.find((r) => r.status === 'failed');
       if (failedStep && test.steps[failedStep.index].target) {
         try { highlight(resolve(test.steps[failedStep.index].target), `Failed: ${failedStep.description}`, true); } catch { highlight(null); }
       } else highlight(null);
     }
-    debug = null;
+    if (debug === run) debug = null;
     post('interaction', outcome);
     return outcome;
   }
@@ -673,8 +677,10 @@
     const runOptions = { resultTypes: ['violations', 'incomplete'], rules };
     if (options && options.tags && options.tags.length) runOptions.runOnly = { type: 'tag', values: options.tags };
     const result = await window.axe.run(root() || document, runOptions);
+    // Fresh arrays: axe-core shares a rule's tags array between its violations and incomplete entries, and automation
+    // serializers (Playwright, DevTools) encode a repeated reference as an object, not an array.
     const map = (items) => items.map((v) => ({
-      id: v.id, impact: v.impact, help: v.help, description: v.description, helpUrl: v.helpUrl, tags: v.tags,
+      id: v.id, impact: v.impact, help: v.help, description: v.description, helpUrl: v.helpUrl, tags: Array.from(v.tags || []),
       nodes: v.nodes.slice(0, 20).map((n) => ({ target: n.target.join(' '), html: redact(n.html).slice(0, 500), failureSummary: n.failureSummary })),
     }));
     const outcome = {
@@ -1342,7 +1348,8 @@
     // Property access (storage.theme, storage['theme'] = 'x') works as with a real Storage.
     return new Proxy(target, {
       get: (t, p) => (p in t || typeof p === 'symbol' ? Reflect.get(t, p) : t.getItem(p)),
-      set: (t, p, v) => { if (p in t) return false; t.setItem(p, v); return true; },
+      // Like a real Storage, assigning any string key stores an item (even 'key' or 'length').
+      set: (t, p, v) => { if (typeof p === 'symbol') return false; t.setItem(p, v); return true; },
       deleteProperty: (t, p) => { t.removeItem(p); return true; },
       has: (t, p) => p in t || items.has(String(p)),
       ownKeys: () => Array.from(items.keys()),
@@ -1532,8 +1539,12 @@
 
   function applySyncScroll(p) {
     const el = document.scrollingElement || document.documentElement;
+    const x = Math.round((el.scrollWidth - el.clientWidth) * (p.x || 0));
+    const y = Math.round((el.scrollHeight - el.clientHeight) * (p.y || 0));
+    // Only a real change fires a scroll event that clears the flag; otherwise the next user scroll would be swallowed.
+    if (Math.abs(el.scrollLeft - x) < 1 && Math.abs(el.scrollTop - y) < 1) return;
     scrollApplying = true;
-    el.scrollTo((el.scrollWidth - el.clientWidth) * (p.x || 0), (el.scrollHeight - el.clientHeight) * (p.y || 0));
+    el.scrollTo(x, y);
   }
 
   async function applySyncStep(p) {
@@ -1731,7 +1742,8 @@
       tools.gridSize = info.gridSize || 8;
       tools.declaredPseudo = info.pseudoStates || [];
       layoutState.allow = info.overflowAllow || [];
-      if (info.storage && info.storage.length && !document.getElementById('workbench-preview-config')) isolateAndSeed({ isolateStorage: info.isolateStorage, storage: info.storage });
+      // Hosts that cannot write storage before Blazor starts (Blazor Hybrid) isolate and seed it here.
+      if ((info.isolateStorage || (info.storage && info.storage.length)) && !document.getElementById('workbench-preview-config')) isolateAndSeed({ isolateStorage: info.isolateStorage, storage: info.storage });
       applyTools(Object.assign(toolsFromQuery(), tools.current));
       (info.diagnostics || []).forEach((d) => { if (!state.diagnostics.some((x) => x.timestamp === d.timestamp && x.message === d.message)) addDiagnostic(d); });
       if (info.argErrors && Object.keys(info.argErrors).length) post('arg-errors', info.argErrors);

@@ -145,6 +145,9 @@ body { background: var(--c-bg); color: var(--c-text); }
 .sale-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .sale .btn-primary { background: #ffffff; color: #2e2896; }
 .sale-urgent .btn-primary { color: #9b1c12; }
+/* The generic hover darkens the background; on the banner the button stays light, or its dark text would be unreadable. */
+.sale .btn-primary:hover:not(:disabled) { background: #e8e6ff; }
+.sale-urgent .btn-primary:hover:not(:disabled) { background: #fde7e4; }
 
 .search { max-width: 640px; }
 .search-title { margin: 0 0 .75rem; font-size: 20px; }

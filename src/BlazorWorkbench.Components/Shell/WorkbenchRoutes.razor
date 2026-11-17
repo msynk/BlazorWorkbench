@@ -1,5 +1,6 @@
 @* Router for the Workbench pages. Lives in the RCL so both Interactive Server and WebAssembly hosts can render it.
    FocusOnNavigate is intentionally omitted: moving focus would interfere with focus behavior under test in previews. *@
+<CascadingValue Name="WorkbenchServerBaseUri" Value="ServerBaseUri" IsFixed="true">
 <Router AppAssembly="typeof(WorkbenchShell).Assembly">
     <Found Context="routeData">
         <RouteView RouteData="routeData" />
@@ -13,3 +14,12 @@
         </main>
     </NotFound>
 </Router>
+</CascadingValue>
+
+@code {
+    /// <summary>
+    /// The host's own address for server-side requests (relative catalog references), set by the host page. Null in hosts
+    /// without one (WebAssembly fetches from the browser, where the page's address is the right base).
+    /// </summary>
+    [Parameter] public string? ServerBaseUri { get; set; }
+}

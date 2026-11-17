@@ -97,6 +97,15 @@ public sealed class JSInteropSimulator
         var rule = Match(call);
         if (rule is null && identifier == "import" && args is [string path, ..] && Simulation?.HasModuleRules(path) == true)
         {
+            if (!typeof(TValue).IsAssignableFrom(typeof(WorkbenchJSModule)))
+            {
+                // For example IJSInProcessObjectReference (WebAssembly, Hybrid): the planned module cannot stand in for it,
+                // so the real module is imported and the planned answers do not apply.
+                Record(call, "real module", "import " + path, Stopwatch.StartNew(), DiagnosticSeverity.Warning,
+                    $"The component imports {path} as {typeof(TValue).Name}, which a planned module cannot provide: the real module is used and the module's planned answers do not apply.");
+                return await runtime.InvokeAsync<TValue>(identifier, cancellationToken, args).ConfigureAwait(false);
+            }
+
             Record(call, "planned module", "import " + path, Stopwatch.StartNew(), DiagnosticSeverity.Info);
             var module = new WorkbenchJSModule(this, JSInteropRule.NormalizeModule(path), ct => runtime.InvokeAsync<IJSObjectReference>("import", ct, args));
             return (TValue)(object)module;
@@ -245,12 +254,17 @@ public sealed class JSInteropSimulator
 
     private void ThrowIfUnplanned(JSCall call, Stopwatch watch)
     {
-        if (Simulation is not { Strict: true } || call.Module is null && call.Identifier.StartsWith("Blazor.", StringComparison.Ordinal))
+        if (Simulation is not { Strict: true } || call.Module is null && (call.Identifier.StartsWith("Blazor.", StringComparison.Ordinal) || IsFrameworkImport(call)))
             return;
         Record(call, "unplanned", null, watch, DiagnosticSeverity.Error,
             $"Unplanned JavaScript call {Describe(call)} in a strict scenario. Add .JSInterop(js => js.{(call.Module is null ? "" : $"Module(\"{call.Module}\", m => m.")}Setup(\"{call.Identifier}\")...){(call.Module is null ? "" : ")")}.");
         throw new JSException($"Unplanned JavaScript interop call '{Describe(call)}' (the scenario's JavaScript interop simulation is strict).");
     }
+
+    // Framework components (QuickGrid, the Virtualize and InputFile helpers) import their own modules; strict scenarios allow it.
+    private static bool IsFrameworkImport(JSCall call) =>
+        call.Identifier == "import" && call.Arguments is [string path, ..] &&
+        path.Replace("./", "", StringComparison.Ordinal).TrimStart('/').StartsWith("_content/Microsoft.AspNetCore.", StringComparison.Ordinal);
 
     private JSInteropRule? Match(JSCall call)
     {

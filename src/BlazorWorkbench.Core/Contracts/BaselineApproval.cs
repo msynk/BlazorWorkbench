@@ -53,6 +53,9 @@ public static class BaselineApproval
 
                 var relative = RelativePath(platform, scenario.ScenarioId, visual.Variant);
                 var target = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+                // The platform comes from report.json: a crafted value must not write outside the baseline directory.
+                if (!PathSafety.IsInside(target, root))
+                    continue;
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.Copy(source, target, overwrite: true);
                 var bytes = File.ReadAllBytes(target);

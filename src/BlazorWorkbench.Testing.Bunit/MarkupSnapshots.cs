@@ -94,8 +94,11 @@ public static partial class MarkupSnapshots
         return "";
     }
 
+    // The same characters on every operating system, so a snapshot has the same file name on Windows, Linux and macOS.
+    private static readonly char[] s_invalidFileNameChars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
     private static string Sanitize(string name) =>
-        string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        string.Concat(name.Select(c => c < 32 || s_invalidFileNameChars.Contains(c) ? '_' : c));
 
     [GeneratedRegex("""\s+blazor:[A-Za-z0-9_.:-]+(="[^"]*")?""")]
     private static partial Regex BlazorAttribute();

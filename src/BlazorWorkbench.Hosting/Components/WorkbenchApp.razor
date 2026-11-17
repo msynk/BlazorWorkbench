@@ -44,7 +44,7 @@
     <HeadOutlet @rendermode="RenderMode" />
 </head>
 <body>
-    <BlazorWorkbench.Components.Shell.WorkbenchRoutes @rendermode="RenderMode" />
+    <BlazorWorkbench.Components.Shell.WorkbenchRoutes @rendermode="RenderMode" ServerBaseUri="@ServerBaseUri" />
     <div id="blazor-error-ui" data-nosnippet hidden>
         An unhandled error has occurred. <a href="" class="reload">Reload</a>
     </div>
@@ -67,7 +67,20 @@
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
 
-    private string BaseHref => (HttpContext?.Request.PathBase.Value ?? "").TrimEnd('/') + "/";
+    // A path base such as "//evil.example" (a trusted X-Forwarded-Prefix gone wrong) would move every relative URL to
+    // another origin: only plain paths are used.
+    private string BaseHref => HttpContext?.Request.PathBase.Value is { Length: > 0 } pathBase && pathBase.StartsWith('/') &&
+                               !pathBase.StartsWith("//", StringComparison.Ordinal) && !pathBase.Contains('\\')
+        ? pathBase.TrimEnd('/') + "/"
+        : "/";
+
+    /// <summary>
+    /// The address under which this server reaches itself (localhost, the port the request arrived on, the path base), for
+    /// server-side fetches of relative catalog references. Unlike NavigationManager.BaseUri in a circuit, a client cannot choose it.
+    /// </summary>
+    private string? ServerBaseUri => HttpContext?.Connection.LocalPort is > 0 and var port
+        ? $"{HttpContext.Request.Scheme}://localhost:{port}{BaseHref}"
+        : null;
 
     private bool IsPreview => HttpContext?.Request.Path.StartsWithSegments("/_workbench/preview") == true ||
                               HttpContext?.Request.Path.StartsWithSegments("/_workbench/tokens") == true;

@@ -504,13 +504,14 @@
         {
             return await completion.Task.WaitAsync(timeoutSource.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !_disposed.IsCancellationRequested)
         {
             throw new TimeoutException($"The preview did not answer within {timeout.TotalSeconds:0.#} s.");
         }
         finally
         {
-            await InvokeAsync(() => _evaluations.Remove(id));
+            try { await InvokeAsync(() => _evaluations.Remove(id)); }
+            catch (ObjectDisposedException) { /* the shell closed */ }
         }
     }
 

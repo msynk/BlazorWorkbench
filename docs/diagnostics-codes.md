@@ -44,6 +44,7 @@ Codes are stable. Errors fail `workbench validate` and make the scenario's rende
 | WB1025 | Warning | A documentation page or a component's documentation embeds `{{scenario:...}}`, `{{scenarios:...}}` or `{{parameters:...}}` with an id that does not exist, or two pages share an id. |
 | WB1026 | Error | A responsive width is outside 120–3840 px, or `AllowOverflow(...)` was given an empty selector. |
 | WB1027 | Error | The scenario plans JavaScript interop calls with `.JSInterop(...)`, but `WorkbenchOptions.InterceptJSInterop` is off. |
+| WB1028 | Warning | The scenario sets a toolbar global with `.Global(...)` that is not defined, or to a value that is not one of its values (the default is used). |
 
 ## Runtime diagnostics
 

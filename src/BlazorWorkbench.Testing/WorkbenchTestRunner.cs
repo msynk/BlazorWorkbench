@@ -415,6 +415,14 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         if (state == "ready")
             await page.EvaluateAsync("() => document.fonts.ready.then(() => true)");
+        // A Blazor Hybrid app's WebView sits under the real mouse pointer, which can leave an element in :hover and change
+        // screenshots and contrast checks from run to run. Moving the synthetic pointer to the corner resets it.
+        if (_hybrid is not null && state == "ready")
+        {
+            try { await page.Mouse.MoveAsync(0, 0); }
+            catch (PlaywrightException) { /* best effort */ }
+        }
+
         var diagnostics = state == "missing" ? [] : await LoadState.DiagnosticsAsync(page);
         return new LoadResult(state, ready, updates, pending, watch.Elapsed.TotalMilliseconds, diagnostics);
     }
@@ -542,7 +550,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
                     impact,
                     item.GetProperty("help").GetString() ?? "",
                     item.TryGetProperty("helpUrl", out var url) ? url.GetString() : null,
-                    item.TryGetProperty("tags", out var tags) ? tags.EnumerateArray().Select(t => t.GetString()!).ToArray() : [],
+                    item.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array ? tags.EnumerateArray().Select(t => t.GetString()!).ToArray() : [],
                     item.GetProperty("nodes").EnumerateArray().Select(n => n.GetProperty("target").GetString()!).ToArray(),
                     blocking,
                     review));

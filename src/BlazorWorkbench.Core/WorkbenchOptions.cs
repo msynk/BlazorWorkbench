@@ -82,8 +82,19 @@ public class WorkbenchOptions
     public IList<string> ShellStylesheets { get; } = [];
 
     /// <summary>True when <paramref name="value"/> is a plain CSS color value that is safe to place in a stylesheet.</summary>
-    public static bool IsSafeCssColor(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '#' or '(' or ')' or ',' or '.' or '%' or ' ' or '-' or '/');
+    public static bool IsSafeCssColor(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 64 ||
+            !value.All(c => char.IsAsciiLetterOrDigit(c) || c is '#' or '(' or ')' or ',' or '.' or '%' or ' ' or '-' or '/'))
+            return false;
+        var open = value.IndexOf('(');
+        if (open < 0)
+            return value.IndexOf(')') < 0; // a hex value or a color name
+        // Only color functions: never url(), image(), var() or anything else that loads or computes.
+        var function = value[..open].Trim().ToLowerInvariant();
+        return function is "rgb" or "rgba" or "hsl" or "hsla" or "hwb" or "lab" or "lch" or "oklab" or "oklch" or "color" &&
+               value.TrimEnd().EndsWith(')') && value.Count(c => c == '(') == 1 && value.Count(c => c == ')') == 1;
+    }
 
     /// <summary>
     /// Markdown shown at the top of the Overview page, for example what the library is, how to find your way around the
@@ -257,10 +268,21 @@ public class WorkbenchOptions
         return this;
     }
 
-    /// <summary>Wraps every scenario of the catalog in <typeparamref name="TWrapper"/>, which receives it as <c>ChildContent</c>.</summary>
-    public WorkbenchOptions AddDecorator<TWrapper>(IReadOnlyDictionary<string, object?>? parameters = null) where TWrapper : IComponent
+    /// <inheritdoc cref="AddDecorator(string, Func{RenderFragment, RenderFragment})"/>
+    public WorkbenchOptions AddDecorator(string name, Func<RenderFragment, ScenarioContext, RenderFragment> wrap)
     {
-        Decorators.Add(ScenarioDecorator.Component(typeof(TWrapper), parameters));
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(wrap);
+        Decorators.Add(new ScenarioDecorator { Name = name, Wrap = wrap });
+        return this;
+    }
+
+    /// <summary>Wraps every scenario of the catalog in <typeparamref name="TWrapper"/>, which receives it as <c>ChildContent</c>.</summary>
+    /// <param name="parameters">Other parameters of the wrapper, by name.</param>
+    /// <param name="name">Name shown in the scenario facts; defaults to the component name.</param>
+    public WorkbenchOptions AddDecorator<TWrapper>(IReadOnlyDictionary<string, object?>? parameters = null, string? name = null) where TWrapper : IComponent
+    {
+        Decorators.Add(ScenarioDecorator.Component(typeof(TWrapper), parameters, name));
         return this;
     }
 
@@ -274,6 +296,7 @@ public class WorkbenchOptions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         var panel = new WorkbenchPanel(title, typeof(TPanel));
+        RequireId(panel.Id[2..], title, nameof(title));
         if (Panels.Any(p => p.Id == panel.Id))
             throw new ArgumentException($"A panel with the id '{panel.Id}' already exists.", nameof(title));
         Panels.Add(panel);
@@ -286,10 +309,20 @@ public class WorkbenchOptions
     /// </summary>
     public WorkbenchOptions AddToolbarItem<TItem>() where TItem : IComponent
     {
-        if (!ToolbarItems.Contains(typeof(TItem)))
-            ToolbarItems.Add(typeof(TItem));
+        if (ToolbarItems.Contains(typeof(TItem)))
+            throw new ArgumentException($"{Naming.FormatTypeName(typeof(TItem))} is already a toolbar item.", nameof(TItem));
+        ToolbarItems.Add(typeof(TItem));
         return this;
     }
+
+    private static void RequireId(string id, string label, string parameter)
+    {
+        if (id.Length == 0)
+            throw new ArgumentException($"'{label}' has no letters or digits to make an id from.", parameter);
+    }
+
+    // Attributes the preview itself sets on <html>; a toolbar global's data-{id} attribute must not overwrite them.
+    private static readonly string[] s_reservedGlobalIds = ["theme", "dir", "lang"];
 
     /// <summary>
     /// Lists a published catalog (the folder <c>workbench publish</c> writes, with its <c>search.json</c>) in the explorer.
@@ -301,7 +334,10 @@ public class WorkbenchOptions
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
         var reference = new CatalogReference(title, url);
-        if (Uri.TryCreate(url, UriKind.Absolute, out var absolute) && absolute.Scheme is not ("http" or "https"))
+        RequireId(reference.Id, title, nameof(title));
+        // "/catalogs/x/" is a path on this host (on Linux and macOS it would otherwise parse as an absolute file URI).
+        var relative = url.StartsWith('/') && !url.StartsWith("//", StringComparison.Ordinal);
+        if (!relative && Uri.TryCreate(url, UriKind.Absolute, out var absolute) && absolute.Scheme is not ("http" or "https"))
             throw new ArgumentException("A catalog reference must be an http(s) URL or a relative path.", nameof(url));
         if (CatalogReferences.Any(r => r.Id == reference.Id))
             throw new ArgumentException($"A catalog reference with the id '{reference.Id}' already exists.", nameof(title));
@@ -323,6 +359,11 @@ public class WorkbenchOptions
         if (defaultValue is not null && !list.Contains(defaultValue, StringComparer.Ordinal))
             throw new ArgumentException($"The default value '{defaultValue}' is not one of the values.", nameof(defaultValue));
         var global = new ToolbarGlobal(label, list) { DefaultValue = defaultValue };
+        RequireId(global.Id, label, nameof(label));
+        if (!global.Id.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-'))
+            throw new ArgumentException($"The id '{global.Id}' of a toolbar global must use ASCII letters, digits and hyphens: it becomes an HTML attribute name.", nameof(label));
+        if (s_reservedGlobalIds.Contains(global.Id) || global.Id.StartsWith("workbench", StringComparison.Ordinal) || global.Id.StartsWith("wb-", StringComparison.Ordinal))
+            throw new ArgumentException($"The id '{global.Id}' is used by the Workbench preview; choose another label.", nameof(label));
         if (Globals.Any(g => g.Id == global.Id))
             throw new ArgumentException($"A toolbar global with the id '{global.Id}' already exists.", nameof(label));
         Globals.Add(global);
@@ -337,7 +378,8 @@ public class WorkbenchOptions
         foreach (var global in Globals)
         {
             var value = chosen?.GetValueOrDefault(global.Id) is { } c && global.Values.Contains(c, StringComparer.Ordinal) ? c
-                : environment.Globals.GetValueOrDefault(global.Id) ?? global.DefaultValue;
+                : environment.Globals.GetValueOrDefault(global.Id) is { } s && global.Values.Contains(s, StringComparer.Ordinal) ? s
+                : global.DefaultValue;
             if (value is not null)
                 result[global.Id] = value;
         }

@@ -9,14 +9,11 @@ public class ViewerTimeZoneTests
     public void Times_follow_the_zone_the_browser_reports()
     {
         var viewer = new ViewerTimeZone();
-        var changed = 0;
-        viewer.Changed += () => changed++;
         Assert.False(viewer.TrySet("Not/A_Zone"));
         Assert.False(viewer.IsKnown);
 
         Assert.True(viewer.TrySet("Asia/Tokyo"));
         Assert.True(viewer.IsKnown);
-        Assert.Equal(1, changed);
         var noonUtc = new DateTimeOffset(2026, 11, 17, 12, 0, 0, TimeSpan.Zero);
         Assert.Equal(21, viewer.ToViewer(noonUtc).Hour);
 

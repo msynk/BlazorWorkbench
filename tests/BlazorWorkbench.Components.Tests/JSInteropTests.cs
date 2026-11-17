@@ -24,6 +24,8 @@ public class JSInteropTests
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
         {
             Calls.Add(identifier);
+            if (identifier == "import" && typeof(TValue) == typeof(IJSInProcessObjectReference))
+                return ValueTask.FromResult((TValue)(object)new FakeInProcessModule());
             if (identifier == "import")
                 return ValueTask.FromResult((TValue)(object)new FakeModule(this, (string)args![0]!));
             if (typeof(TValue) == typeof(IJSVoidResult))
@@ -225,6 +227,28 @@ public class JSInteropTests
         // Other modules are imported for real.
         var other = await js.InvokeAsync<IJSObjectReference>("import", "./other.js");
         Assert.IsType<FakeModule>(other);
+    }
+
+    public sealed class FakeInProcessModule : IJSInProcessObjectReference
+    {
+        public TValue Invoke<TValue>(string identifier, params object?[]? args) => default!;
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+        public void Dispose() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_planned_module_imported_as_in_process_reference_falls_back_to_the_real_module()
+    {
+        var (scope, js, browser, session) = Activate("planned");
+        using var _ = scope;
+
+        // A planned module cannot stand in for IJSInProcessObjectReference: the real import runs, with a warning.
+        var module = await js.InvokeAsync<IJSInProcessObjectReference>("import", "./_content/Lib/chart.js");
+        Assert.IsType<FakeInProcessModule>(module);
+        Assert.Equal(["import"], browser.Calls);
+        Assert.Contains(session.Diagnostics.Snapshot(), d => d.Severity == Diagnostics.DiagnosticSeverity.Warning && d.Message.Contains("IJSInProcessObjectReference", StringComparison.Ordinal));
     }
 
     [Fact]

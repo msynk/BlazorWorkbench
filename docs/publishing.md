@@ -37,7 +37,9 @@ shows its published page inside the Workbench, with a link to open it on its own
 `search.json` (at most 4 MB and 5,000 components, cached for five minutes) and frames the page with a sandbox that runs no
 scripts. A catalog that cannot be loaded shows the reason in its group; a host that refuses framing still offers the link.
 In WebAssembly hosts the browser fetches `search.json`, so a catalog on another origin must allow it with CORS (GitHub
-Pages and most static hosts do); Interactive Server hosts fetch it on the server. The server demo references a small
+Pages and most static hosts do); Interactive Server hosts fetch it on the server, and resolve a relative reference
+against the server itself (`localhost`, the port the page was served on and the path base), never against an address the
+browser reports. The server demo references a small
 stand-in catalog in `demo/BlazorWorkbench.Demo/wwwroot/catalogs/trail-icons`.
 
 ## What is published, and what is not

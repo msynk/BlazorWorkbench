@@ -163,11 +163,18 @@ public static class ParameterValueConverter
             var ns = t.Namespace ?? "";
             if (ns == "System" || ns.StartsWith("System.", StringComparison.Ordinal) || ns.StartsWith("Microsoft.", StringComparison.Ordinal))
                 return false;
-            if (!t.IsValueType && t.GetConstructor(Type.EmptyTypes) is null && t.GetConstructors().Length != 1)
-                return false;
             var properties = t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                 .Where(p => p.GetIndexParameters().Length == 0 && p.GetMethod is { IsPublic: true })
                 .ToArray();
+            if (!t.IsValueType && t.GetConstructor(Type.EmptyTypes) is null)
+            {
+                // System.Text.Json binds a single constructor's parameters to properties by name; anything else cannot be created.
+                var constructors = t.GetConstructors();
+                if (constructors.Length != 1 || !constructors[0].GetParameters().All(a =>
+                        properties.Any(p => string.Equals(p.Name, a.Name, StringComparison.OrdinalIgnoreCase) && p.PropertyType == a.ParameterType)))
+                    return false;
+            }
+
             return properties.Length > 0 && properties.All(p => IsJsonEditable(p.PropertyType, depth + 1, visiting));
         }
         finally
@@ -298,7 +305,7 @@ public static class ParameterValueConverter
 
             return true;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or JsonException)
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or JsonException or InvalidOperationException)
         {
             // The contract is "false for unsupported values"; callers (catalog API, two-way binding) must never throw.
             element = default;
@@ -330,7 +337,7 @@ public static class ParameterValueConverter
 
             return true;
         }
-        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException or InvalidOperationException)
         {
             error = $"Not valid JSON for {Naming.FormatTypeName(type)}: {ex.Message.Split('\n')[0]}";
             return false;

@@ -10,12 +10,12 @@ else if (_component is null)
 {
     <div class="wb-empty" role="alert">
         <h2>@(_catalog.Error ?? $"'{ComponentId}' is not in {_catalog.Reference.Title}.")</h2>
-        <p>The referenced catalog is published at <a href="@_catalog.Folder" target="_blank" rel="noopener noreferrer">@_catalog.Folder</a>.</p>
+        <p>The referenced catalog is published at <a href="@BrowserFolder" target="_blank" rel="noopener noreferrer">@BrowserFolder</a>.</p>
     </div>
 }
 else
 {
-    var pageUrl = _catalog.PageUrl(_component.Id);
+    var pageUrl = new Uri(BrowserFolder, "components/" + Uri.EscapeDataString(_component.Id) + ".html");
     <article class="wb-docs wb-ref-page">
         <div class="wb-crumbs">@_catalog.Reference.Title / @string.Join(" / ", _component.Title.Split('/').SkipLast(1))</div>
         <h1 class="wb-title">@_component.Title.Split('/')[^1] <span class="wb-badge" title="From a referenced catalog">@_catalog.Reference.Title</span></h1>
@@ -32,6 +32,15 @@ else
 }
 
 @code {
+    [CascadingParameter(Name = "WorkbenchServerBaseUri")] private string? ServerBaseUri { get; set; }
+
+    // Server-side fetches use the address the host page captured; in the browser (WebAssembly) the page address is right.
+    // What the browser loads (links, the framed page) resolves against the page's address; only the server's own fetch of
+    // search.json uses the server base.
+    private Uri BrowserFolder => _catalog?.Reference is { Url.Length: > 0 } reference ? reference.Resolve(new Uri(Navigation.BaseUri)) : new Uri(Navigation.BaseUri);
+
+    private Uri ReferenceBase => !OperatingSystem.IsBrowser() && ServerBaseUri is { Length: > 0 } server ? new Uri(server) : new Uri(Navigation.BaseUri);
+
     private ReferencedCatalog? _catalog;
     private ReferencedComponent? _component;
 
@@ -44,14 +53,14 @@ else
         var reference = Options.CatalogReferences.FirstOrDefault(r => r.Id == RefId);
         if (reference is null)
         {
-            _catalog = new ReferencedCatalog(new CatalogReference(RefId, ""), new Uri(Navigation.BaseUri), [], $"No catalog reference named '{RefId}'.");
+            _catalog = new ReferencedCatalog(new CatalogReference(RefId, ""), ReferenceBase, [], $"No catalog reference named '{RefId}'.");
             _component = null;
             return;
         }
 
         if (Services.GetService(typeof(CatalogReferenceLoader)) is not CatalogReferenceLoader loader)
             return;
-        _catalog = await loader.LoadAsync(reference, new Uri(Navigation.BaseUri));
+        _catalog = await loader.LoadAsync(reference, ReferenceBase);
         _component = _catalog.Components.FirstOrDefault(c => c.Id == ComponentId);
     }
 }

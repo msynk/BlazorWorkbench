@@ -42,6 +42,8 @@ The header toolbar also has two session switches. They reload the preview, becau
   components by its id (`[CascadingParameter(Name = "density")] public string? Density { get; set; }`), set as
   `data-density` on the preview's `<html>` for stylesheets, and available to service factories as `ctx.Global("density")`.
   A scenario fixes a value with `.Global("density", "compact")`; links carry the toolbar's choice (`?g.density=compact`).
+  The id is the label in kebab case and must be ASCII; `theme`, `dir`, `lang` and ids starting with `workbench` or `wb-`
+  are reserved for the preview's own attributes. An unknown id or value in `.Global(...)` is reported as `WB1028`.
 
 ## Device mode and responsive design
 

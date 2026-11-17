@@ -91,7 +91,7 @@
                 var refOpen = IsExpanded("ref:" + reference.Reference.Id, SelectedRefId == reference.Reference.Id);
                 <details class="wb-ref" open="@refOpen">
                     <summary class="wb-node-group" @onclick='() => Flip("ref:" + reference.Reference.Id, refOpen)' @onclick:preventDefault
-                             title="@($"Published catalog at {reference.Folder}")">
+                             title="@($"Published catalog: {reference.Reference.Url}")">
                         <span class="wb-icon" aria-hidden="true">⧉</span>@reference.Reference.Title <span class="wb-muted wb-small">@reference.Components.Count</span>
                     </summary>
                     @if (refOpen)
@@ -143,6 +143,11 @@
 </div>
 
 @code {
+    [CascadingParameter(Name = "WorkbenchServerBaseUri")] private string? ServerBaseUri { get; set; }
+
+    // Server-side fetches use the address the host page captured; in the browser (WebAssembly) the page address is right.
+    private Uri ReferenceBase => !OperatingSystem.IsBrowser() && ServerBaseUri is { Length: > 0 } server ? new Uri(server) : new Uri(Navigation.BaseUri);
+
     private static readonly (string Token, string Label)[] QuickFilters =
         [("is:pinned", "Pinned"), ("is:affected", "Changed"), ("is:tested", "Has tests"), ("is:failing", "Failing"), ("is:matrix", "Matrix"), ("status:beta", "Beta"), ("status:experimental", "Experimental"), ("is:deprecated", "Deprecated")];
 
@@ -185,7 +190,7 @@
     {
         if (Catalog.Options.CatalogReferences.Count == 0 || Services.GetService(typeof(CatalogReferenceLoader)) is not CatalogReferenceLoader loader)
             return;
-        _references = await loader.LoadAllAsync(Catalog.Options, new Uri(Navigation.BaseUri));
+        _references = await loader.LoadAllAsync(Catalog.Options, ReferenceBase);
         if (_query.Length > 0)
             Refresh();
     }

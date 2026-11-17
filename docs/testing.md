@@ -158,7 +158,10 @@ and opening a scenario shows its interaction and accessibility results. **Watch*
 hot reload rebuilds the catalog.
 
 The runner uses the in-browser interaction runner, which simulates events. `workbench test` drives a real browser with
-Playwright, adds visual and responsive checks, retries and reports, and stays authoritative for CI.
+Playwright, adds visual and responsive checks, retries and reports, and stays authoritative for CI. The runner always
+fails accessibility scans on serious and critical violations with axe-core's default rules: it does not read
+`accessibility.failOn` and `accessibility.tags` from `workbench.json`, or accessibility baselines, so a scenario with
+approved violations can fail there and pass in `workbench test --a11y`.
 
 ## Change impact (`--changed-since`)
 

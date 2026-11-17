@@ -13,19 +13,14 @@ public sealed class ViewerTimeZone
     /// <summary>True once the browser has reported a zone that this machine knows.</summary>
     public bool IsKnown { get; private set; }
 
-    /// <summary>Raised when the zone changes, so open panels re-render with the viewer's times.</summary>
-    public event Action? Changed;
-
     /// <summary>Uses the browser's IANA zone id (for example <c>Europe/Berlin</c>). Unknown ids keep the current zone.</summary>
     public bool TrySet(string? ianaId)
     {
         if (string.IsNullOrWhiteSpace(ianaId) || !TimeZoneInfo.TryFindSystemTimeZoneById(ianaId, out var zone))
             return false;
-        var changed = !IsKnown || zone.Id != Zone.Id;
+        // The shell sets the zone once, right after its first render, and re-renders: open panels show the viewer's times.
         Zone = zone;
         IsKnown = true;
-        if (changed)
-            Changed?.Invoke();
         return true;
     }
 

@@ -124,9 +124,9 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         {
             builder.OpenComponent<WorkbenchErrorBoundary>(10);
             builder.AddComponentParameter(11, nameof(WorkbenchErrorBoundary.OnError), (Action<Exception>)OnRenderError);
-            builder.AddComponentParameter(14, nameof(WorkbenchErrorBoundary.OnRecovered), (Action)OnRecovered);
-            builder.AddComponentParameter(12, nameof(WorkbenchErrorBoundary.ChildContent), (RenderFragment)RenderScenario);
-            builder.AddComponentReferenceCapture(13, r => _boundary = (WorkbenchErrorBoundary)r);
+            builder.AddComponentParameter(12, nameof(WorkbenchErrorBoundary.OnRecovered), (Action)OnRecovered);
+            builder.AddComponentParameter(13, nameof(WorkbenchErrorBoundary.ChildContent), (RenderFragment)RenderScenario);
+            builder.AddComponentReferenceCapture(14, r => _boundary = (WorkbenchErrorBoundary)r);
             builder.CloseComponent();
         }
 

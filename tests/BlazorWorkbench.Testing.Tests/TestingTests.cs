@@ -239,6 +239,17 @@ public class BaselineAndReportTests : IDisposable
     }
 
     [Fact]
+    public void Approval_never_writes_outside_the_baseline_directory_for_a_crafted_platform()
+    {
+        var source = ReportWithScreenshot(CheckStatus.Failed);
+        var report = new TestRunReport { StartedAt = source.StartedAt, Environment = new RunEnvironment { Platform = "../../escaped", Browser = "chromium" } };
+        report.Scenarios.Add(source.Scenarios[0]);
+        var baselines = Path.Combine(_root.FullName, "baselines");
+        Assert.Empty(BaselineApproval.Approve(report, Path.Combine(_root.FullName, "out"), baselines, _ => true));
+        Assert.False(Directory.Exists(Path.Combine(_root.FullName, "..", "escaped")));
+    }
+
+    [Fact]
     public void Approval_never_copies_files_from_outside_the_report_directory()
     {
         var report = ReportWithScreenshot(CheckStatus.Failed);

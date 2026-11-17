@@ -109,6 +109,18 @@ public static class ScenarioValidator
             Add(IssueSeverity.Error, "WB1027", "The scenario plans JavaScript interop calls, but WorkbenchOptions.InterceptJSInterop is off, so they reach the browser.",
                 "Turn InterceptJSInterop back on, or remove .JSInterop(...) from the scenario.");
 
+        // Toolbar globals fixed by the scenario.
+        foreach (var (id, value) in env.Globals)
+        {
+            var global = options.Globals.FirstOrDefault(g => g.Id == id);
+            if (global is null)
+                Add(IssueSeverity.Warning, "WB1028", $"The scenario sets the toolbar global '{id}', which is not defined.",
+                    options.Globals.Count == 0 ? "Define it with options.AddGlobal(...)." : $"Use the id of a defined global: {string.Join(", ", options.Globals.Select(g => g.Id))}.");
+            else if (!global.Values.Contains(value, StringComparer.Ordinal))
+                Add(IssueSeverity.Warning, "WB1028", $"The scenario sets the toolbar global '{id}' to '{value}', which is not one of its values; the default is used instead.",
+                    $"Use one of: {string.Join(", ", global.Values)}.");
+        }
+
         // Interactions.
         var callbacks = metadata.Parameters.Where(p => p.Kind == ParameterKind.EventCallback).Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var test in scenario.Interactions)
