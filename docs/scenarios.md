@@ -186,7 +186,7 @@ s.Interaction("submits valid data", i => i
 
 | Locators | Actions | Assertions |
 | --- | --- | --- |
-| `By.Role(role, name)`, `By.Label`, `By.Text`, `By.Placeholder`, `By.TestId`, `By.Css` | `Click`, `DoubleClick`, `Hover`, `Focus`, `Blur`, `Fill`, `Type`, `Press`, `Tab(n)`, `Check`, `Uncheck`, `Select`, `DragTo(source, target)`, `Upload(input, name, bytes \| text, mime)`, `ScrollIntoView`, `ReleaseGate`, `FailGate`, `WaitFor`, `Checkpoint` | `ExpectVisible`, `ExpectHidden`, `ExpectText` (contains), `ExpectValue`, `ExpectAttribute`, `ExpectFocused`, `ExpectEnabled`, `ExpectDisabled`, `ExpectChecked`, `ExpectUnchecked`, `ExpectCount`, `ExpectCallback`, `ExpectNoErrors` |
+| `By.Role(role, name)`, `By.Label`, `By.Text`, `By.Placeholder`, `By.TestId`, `By.Css` | `Click`, `DoubleClick`, `Hover`, `Focus`, `Blur`, `Fill`, `Type`, `Press`, `Tab(n)`, `Check`, `Uncheck`, `Select`, `DragTo(source, target)`, `Upload(input, name, bytes \| text, mime)`, `ScrollIntoView`, `ReleaseGate`, `FailGate`, `WaitFor`, `Checkpoint` | `ExpectVisible`, `ExpectHidden`, `ExpectText` (contains), `ExpectValue`, `ExpectAttribute`, `ExpectFocused`, `ExpectEnabled`, `ExpectDisabled`, `ExpectChecked`, `ExpectUnchecked`, `ExpectCount`, `ExpectCallback`, `ExpectJSCall`, `ExpectNoErrors` |
 
 Locators are strict: an action fails when a locator matches more than one element. Each interaction test starts from a freshly activated scenario.
 

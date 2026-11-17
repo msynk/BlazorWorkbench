@@ -37,6 +37,10 @@
 - **Package size**: the CLI tool contains the Playwright driver (about 40 MB).
 - **WebAssembly clients** must not be trimmed, and each preview boots the runtime (slower readiness).
 - **Blazor Hybrid runs** use the app's single WebView page: scenarios run one at a time, without Playwright traces, and hybrid baselines depend on the installed WebView2 version.
+- **JavaScript interop simulation** answers calls made through `IJSRuntime` by components created after the scenario is active. A faked module is a .NET stand-in and cannot be passed back to JavaScript as an argument. Libraries that cast `IJSRuntime` to a framework type need `InterceptJSInterop = false`.
+- **The test runner in the explorer** uses the in-browser interaction runner and does no visual or responsive checks; `workbench test` is authoritative.
+- **Media emulation** rewrites same-origin stylesheets and `matchMedia()`; it cannot emulate `forced-colors` rendering, which automated runs do with `.Media(m => m.ForcedColors())`.
+- **Change marks** need git and PDBs with source paths; files outside the source root are listed but not mapped.
 - **Change impact** (`--changed-since`) maps files through PDB source paths. Shared code and global assets select every scenario.
 
 ## Versioning policy

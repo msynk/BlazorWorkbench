@@ -105,6 +105,10 @@ public static class ScenarioValidator
                 Add(IssueSeverity.Error, "WB1010", $"HTTP rule '{rule}' has Times({rule.Times}); it must be positive.");
         }
 
+        if (env.JSInterop is { Rules.Count: > 0 } && !options.InterceptJSInterop)
+            Add(IssueSeverity.Error, "WB1027", "The scenario plans JavaScript interop calls, but WorkbenchOptions.InterceptJSInterop is off, so they reach the browser.",
+                "Turn InterceptJSInterop back on, or remove .JSInterop(...) from the scenario.");
+
         // Interactions.
         var callbacks = metadata.Parameters.Where(p => p.Kind == ParameterKind.EventCallback).Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
         foreach (var test in scenario.Interactions)
@@ -205,7 +209,8 @@ public static class ScenarioValidator
             return ("WB1012", "a target locator is required.");
 
         var needsValue = step.Action is StepAction.Fill or StepAction.Type or StepAction.Press or StepAction.Select
-            or StepAction.ReleaseGate or StepAction.FailGate or StepAction.ExpectCallback or StepAction.ExpectAttribute or StepAction.Checkpoint;
+            or StepAction.ReleaseGate or StepAction.FailGate or StepAction.ExpectCallback or StepAction.ExpectAttribute or StepAction.Checkpoint
+            or StepAction.ExpectJSCall;
         if (needsValue && step.Value is null)
             return ("WB1012", "a value is required.");
 

@@ -36,6 +36,25 @@ Use predefined culture names (`fa-IR`, not `fa`). Code that runs outside circuit
 ### Interaction passes in the UI but fails in the CLI (or the other way round)
 The CLI (Playwright) is authoritative. Typical causes: a locator matches several elements (strict mode), an element is covered or hidden, or keyboard default actions differ. Open the trace from `artifacts/workbench/traces` with `npx playwright show-trace`.
 
+### `CsWinRT1032` errors when building a MAUI Workbench app on Windows
+
+Newer Windows App SDK analyzers flag collection expressions that target read-only interfaces (`IReadOnlyList<T> items = [...]`)
+in code compiled into the Windows app, such as scenarios shared with a web host. The analysis is about trimming and AOT, so
+it does not apply to a Workbench app; add `<NoWarn>$(NoWarn);CsWinRT1032</NoWarn>` to the app project, as the demo does.
+
+### Every scenario fails with `fetch …/_framework/dotnet-browser-tools/… → 404`
+
+Newer SDKs inject hot reload tooling into Development hosts, and its requests fail when the host is not run by
+`dotnet watch`. Workbench ignores the tooling's requests in render checks; update the `BlazorWorkbench.*` packages and the
+CLI if an older version reports them.
+
+### A planned JavaScript call still reaches the browser
+
+The rule must match the identifier exactly as the component passes it (`localStorage.getItem`, not `window.localStorage.getItem`;
+use `*` for variants), and module rules need the path the component imports. Components created before the scenario was
+active (none in a preview) keep the real runtime. Check **Environment → JavaScript interop**: the *Outcome* column says
+`browser` for calls no rule answered.
+
 ### Blazor Hybrid (MAUI) problems
 See the [troubleshooting table in the Blazor Hybrid guide](hybrid.md#troubleshooting).
 

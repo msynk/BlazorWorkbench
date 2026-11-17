@@ -83,7 +83,8 @@
     </header>
 
     <aside class="wb-sidebar" aria-label="Component explorer">
-        <Explorer Catalog="Catalog" SelectedScenarioId="@_scenario?.Id" SelectedComponentId="@ComponentId" SelectedPageId="@PageId" Recent="_recent" />
+        <Explorer Catalog="Catalog" SelectedScenarioId="@_scenario?.Id" SelectedComponentId="@ComponentId" SelectedPageId="@PageId" Recent="_recent" Pinned="_pinned"
+                  UiRun="_uiRun" OnRunTests="RunTests" OnStopTests="StopTests" />
     </aside>
 
     <main class="wb-main" id="wb-main">
@@ -164,6 +165,8 @@
                             <span class="wb-state wb-state-@_previewState" role="status">@StateText</span>
                         }
                         @if (_mode == "canvas" && _metrics?.ReadyMs is { } ready) { <span class="wb-muted" title="Time from navigation start until ready">ready in @ready.ToString("0") ms · @_metrics.DomUpdates DOM updates</span> }
+                        <button type="button" class="wb-button wb-button-small wb-pin @(IsPinned ? "active" : "")" aria-pressed="@(IsPinned ? "true" : "false")"
+                                title="Pin this scenario to the top of the explorer (B)" @onclick="TogglePin">@(IsPinned ? "★ Pinned" : "☆ Pin")</button>
                         <a class="wb-link" href="@($"docs/{_component?.Id}")">Docs</a>
                     </div>
                 </div>
@@ -303,6 +306,7 @@
     private readonly Dictionary<string, int> _callbackCounts = new(StringComparer.Ordinal);
     private List<GateInfo> _gates = [];
     private JsonElement? _session;
+    private bool _sessionRefreshQueued;
     private readonly Dictionary<string, InteractionOutcome> _interactionResults = new(StringComparer.Ordinal);
     private string? _runningInteraction;
     private string? _pendingInteraction;
@@ -339,6 +343,8 @@
     private bool _shortcutsOpen;
     private bool _linkCopied;
     private List<string> _recent = [];
+    private List<string> _pinned = [];
+    private readonly UiTestRun _uiRun = new();
 
     [Parameter] public string? ScenarioId { get; set; }
     [Parameter] public string? ComponentId { get; set; }
@@ -483,6 +489,8 @@
         _frameSrc = BuildPreviewUrl(includeArgs: true);
         _sentTouch = EffectiveTouch;
         RememberRecent(_scenario.Id);
+        foreach (var result in _uiRun.For(_scenario.Id))
+            ShowRunResult(result);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -499,6 +507,7 @@
             if (theme is not ("dark" or "light"))
                 theme = await _module.InvokeAsync<string?>("getSystemTheme");
             _panelRight = await _module.InvokeAsync<string?>("getPreference", "panel-position") == "right";
+            _pinned = ((await _module.InvokeAsync<string?>("getPreference", "pinned")) ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             var recent = await _module.InvokeAsync<string?>("getPreference", "recent");
             var current = _recent;
             _recent = (recent ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
@@ -695,6 +704,7 @@
             case "escape": _shortcutsOpen = false; break;
             case "focus" or "panel": await OnLayout(action); break;
             case "previous-scenario" or "next-scenario" or "previous-component" or "next-component": Step(action); break;
+            case "pin": await TogglePin(); break;
         }
 
         if (_scenario is null || _mode != "canvas" && action is not ("reload" or "reset"))
@@ -956,6 +966,26 @@
         }
     }
 
+    private bool IsPinned => _scenario is not null && _pinned.Contains(_scenario.Id, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Pins or unpins the current scenario (like bookmarks in other workbenches); pins are kept in this browser.</summary>
+    private async Task TogglePin()
+    {
+        if (_scenario is null)
+            return;
+        var id = _scenario.Id;
+        if (_pinned.RemoveAll(p => string.Equals(p, id, StringComparison.OrdinalIgnoreCase)) == 0)
+            _pinned.Add(id);
+        // A new list, so the explorer sees a changed parameter.
+        _pinned = [.. _pinned];
+
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("setPreference", "pinned", string.Join(',', _pinned)); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
     private void RememberRecent(string id)
     {
         _recent.Remove(id);
@@ -1085,6 +1115,15 @@
             case "gates":
                 _gates = payload.Deserialize<List<GateInfo>>(WorkbenchJson.Options) ?? [];
                 break;
+            case "js-call":
+                // The Environment panel lists the calls from the session; refresh it at most a few times per second.
+                if (_tab == "environment" && !_sessionRefreshQueued)
+                {
+                    _sessionRefreshQueued = true;
+                    _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(async () => { _sessionRefreshQueued = false; await RequestSession(); }), TaskScheduler.Default);
+                }
+
+                return;
             case "arg-errors":
                 _argErrors = payload.Deserialize<Dictionary<string, string>>(WorkbenchJson.Options) ?? new();
                 break;
@@ -1141,6 +1180,99 @@
         StateHasChanged();
     });
 
+    // ---- Test runner (sidebar) ----
+
+    /// <summary>Runs the request's scenarios in invisible frames: render health (and accessibility) once, each interaction in a fresh session.</summary>
+    private async Task RunTests(UiTestRequest request)
+    {
+        if (_module is null)
+            return;
+        var jobs = new List<object>();
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var skipped = new List<ScenarioDefinition>();
+        foreach (var id in request.ScenarioIds)
+        {
+            if (Catalog.FindScenario(id) is not { } scenario)
+                continue;
+            if (scenario.SkipReason is not null)
+            {
+                skipped.Add(scenario);
+                continue;
+            }
+
+            var viewport = Options.FindViewport(scenario.Environment.Viewport);
+            var url = $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" + (viewport?.IsMobile == true ? "?touch=1" : "");
+            var size = new { width = viewport?.Width ?? 1280, height = viewport?.Height ?? 800 };
+            var a11y = request.Accessibility && !scenario.Accessibility.Skip
+                ? new { disabledRules = scenario.Accessibility.DisabledRules, failOn = "serious", todo = scenario.Accessibility.TodoReason }
+                : null;
+            jobs.Add(new { scenarioId = scenario.Id, kind = "render", url, size.width, size.height, timeout = 20000, a11y });
+            foreach (var test in scenario.Interactions)
+                jobs.Add(new { scenarioId = scenario.Id, kind = "interaction", name = test.Name, url, size.width, size.height, timeout = 20000, test = JsonSerializer.SerializeToElement(test, WorkbenchJson.Options) });
+            counts[scenario.Id] = 1 + scenario.Interactions.Count;
+        }
+
+        _uiRun.Start(request, counts);
+        foreach (var scenario in skipped)
+            _uiRun.Skip(scenario.Id, scenario.SkipReason!);
+        if (jobs.Count == 0)
+        {
+            _uiRun.Finish();
+            return;
+        }
+
+        try { await _module.InvokeVoidAsync("startTests", jobs, _self, new { concurrency = 2 }); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task StopTests()
+    {
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("cancelTests"); }
+            catch (JSDisconnectedException) { }
+        }
+
+        _uiRun.Finish();
+    }
+
+    [JSInvokable]
+    public Task OnTestResult(string json) => InvokeAsync(() =>
+    {
+        if (!_uiRun.Running || JsonSerializer.Deserialize<UiTestResult>(json, WorkbenchJson.Options) is not { } result || result.Status == "canceled")
+            return;
+        _uiRun.Add(result);
+        if (_scenario is not null && string.Equals(result.ScenarioId, _scenario.Id, StringComparison.OrdinalIgnoreCase))
+            ShowRunResult(result);
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task OnTestsFinished(bool completed) => InvokeAsync(() =>
+    {
+        if (_uiRun.Running)
+            _uiRun.Finish();
+        StateHasChanged();
+    });
+
+    /// <summary>Shows a result of the UI run in the Interactions or Accessibility panel of the scenario on screen.</summary>
+    private void ShowRunResult(UiTestResult result)
+    {
+        if (result.Details is not { } details)
+            return;
+        try
+        {
+            if (result.Kind == "interaction" && details.Deserialize<InteractionOutcome>(WorkbenchJson.Options) is { } outcome)
+                _interactionResults[outcome.Name] = outcome;
+            else if (result.Kind == "render" && details.ValueKind == JsonValueKind.Object && details.TryGetProperty("violations", out _))
+                _a11y = details.Deserialize<A11yOutcome>(WorkbenchJson.Options);
+        }
+        catch (JsonException)
+        {
+            // Details are informational; a malformed one leaves the panels as they are.
+        }
+    }
+
     private void OnCatalogChanged() => _ = InvokeAsync(async () =>
     {
         // Hot reload: re-resolve the scenario and reload the preview.
@@ -1150,6 +1282,14 @@
         StateHasChanged();
         if (_scenario is not null)
             await ReloadFrame(keepArgs: true);
+        // Watch mode: the components changed, so run the last tests again.
+        if (_uiRun.Watch && _uiRun.Request is { } request)
+        {
+            if (_uiRun.Running)
+                await StopTests();
+            await RunTests(request with { ScenarioIds = request.ScenarioIds.Where(id => Catalog.FindScenario(id) is not null).ToList() });
+            StateHasChanged();
+        }
     });
 
     public async ValueTask DisposeAsync()

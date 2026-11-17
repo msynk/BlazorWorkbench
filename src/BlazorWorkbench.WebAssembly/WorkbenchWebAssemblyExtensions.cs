@@ -48,6 +48,7 @@ public static class WorkbenchWebAssemblyExtensions
         builder.Services.AddBlazorWorkbenchRuntime(options, catalog, overridable);
         builder.Services.AddScoped<IVisualResultsProvider>(_ => new HttpVisualResultsProvider(baseAddress));
         builder.Services.AddScoped<ITestResultsProvider>(_ => new HttpTestResultsProvider(baseAddress));
+        builder.Services.AddScoped<IChangesProvider>(_ => new HttpChangesProvider(baseAddress));
         builder.ConfigureContainer(new DefaultServiceProviderFactory(), services => ServiceOverrides.Apply(services, overridable));
         return builder;
     }
@@ -70,6 +71,23 @@ internal sealed class HttpTestResultsProvider(Uri baseAddress) : ITestResultsPro
     }
 }
 
+/// <summary>Reads the working-copy changes from the host's <c>/_workbench/api/changes</c> endpoint.</summary>
+internal sealed class HttpChangesProvider(Uri baseAddress) : IChangesProvider
+{
+    public async Task<CatalogChangeSummary> GetChangesAsync(CancellationToken cancellationToken = default)
+    {
+        using var http = new HttpClient { BaseAddress = baseAddress };
+        try
+        {
+            return await http.GetFromJsonAsync<CatalogChangeSummary>("_workbench/api/changes", WorkbenchJson.Options, cancellationToken).ConfigureAwait(false) ?? CatalogChangeSummary.Empty;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return CatalogChangeSummary.Empty;
+        }
+    }
+}
+
 /// <summary>Reads visual results from the host's <c>/_workbench/api/visual/{id}</c> endpoint.</summary>
 internal sealed class HttpVisualResultsProvider(Uri baseAddress) : IVisualResultsProvider
 {
@@ -87,4 +105,38 @@ internal sealed class HttpVisualResultsProvider(Uri baseAddress) : IVisualResult
     }
 
     public string Describe() => "Results and baselines served by the Workbench host.";
+
+    public async ValueTask<bool> CanApproveAsync(CancellationToken cancellationToken = default)
+    {
+        using var http = new HttpClient { BaseAddress = baseAddress };
+        try
+        {
+            var health = await http.GetFromJsonAsync<System.Text.Json.JsonElement>("_workbench/api/health", cancellationToken).ConfigureAwait(false);
+            return health.TryGetProperty("approveFromUi", out var value) && value.ValueKind == System.Text.Json.JsonValueKind.True;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    public async Task<VisualApprovalResult> ApproveAsync(string scenarioId, string? variant = null, CancellationToken cancellationToken = default)
+    {
+        using var http = new HttpClient { BaseAddress = baseAddress };
+        var url = $"_workbench/api/visual/{Uri.EscapeDataString(scenarioId)}/approve" + (variant is null ? "" : "?variant=" + Uri.EscapeDataString(variant));
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Add("X-Workbench-Request", "1");
+        try
+        {
+            using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+                return new VisualApprovalResult([], $"The host refused to approve baselines ({(int)response.StatusCode}).");
+            return await response.Content.ReadFromJsonAsync<VisualApprovalResult>(WorkbenchJson.Options, cancellationToken).ConfigureAwait(false)
+                   ?? new VisualApprovalResult([], "The host sent no answer.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return new VisualApprovalResult([], $"Approving failed: {ex.Message}");
+        }
+    }
 }

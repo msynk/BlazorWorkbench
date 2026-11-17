@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text.Json;
 using BlazorWorkbench.Contracts;
 using BlazorWorkbench.Testing.Imaging;
@@ -66,53 +65,8 @@ public sealed class BaselineStore(string directory, string? platform = null)
     /// Copies the actual screenshots of failed or missing visual checks from <paramref name="report"/> into the baseline
     /// directory. Returns the approved entries. Only checks matching <paramref name="filter"/> are approved.
     /// </summary>
-    public IReadOnlyList<BaselineEntry> Approve(TestRunReport report, string reportDirectory, Func<string, bool> filter, bool includePassed = false)
-    {
-        // Screenshots belong to the platform that captured them (for example a Linux CI run approved on Windows).
-        if (report.Environment.Platform is { } reportPlatform && reportPlatform != Platform)
-            return new BaselineStore(Directory, reportPlatform).Approve(report, reportDirectory, filter, includePassed);
-
-        var manifest = LoadManifest();
-        var approved = new List<BaselineEntry>();
-        foreach (var scenario in report.Scenarios.Where(s => filter(s.ScenarioId)))
-        {
-            foreach (var check in scenario.Checks.Where(c => c.Kind == CheckKind.Visual && c.Visual?.ActualPath is not null))
-            {
-                if (!includePassed && check.Status == CheckStatus.Passed)
-                    continue;
-                var visual = check.Visual!;
-                var source = Path.Combine(reportDirectory, visual.ActualPath!);
-                if (!File.Exists(source))
-                    continue;
-
-                var target = FullPath(scenario.ScenarioId, visual.Variant);
-                System.IO.Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Copy(source, target, overwrite: true);
-                var image = PngImage.Load(target);
-                var entry = new BaselineEntry
-                {
-                    ScenarioId = scenario.ScenarioId,
-                    Variant = visual.Variant,
-                    File = RelativePath(scenario.ScenarioId, visual.Variant),
-                    Sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(target))),
-                    Width = image.Width,
-                    Height = image.Height,
-                    Browser = report.Environment.Browser,
-                    BrowserVersion = report.Environment.BrowserVersion,
-                    Viewport = visual.Viewport,
-                    Theme = visual.Theme,
-                    Os = report.Environment.Os,
-                    ApprovedAt = DateTimeOffset.UtcNow,
-                };
-                manifest.Entries[entry.File] = entry;
-                approved.Add(entry);
-            }
-        }
-
-        if (approved.Count > 0)
-            SaveManifest(manifest);
-        return approved;
-    }
+    public IReadOnlyList<BaselineEntry> Approve(TestRunReport report, string reportDirectory, Func<string, bool> filter, bool includePassed = false) =>
+        BaselineApproval.Approve(report, reportDirectory, Directory, filter, includePassed, platform: Platform);
 
     /// <summary>Removes baseline files whose scenario no longer exists. Returns removed relative paths.</summary>
     public IReadOnlyList<string> Prune(IReadOnlySet<string> scenarioIds)

@@ -2,6 +2,7 @@ using BlazorWorkbench.Catalog;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.JSInterop;
 
 namespace BlazorWorkbench.Components.Runtime;
 
@@ -47,6 +48,19 @@ public static class ServiceOverrides
         if (originalTime is not null)
             services.Add(ToKeyed(originalTime));
         services.AddSingleton<TimeProvider>(sp => new WorkbenchTimeProvider(sp.GetKeyedService<TimeProvider>(OriginalKey) ?? TimeProvider.System));
+
+        // IJSRuntime: the framework resolves it when a circuit or WebView page starts and initializes the instance it gets
+        // (Interactive Server casts it to RemoteJSRuntime), so the registration resolves to the original runtime until the
+        // scope's scenario is active. Components created after activation get a decorator that records their calls and
+        // answers the scenario's planned ones. It is transient so each consumer asks at the time it is created.
+        var js = services.LastOrDefault(d => d.ServiceType == typeof(IJSRuntime) && !d.IsKeyedService);
+        if (js is not null && !services.Any(d => d.ServiceType == typeof(IJSRuntime) && d.IsKeyedService && Equals(d.ServiceKey, OriginalKey)))
+        {
+            foreach (var descriptor in services.Where(d => d.ServiceType == typeof(IJSRuntime) && !d.IsKeyedService).ToList())
+                services.Remove(descriptor);
+            services.Add(ToKeyed(js));
+            services.AddTransient<IJSRuntime>(JSInteropSimulator.Resolve);
+        }
 
         // The framework casts AuthenticationStateProvider to IHostEnvironmentAuthenticationStateProvider at circuit start.
         services.RemoveAll<IHostEnvironmentAuthenticationStateProvider>();

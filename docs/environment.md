@@ -11,7 +11,7 @@ Scenarios can simulate the conditions a component depends on, without changing p
 | `AuthenticationStateProvider` | **Simulated** | Anonymous unless the scenario declares a user. |
 | `TimeProvider` | Real, or **simulated** with `.Clock(...)` | A singleton that follows the active session. |
 | `NavigationManager` | Real, with interception | Navigations are prevented and reported as diagnostics. |
-| `IJSRuntime` | Real | The browser runs your component's JavaScript. |
+| `IJSRuntime` | Real, or **planned** per call with `.JSInterop(...)` | Calls without a rule reach the browser. Every call the component makes is recorded. See [JavaScript interop](#javascript-interop). |
 | Culture | Simulated per session | Applied to every circuit activity (events, rendering, JS interop callbacks). |
 | Theme, direction, viewport | Simulated | Attributes on the preview document and iframe size. CLI runs also emulate `prefers-color-scheme`. |
 | Touch input | Simulated | Media queries on `hover` and `pointer` (and `matchMedia`) answer like a phone for mobile presets or the **Touch** switch. CLI runs emulate real touch input. |
@@ -51,6 +51,50 @@ Matching and responses:
 - `.Handle((request, ctx) => ...)` produces a custom response in code. The demo's [FakeBackends](../demo/BlazorWorkbench.Demo/Fakes/FakeBackends.cs) filters a product catalog by query string and validates a posted order.
 - The injected `HttpClient` has the base address `https://workbench.invalid/`. The `.invalid` domain is reserved, so accidental real requests cannot resolve.
 - Every request is recorded with its redacted URL, status, duration and matched rule.
+
+## JavaScript interop
+
+Components that call JavaScript through `IJSRuntime` (browser APIs, your own scripts, imported modules) can be previewed with
+planned answers, so a scenario can show what happens when storage is blocked, a permission is denied or a library is slow,
+without a browser setting or a test double in your code:
+
+```csharp
+set.Add("Storage blocked", s => s.JSInterop(js =>
+{
+    js.Setup("localStorage.getItem").Throws("SecurityError: The operation is insecure.");
+    js.Setup("localStorage.setItem").Throws("SecurityError: The operation is insecure.");
+}));
+
+set.Add("Dark preference", s => s.JSInterop(js => js.Setup("theme.get").Returns("dark")));
+
+set.Add("Slow chart library", s => s.JSInterop(js =>
+    js.Module("./_content/MyLib/chart.js", m => m.Setup("render").Delay(TimeSpan.FromSeconds(2)))));
+```
+
+| Rule | Effect |
+| --- | --- |
+| `Setup(identifier)` | Answers calls to the function (`*` is a wildcard: `chart.*`). Without an answer, the call completes with the default value, which suits `InvokeVoidAsync`. |
+| `.Returns(value)` | The value, converted through JSON when the component asks for another type (`Returns(new { x = 1 })` for `InvokeAsync<Point>`). |
+| `.Throws(message)` | Fails the call with a `JSException`. |
+| `.Delay(time)` | Answers later; the call counts as pending activity, so the preview is ready only afterwards. |
+| `.Hold(gate)` | Waits for a [gate](#gates-deterministic-async), released from the Environment panel, a test step or code. |
+| `.Times(n)` | Answers the next *n* calls, then falls through to later rules (and to the browser). |
+| `.When(call => ...)` | Answers only calls whose `call.Arguments` match. |
+| `.Handle((call, ctx) => ...)` | Computes the answer in code. |
+| `Module(path, m => m.Setup(...))` | Fakes exports of a module imported with `InvokeAsync<IJSObjectReference>("import", path)`. The component gets a .NET stand-in; exports without a rule are called on the real module, imported on first use. The stand-in cannot be passed back to JavaScript as an argument. |
+| `Strict()` | Calls without a rule fail with a `JSException` and an error diagnostic, like bUnit's strict mode. Calls into the framework (`Blazor.*`) always reach the browser. |
+
+Rules from `set.Setup(...)` apply after the scenario's own rules, and the first matching rule answers. Planned answers and
+failures are reported as `JsInterop` diagnostics. **Environment → JavaScript interop** lists the rules and every call the
+component made, with its arguments (redacted), outcome and duration; interaction tests check calls with
+`.ExpectJSCall("localStorage.setItem", times: 1)`, bUnit tests with `cut.JSCallCount("localStorage.setItem")`.
+
+How it works: the host's `IJSRuntime` registration is rewritten like an [overridable service](#services). The framework gets
+the real runtime when the circuit (or WebView page) starts; components created after the scenario is active get a
+decorator that records their calls and answers the planned ones. In WebAssembly and Blazor Hybrid hosts the decorator
+also implements `IJSInProcessRuntime`. Workbench's own bridge keeps the real runtime, so its calls are never counted. A
+library that casts `IJSRuntime` to a framework type can opt out with `options.InterceptJSInterop = false`; planned calls then
+do not apply (`WB1027`).
 
 ## Gates: deterministic async
 

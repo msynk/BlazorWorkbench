@@ -83,6 +83,6 @@ Services a component needs in every app, such as authorization policies, are reg
 
 - Use one `BunitContext` per scenario. A context hosts one session.
 - Workbench replaces bUnit's placeholder `HttpClient` and authorization services with the scenario simulations. Do not call `AddAuthorization()` in the same context.
-- JavaScript interop follows bUnit's mode. Set `JSInterop.Mode = JSRuntimeMode.Loose` for components that call JavaScript, or set up the specific calls.
+- JavaScript interop: calls the scenario plans with `.JSInterop(...)` are answered by Workbench, exactly as in the browser; the others go to bUnit's `JSInterop` and follow its mode. Set `JSInterop.Mode = JSRuntimeMode.Loose` for components that make other calls, or set them up. `cut.JSCallCount(identifier)` counts the component's calls, planned or not.
 - Culture: the host sets `CurrentCulture` while rendering. Tests that assert culture-specific output should set the culture explicitly, for example to invariant, before rendering scenarios without `.Culture(...)`.
 - bUnit does not run CSS or a layout engine. Use the Playwright runner for focus, visibility, layout and visual checks.

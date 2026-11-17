@@ -146,6 +146,13 @@ public sealed class EnvironmentDto
     public IReadOnlyList<string> UserRoles { get; init; } = [];
     public bool? Authenticated { get; init; }
     public IReadOnlyList<HttpRuleDto> Http { get; init; } = [];
+
+    /// <summary>Planned JavaScript interop answers.</summary>
+    public IReadOnlyList<JSInteropRuleDto> JSInterop { get; init; } = [];
+
+    /// <summary>Unplanned JavaScript interop calls fail.</summary>
+    public bool JSInteropStrict { get; init; }
+
     public DateTimeOffset? Clock { get; init; }
     public int? Seed { get; init; }
     public bool Offline { get; init; }
@@ -164,6 +171,9 @@ public sealed class EnvironmentDto
 }
 
 public sealed record HttpRuleDto(string Method, string Pattern, int Status, string? Fault, string? Gate, int? Times, double? LatencyMs, bool Custom);
+
+/// <summary>A planned JavaScript interop answer: the call (module and function) and how it is answered.</summary>
+public sealed record JSInteropRuleDto(string Identifier, string? Module, string Answer, string? Gate, int? Times);
 
 public sealed class PerformanceBudgetDto
 {
@@ -264,6 +274,8 @@ public static class CatalogMapper
                 Http = (env.Http?.Rules ?? []).Select(r => new HttpRuleDto(r.Method, r.Pattern, (int)r.Status,
                     r.Fault == HttpFault.None ? null : r.Fault.ToString(), r.Gate, r.Times, (r.Latency ?? env.Http!.Latency).TotalMilliseconds is var l && l > 0 ? l : null,
                     r.Handler is not null)).ToArray(),
+                JSInterop = (env.JSInterop?.Rules ?? []).Select(r => new JSInteropRuleDto(r.Identifier, r.Module, r.Describe(), r.Gate, r.Times)).ToArray(),
+                JSInteropStrict = env.JSInterop?.Strict == true,
                 Clock = env.Clock,
                 Seed = env.Seed,
                 Offline = env.Offline,

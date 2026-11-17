@@ -23,6 +23,7 @@ The canvas toolbar sits above the preview.
 | Updates | Flashes every element whose DOM changes, which exposes unexpected re-rendering. | `updates=1` | |
 | States | Forces `:hover`, `:focus`, `:focus-visible`, `:focus-within` or `:active` on every element (see below). | `pseudo=hover,focus` | |
 | Accessibility | Vision simulation, text size, text spacing and tab order (see below). | | |
+| Media | Emulated media features (reduced motion, more contrast, print) and animation controls (see below). | `media=`, `anim=` | |
 | Clear tools | Turns every tool off. | | |
 | Panel position | Moves the panel to the right or back to the bottom. The choice is remembered. | | Alt+D |
 | Focus mode | Hides the explorer and the panel. | | Alt+F |
@@ -76,6 +77,22 @@ What the canvas cannot emulate: the device pixel ratio (`devicePixelRatio`, `res
 choices), touch events, a mobile browser's viewport behavior and its user agent. Automated runs emulate all of them
 for presets with `DeviceScaleFactor` and `IsMobile`, so screenshots of a mobile preset are taken like on a phone.
 
+## Media emulation and animations
+
+The **Media** menu of the canvas toolbar emulates CSS media features, like the rendering settings of browser developer tools,
+and controls animations. Everything is in the URL and applies without reloading.
+
+| Setting | What it does | URL |
+| --- | --- | --- |
+| `prefers-reduced-motion: reduce` | Media queries and `matchMedia()` answer as for a user who asked for less motion. | `media=reduced-motion` |
+| `prefers-contrast: more` | As for a user who asked for more contrast. | `media=more-contrast` |
+| Print media type | `@media print` rules and `<link media="print">` stylesheets apply, `screen` ones do not: the printed layout on screen. | `media=print` |
+| Animations: Slow | CSS animations, transitions and Web Animations run at 10% speed. | `anim=slow` |
+| Animations: Paused | They stop; the **Position** slider moves every animation to the same point of its first iteration, to inspect a frame. | `anim=paused&animAt=0.5` |
+
+Like touch emulation, media emulation rewrites the media queries of same-origin stylesheets; cross-origin stylesheets keep
+the real values. Automated runs emulate reduced motion always, and forced colors and print with `.Media(...)`.
+
 ## Accessibility simulations
 
 The **Accessibility** menu in the canvas toolbar:
@@ -120,6 +137,7 @@ Frames load lazily. In an Interactive Server host each frame is a circuit, so la
 | --- | --- |
 | **Design** | The design references of the scenario (`.Design(url)`): images, Figma files (embedded) and links. **Overlay on preview** draws an image over the component with adjustable opacity; **Difference** blends it so identical pixels turn black. Shown only when the scenario has references. |
 | **HTML** | The rendered markup of the preview root, formatted, without Blazor's comments, `_bl_` and scoped-CSS (`b-xxxxxxxxxx`) attributes. Copy it into a bug report or a snapshot. |
+| **Visual** | Baseline, current and difference images of the last `workbench test --visual` run, side by side, overlaid or as a difference; **Approve** makes a changed or new screenshot the baseline. |
 | **Storage** | `localStorage`, `sessionStorage` and script-visible cookies of the preview. Remove items, add or change one, or clear everything; reload to see how the component starts with it. |
 
 ## Recording and debugging interactions
@@ -146,8 +164,23 @@ The search box understands filters, and the chips under it toggle the common one
 | `is:tested` | Scenarios with interaction tests |
 | `is:failing`, `is:passing`, `is:flaky` | Results of the last `workbench test` run |
 | `is:generated`, `is:skipped`, `is:deprecated`, `is:documented` | What the names say |
+| `is:pinned` | Scenarios you pinned |
+| `is:changed`, `is:new`, `is:related`, `is:affected` | Scenarios affected by uncommitted changes (see below) |
 
 Filters combine with text: `is:matrix button`. Documentation pages appear in search results and in the tree.
+
+**Pins.** **☆ Pin** next to the scenario title (or B) pins the scenario to the top of the explorer, like bookmarks. Pins are
+kept in this browser.
+
+**Changes.** The explorer marks scenarios affected by the changes in your git working copy: **M** when the component's
+markup, code-behind (`.razor.cs`) or isolated stylesheet (`.razor.css`), or the scenario set, changed; **N** when that file
+is new; **R** (related) when the component renders a changed component. The footer counts them and toggles
+`is:affected`. The host runs `git status` in the source root; set `ChangesBase = "origin/main"` to also mark what the branch
+changed, or `ShowChanges = false` to turn it off. Hot reload refreshes the marks.
+
+**Test runner.** Under the tree, **Run tests** renders scenarios, runs their interaction tests and, optionally, scans them with
+axe-core in the browser, then marks the results in the tree; **Watch** runs again after every hot reload. See
+[running tests from the Workbench](testing.md#running-tests-from-the-workbench).
 
 When the host has results from `workbench test` (`report.json` in the results folder), every scenario shows a dot for its
 last result (passed, failed, flaky or skipped), components show their number of failures, and the footer shows the run

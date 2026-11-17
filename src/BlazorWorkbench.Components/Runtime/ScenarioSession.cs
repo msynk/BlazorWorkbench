@@ -43,6 +43,7 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
         Http = new WorkbenchHttpMessageHandler(this);
         Auth = new WorkbenchAuthenticationStateProvider(this);
         Time = new SessionTimeProvider(this);
+        JSInterop = new JSInteropSimulator(this);
     }
 
     public WorkbenchCatalogAccessor Catalogs { get; }
@@ -65,6 +66,9 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     public WorkbenchHttpMessageHandler Http { get; }
     public WorkbenchAuthenticationStateProvider Auth { get; }
     public SessionTimeProvider Time { get; }
+
+    /// <summary>Planned JavaScript interop answers and the log of the calls made by the scenario's components.</summary>
+    public JSInteropSimulator JSInterop { get; }
 
     /// <summary>The fixed clock when the scenario declares one (advance it from the Environment panel or code).</summary>
     public FakeTimeProvider? Clock { get; private set; }
@@ -128,10 +132,10 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
             // Fixtures and factories see the culture the component renders in (including toolbar / ?culture= overrides).
             Context = new ScenarioContext(scenario, Time, Gates, Activity, Culture) { Services = services, Diagnostics = Diagnostics };
 
-            foreach (var rule in env.Http?.Rules ?? [])
+            foreach (var gate in (env.Http?.Rules ?? []).Select(r => r.Gate).Concat((env.JSInterop?.Rules ?? []).Select(r => r.Gate)))
             {
-                if (rule.Gate is not null)
-                    Gates.Declare(rule.Gate);
+                if (gate is not null)
+                    Gates.Declare(gate);
             }
 
             var collection = new ServiceCollection();
@@ -237,12 +241,14 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
               (Network is not null ? $", +{Network.Latency.TotalMilliseconds:0} ms ({Network.Name})" : "")));
         result.Add(new("AuthenticationStateProvider", "Simulated", (User?.ToString() ?? "Anonymous (unspecified)") + (Activation.User is not null ? " — chosen in the toolbar" : "")));
         result.Add(new("TimeProvider", Clock is null ? "Real" : "Simulated", Clock is null ? "System clock" : $"Fixed at {Clock.GetUtcNow():O}"));
+        if (Scenario?.Environment.JSInterop is { } js)
+            result.Add(new("IJSRuntime", "Simulated", $"{js.Rules.Count} planned call(s){(js.Strict ? ", strict: unplanned calls fail" : ", other calls reach the browser")}"));
 
         if (Component is not null)
         {
             foreach (var injection in Component.Metadata.Injections)
             {
-                if (result.Any(r => r.ServiceType == injection.ServiceTypeName) || injection.ServiceTypeName is "HttpClient" or "IHttpClientFactory" or "AuthenticationStateProvider" or "TimeProvider")
+                if (result.Any(r => r.ServiceType == injection.ServiceTypeName) || injection.ServiceTypeName is "HttpClient" or "IHttpClientFactory" or "AuthenticationStateProvider" or "TimeProvider" or "IJSRuntime")
                     continue;
                 result.Add(new(injection.ServiceTypeName, "Host registration", "Real (from the Workbench host)"));
             }

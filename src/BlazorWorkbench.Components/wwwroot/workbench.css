@@ -50,7 +50,7 @@ html:has(.wb-shell[data-shell-theme="dark"]) { background: #16161a; color-scheme
 .wb-explorer { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .wb-search { padding: .5rem; border-bottom: 1px solid var(--wb-border); }
 .wb-search input { width: 100%; }
-.wb-explorer nav, .wb-results { flex: 1; overflow: auto; padding: .4rem .5rem 1rem; margin: 0; }
+.wb-explorer nav, .wb-results { position: relative; flex: 1; overflow: auto; padding: .4rem .5rem 1rem; margin: 0; }
 .wb-explorer > .wb-muted { margin: .5rem .75rem 0; }
 .wb-tree { list-style: none; margin: 0; padding: 0 0 0 1.05rem; }
 nav > .wb-tree { padding-inline-start: 0; }
@@ -169,6 +169,8 @@ html.wb-resizing iframe { pointer-events: none; }
 .wb-source-override, .wb-source-fixture { color: var(--wb-accent); font-weight: 600; }
 .wb-source-scenario { color: var(--wb-success); }
 .wb-source-simulated { color: var(--wb-accent); }
+.wb-js-planned { color: var(--wb-accent); font-weight: 600; }
+.wb-js-error, .wb-js-unplanned, .wb-js-gate { color: var(--wb-error); font-weight: 600; }
 .wb-inspector-actions { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: .5rem; flex-wrap: wrap; }
 .wb-inline-actions { display: inline-flex; gap: .25rem; margin-inline-start: .5rem; flex-wrap: wrap; }
 .wb-flags { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -382,3 +384,32 @@ summary .wb-run { font-size: 11px; }
 @media (prefers-reduced-motion: reduce) {
   .wb-shell * { transition: none !important; animation: none !important; }
 }
+
+/* Pinned scenarios */
+.wb-pin-mark { color: var(--wb-accent); margin-inline-end: .3rem; }
+.wb-pin.active { color: var(--wb-accent); border-color: var(--wb-accent); }
+.wb-fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: .3rem; }
+.wb-fieldset legend { font-weight: 600; font-size: 12px; color: var(--wb-muted); padding: 0; margin-bottom: .2rem; }
+/* Working-copy changes */
+.wb-change { display: inline-block; min-width: 1.05rem; padding: 0 .2rem; margin-inline-start: .3rem; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 1.05rem; text-align: center; vertical-align: middle; background: var(--wb-accent-soft); color: var(--wb-accent); }
+.wb-change-new { background: var(--wb-success); color: var(--wb-surface); }
+.wb-change-related { background: transparent; border: 1px dashed var(--wb-accent); }
+.wb-chip-changed { border-color: var(--wb-accent); color: var(--wb-accent); }
+.wb-visual-approved { border-color: var(--wb-success); color: var(--wb-success); }
+.wb-visual-approve { margin-inline-start: .5rem; }
+.wb-visual-approval { margin: 0 0 .5rem; color: var(--wb-success); }
+/* Test runner (sidebar) */
+.wb-runner { border-top: 1px solid var(--wb-border); padding: .45rem .6rem; display: grid; gap: .3rem; font-size: 12.5px; }
+.wb-runner-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.wb-runner-row .wb-field { flex: 1; min-width: 0; }
+.wb-runner-row select { width: 100%; }
+.wb-button-primary { background: var(--wb-accent); border-color: var(--wb-accent); color: var(--wb-accent-text); }
+.wb-runner-progress { height: 4px; background: var(--wb-border); border-radius: 2px; overflow: hidden; }
+.wb-runner-progress span { display: block; height: 100%; background: var(--wb-accent); transition: width .2s; }
+.wb-runner-summary { margin: 0; }
+.wb-runner-passed { color: var(--wb-success); font-weight: 600; }
+.wb-runner-failed { color: var(--wb-error); font-weight: 600; }
+.wb-runner-warning { color: var(--wb-warning); font-weight: 600; }
+.wb-runner-failures { margin: 0; padding-inline-start: 1rem; display: grid; gap: .15rem; }
+.wb-runner-failures a { color: var(--wb-error); }
+@media (prefers-reduced-motion: reduce) { .wb-runner-progress span { transition: none; } }

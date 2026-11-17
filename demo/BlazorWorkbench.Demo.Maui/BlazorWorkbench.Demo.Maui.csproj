@@ -21,6 +21,13 @@
     <!-- Unpackaged on Windows, so 'dotnet run' and 'workbench test' can start the app directly. -->
     <WindowsPackageType>None</WindowsPackageType>
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
+    <!--
+      CsWinRT1032 (newer Windows App SDK analyzers) flags collection expressions that target read-only interfaces, such as
+      IReadOnlyList<T> x = [...], because WinRT marshalling cannot pick a concrete type under trimming or AOT. The shared
+      scenarios use them for component parameters, never across WinRT boundaries, and the app is neither trimmed nor AOT
+      compiled, so the analysis does not apply.
+    -->
+    <NoWarn>$(NoWarn);CsWinRT1032</NoWarn>
 
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>

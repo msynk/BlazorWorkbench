@@ -70,13 +70,48 @@ repositories and release notes. The features most worth having in a developer-fa
 | Media features in visual runs (Chromatic media features) | Done (forced colors, print; reduced motion always) |
 | Browser storage per scenario (storybook-addon-cookie, Cosmos fixtures) | Done, with isolation |
 | User and network switching for any scenario (Storybook globals) | Done |
-| Running tests from the UI with watch mode (Storybook test widget) | Open: the UI runs one interaction or scan at a time; full runs stay in the CLI |
-| Approving visual changes in the UI (Chromatic UI Review) | Open: approval is `workbench approve` |
-| Change detection in the sidebar (Storybook 10.4) | Open: `--changed-since` exists in the CLI only |
+| Running tests from the UI with watch mode (Storybook test widget) | Done in round 3: the explorer's test runner (render, interactions, accessibility, watch) |
+| Approving visual changes in the UI (Chromatic UI Review) | Done in round 3: **Approve** in the Visual panel |
+| Change detection in the sidebar (Storybook 10.4) | Done in round 3: N/M/R marks and `is:changed` from git |
 | Live Razor playground across themes and widths (Playroom) | Open: needs Razor compilation at run time |
-| JS interop fakes per scenario (bUnit `JSInterop`) | Open: `IJSRuntime` is bound to the circuit and cannot be overridden through DI |
+| JS interop fakes per scenario (bUnit `JSInterop`) | Done in round 3: `.JSInterop(...)`, see below for how the circuit binding was solved |
 | Composition of several catalogs (Storybook refs) | Open |
 | Canvas comments for agents (Histoire) | Open |
+
+## Round 3: ecosystem refresh (November 2026)
+
+A third study looked at what changed since round 2: Storybook 9.0 to 10.6 (test widget with coverage and watch mode,
+module automocking with `sb.mock`, CSF factories, change detection in 10.4, MCP and manifests in 10.3, agentic review in
+10.5, skills in 10.6), Chromatic's Visual Tests addon, Ladle 3, Histoire, React Cosmos 7 (bookmarks, fuzzy search, remote
+renderers), Playroom, Widgetbook 4 (scenarios, modes, matrix), Lookbook (display options, embeds), Phoenix Storybook,
+Showkase, Jetpack Compose previews (resizable preview, animation preview, UI Check), SwiftUI previews (`@Previewable`,
+variants, selectable mode), Kitbook, Blazing Story (MCP, VRT) and PlayBlazor. Sources were release notes, documentation and
+package pages. Gaps found in Workbench and what was done:
+
+| Gap (inspired by) | State |
+| --- | --- |
+| Per-scenario fakes for JavaScript the component calls (Storybook `sb.mock`, bUnit `JSInterop`) | Done: `.JSInterop(...)` with returns, errors, delays, gates, argument conditions, module exports and strict mode; every call recorded, `ExpectJSCall`, bUnit `JSCallCount`. `IJSRuntime` is bound to the circuit when it starts, so the registration is rewritten to a transient that returns the real runtime until the scenario is active and a recording decorator afterwards. |
+| Run tests from the UI, with watch mode (Storybook test widget) | Done: test runner in the explorer |
+| Accept baselines in the UI (Chromatic Visual Tests addon) | Done: Visual panel **Approve**, shared `BaselineApproval` |
+| Changed/new/related stories in the sidebar (Storybook 10.4) | Done: git-based marks and filters, `ChangesBase` for branches |
+| Bookmarks (React Cosmos) | Done: pinned scenarios |
+| Animation timeline and media settings (Compose Animation Preview, Xcode Variants contrast, browser developer tools) | Done: reduced motion, more contrast and print emulation; animations slowed or paused at a position |
+| ⌘K search (Cosmos, Storybook) | Done: Ctrl/⌘+K focuses search |
+| Change-aware agent tooling (Storybook agentic review) | Done: MCP `list_changed_scenarios` |
+| Save edited controls back to the scenario file (Storybook 8.1+, Kitbook) | Not done: C# has no stable round-trip from a running object graph to source. The Code panel shows the scenario as C# to paste; writing source files from a browser also widens the attack surface. |
+| Selectable mode: click an element to jump to its component source (Xcode, Kitbook) | Not done: Blazor does not map DOM nodes to component instances. Needs renderer instrumentation; the HTML panel and PDB source links cover part of it. |
+| Live Razor playground (Playroom) | Still open: needs Razor compilation in the browser or on the server. |
+| Composition of several catalogs (Storybook refs) | Still open: previews of another host are cross-origin, so the bridge would need an origin allowlist. |
+| Coverage in the UI (Storybook 9) | Not planned: .NET coverage needs instrumented builds, which the in-browser runner cannot produce. |
+
+Problems found while doing it, both fixed:
+
+- With newer SDKs, every scenario failed its render check in Development, because the injected hot reload client fetches
+  `_framework/dotnet-browser-tools/…` files that exist only under `dotnet watch`. Development tooling requests are now ignored.
+- The MAUI demo failed to build with newer Windows App SDK analyzers (`CsWinRT1032` on collection expressions in the
+  shared scenarios). The warning concerns trimming and AOT, which the app does not use; it is suppressed and documented.
+- The explorer's screen-reader-only labels are absolutely positioned; deep in a long tree they stretched the page and made
+  it scroll. The tree's scroll areas now contain them.
 
 ## Dependency and licensing review
 

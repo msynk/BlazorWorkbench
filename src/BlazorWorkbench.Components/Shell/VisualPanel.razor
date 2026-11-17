@@ -31,9 +31,18 @@
                 <label class="wb-field"><span>Opacity</span><input type="range" min="0" max="100" @bind="_opacity" @bind:event="oninput" /></label>
             }
             <span class="wb-toolbar-spacer"></span>
+            @if (_canApprove && _results.Count(r => IsApprovable(r)) > 1)
+            {
+                <button type="button" class="wb-button" id="wb-visual-approve-all" disabled="@_approving" @onclick="() => ApproveAsync(null)"
+                        title="Copy every changed or new screenshot of this scenario to the baselines">Approve all</button>
+            }
             <button type="button" class="wb-button" @onclick="LoadAsync">Refresh</button>
         </div>
         <p class="wb-muted wb-small">@_provider.Describe()</p>
+        @if (_approval is { } approval)
+        {
+            <p class="wb-visual-approval" role="status">@approval</p>
+        }
         @foreach (var r in _results)
         {
             <section class="wb-visual-result">
@@ -41,6 +50,11 @@
                     <span class="wb-badge wb-visual-@r.Status.ToLowerInvariant()">@r.Status</span> @r.Variant
                     @if (r.DiffRatio is { } ratio) { <span class="wb-muted"> · @((ratio * 100).ToString("0.###", CultureInfo.InvariantCulture))% pixels differ</span> }
                     @if (r.RunAt is { } at) { <span class="wb-muted"> · @at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</span> }
+                    @if (_canApprove && IsApprovable(r))
+                    {
+                        <button type="button" class="wb-button wb-button-small wb-visual-approve" disabled="@_approving" @onclick="() => ApproveAsync(r.Variant)"
+                                title="Make this screenshot the approved baseline (like workbench approve)">Approve</button>
+                    }
                 </h2>
                 @if (r.Message is { } message) { <p class="wb-muted">@message</p> }
                 @switch (_mode)
@@ -77,6 +91,29 @@
     private string _mode = Modes[0];
     private int _opacity = 50;
     private string? _loaded;
+    private bool _canApprove;
+    private bool _approving;
+    private string? _approval;
+
+    /// <summary>Failed or missing checks with a screenshot can be approved.</summary>
+    private static bool IsApprovable(VisualComparisonView r) => r.Status is "Failed" or "Missing" && r.ActualUrl is not null;
+
+    private async Task ApproveAsync(string? variant)
+    {
+        if (_provider is null)
+            return;
+        _approving = true;
+        try
+        {
+            var result = await _provider.ApproveAsync(ScenarioId, variant);
+            _approval = result.Message;
+            await LoadAsync();
+        }
+        finally
+        {
+            _approving = false;
+        }
+    }
 
     [Parameter, EditorRequired] public string ScenarioId { get; set; } = "";
 
@@ -86,7 +123,10 @@
         if (_loaded != ScenarioId)
         {
             _loaded = ScenarioId;
+            _approval = null;
             await LoadAsync();
+            if (_provider is not null)
+                _canApprove = await _provider.CanApproveAsync();
         }
     }
 

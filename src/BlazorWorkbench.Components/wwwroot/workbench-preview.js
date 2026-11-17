@@ -87,6 +87,7 @@
     const t = e.target;
     if (t && t !== window && t.tagName) {
       const url = t.src || t.href || t.currentSrc || '';
+      if (/\/_framework\/(dotnet-browser-tools|aspnetcore-browser-refresh)|\/_vs\/browserLink/i.test(url)) return; // development tooling
       addDiagnostic({ source: 'Resource', severity: 'Error', message: `Failed to load <${t.tagName.toLowerCase()}> ${url}` });
       return;
     }
@@ -354,6 +355,12 @@
     return matches[0];
   }
 
+  // JavaScript interop calls are counted by .NET (the calls of components, not the bridge's); ask it, so calls made before
+  // the bridge attached count too.
+  function jsCallCount(identifier) {
+    return state.dotnet ? state.dotnet.invokeMethodAsync('GetJSCallCount', identifier) : Promise.resolve(0);
+  }
+
   async function retry(fn, timeout) {
     const start = performance.now();
     let lastError;
@@ -445,6 +452,10 @@
       case 'ExpectCallback': return retry(() => {
         const n = state.callbackCounts[step.value] || 0;
         if (step.count == null ? n === 0 : n !== step.count) throw new Error(`Expected ${step.value} to be invoked ${step.count == null ? 'at least once' : step.count + ' time(s)'} but it was invoked ${n} time(s)`);
+      });
+      case 'ExpectJSCall': return retry(async () => {
+        const n = await jsCallCount(step.value);
+        if (step.count == null ? n === 0 : n !== step.count) throw new Error(`Expected the JavaScript function ${step.value} to be called ${step.count == null ? 'at least once' : step.count + ' time(s)'} but it was called ${n} time(s)`);
       });
       case 'ExpectNoErrors': {
         const errors = state.diagnostics.filter((d) => d.severity === 'Error');
@@ -901,6 +912,8 @@
     applyTabOrder(!!c.tabs);
     applyUpdates(!!c.updates);
     applyOverlay(c.overlay);
+    applyMedia(c.media || []);
+    applyAnimations(c.anim);
   }
 
   function toolsFromQuery() {
@@ -910,6 +923,8 @@
     for (const flag of ['grid', 'outline', 'measure', 'spacing', 'tabs', 'updates']) if (q.get(flag) === '1') t[flag] = true;
     if (q.get('pseudo')) t.pseudo = q.get('pseudo').split(',').filter(Boolean);
     if (q.get('text')) t.text = Number(q.get('text'));
+    if (q.get('media')) t.media = q.get('media').split(',').filter(Boolean);
+    if (q.get('anim')) t.anim = { mode: q.get('anim'), position: q.get('animAt') != null ? Number(q.get('animAt')) : null };
     if (q.get('overlay')) t.overlay = { url: q.get('overlay'), opacity: Number(q.get('overlayOpacity') || 50), blend: q.get('overlayBlend') || 'normal' };
     return t;
   }
@@ -922,21 +937,49 @@
     return Array.from(document.styleSheets).filter((s) => !(s.ownerNode && s.ownerNode.hasAttribute && s.ownerNode.hasAttribute(TOOL_ATTR)));
   }
 
-  // Touch emulation: media queries on hover and pointer are rewritten to what a phone reports (hover: none, pointer: coarse),
-  // so the canvas matches automated runs of mobile presets. matchMedia() answers the same way. Cross-origin stylesheets
-  // cannot be read and keep the real values.
+  // Media emulation, like the "Emulate CSS media" settings of browser developer tools. Media queries of the preview's
+  // stylesheets are rewritten to what the emulated device or setting reports, and matchMedia() answers the same way:
+  //  - touch: hover and pointer answer like a phone (hover: none, pointer: coarse), so the canvas matches automated runs
+  //    of mobile presets;
+  //  - reduced-motion: prefers-reduced-motion: reduce; more-contrast: prefers-contrast: more;
+  //  - print: the print media type applies and screen does not.
+  // Cross-origin stylesheets cannot be read and keep the real values.
   const TOUCH_FEATURES = { hover: 'none', 'any-hover': 'none', pointer: 'coarse', 'any-pointer': 'coarse' };
-  const FEATURE_RE = /\(\s*(any-hover|hover|any-pointer|pointer)\s*(?::\s*([a-z-]+)\s*)?\)/gi;
-  const HAS_FEATURE = /\(\s*(any-hover|hover|any-pointer|pointer)\s*[:)]/i;
+  const FEATURE_RE = /\(\s*(any-hover|hover|any-pointer|pointer|prefers-reduced-motion|prefers-contrast)\s*(?::\s*([a-z-]+)\s*)?\)/gi;
+  const HAS_FEATURE = /\(\s*(any-hover|hover|any-pointer|pointer|prefers-reduced-motion|prefers-contrast)\s*[:)]|\b(print|screen)\b/i;
+  const MEDIA_KEYS = ['reduced-motion', 'more-contrast', 'print'];
   const ALWAYS = '(min-width: 0px)';
   const NEVER = '(max-width: 0px)';
-  const emulation = { touch: new URLSearchParams(location.search).get('touch') === '1', lists: new Map() };
+  const initialQuery = new URLSearchParams(location.search);
+  const emulation = {
+    touch: initialQuery.get('touch') === '1',
+    media: (initialQuery.get('media') || '').split(',').filter((m) => MEDIA_KEYS.includes(m)),
+    lists: new Map(),
+  };
+
+  function emulatedFeatures() {
+    const features = {};
+    if (emulation.touch) Object.assign(features, TOUCH_FEATURES);
+    if (emulation.media.includes('reduced-motion')) features['prefers-reduced-motion'] = 'reduce';
+    if (emulation.media.includes('more-contrast')) features['prefers-contrast'] = 'more';
+    return features;
+  }
+
+  function isEmulating() { return emulation.touch || emulation.media.length > 0; }
 
   function emulateMedia(text) {
-    return String(text).replace(FEATURE_RE, (_, feature, value) => {
-      const actual = TOUCH_FEATURES[feature.toLowerCase()];
-      return (value ? actual === value.toLowerCase() : actual !== 'none') ? ALWAYS : NEVER;
+    const features = emulatedFeatures();
+    let result = String(text).replace(FEATURE_RE, (match, feature, value) => {
+      const actual = features[feature.toLowerCase()];
+      if (actual === undefined) return match;
+      // A boolean query, such as (hover) or (prefers-contrast), matches unless the value is 'none' or 'no-preference'.
+      const matches = value ? actual === value.toLowerCase() : actual !== 'none' && actual !== 'no-preference';
+      return matches ? ALWAYS : NEVER;
     });
+    if (emulation.media.includes('print')) {
+      result = result.split(',').map((q) => q.replace(/\bonly\s+/i, '').replace(/\bprint\b/gi, ALWAYS).replace(/\bscreen\b/gi, NEVER)).join(',');
+    }
+    return result;
   }
 
   function rewriteMediaList(list) {
@@ -957,24 +1000,82 @@
     }
   }
 
-  function applyTouch(on) {
-    emulation.touch = !!on;
+  function applyEmulation() {
     if (emulation.touch) document.documentElement.setAttribute('data-wb-touch', ''); else document.documentElement.removeAttribute('data-wb-touch');
     for (const [list, original] of emulation.lists) { try { list.mediaText = original; } catch { /* stylesheet removed */ } }
     emulation.lists.clear();
-    if (!emulation.touch) return;
+    if (!isEmulating()) return;
     for (const sheet of ownSheets()) {
       rewriteMediaList(sheet.media);
       try { visitMediaRules(sheet.cssRules, rewriteMediaList); } catch { /* cross-origin stylesheet */ }
     }
   }
 
+  function applyTouch(on) {
+    emulation.touch = !!on;
+    applyEmulation();
+  }
+
+  function applyMedia(list) {
+    const next = (list || []).filter((m) => MEDIA_KEYS.includes(m));
+    if (next.join(',') === emulation.media.join(',')) return;
+    emulation.media = next;
+    applyEmulation();
+  }
+
   if (window.matchMedia) {
     const nativeMatchMedia = window.matchMedia.bind(window);
-    window.matchMedia = function (query) { return nativeMatchMedia(emulation.touch ? emulateMedia(query) : query); };
+    window.matchMedia = function (query) { return nativeMatchMedia(isEmulating() ? emulateMedia(query) : query); };
   }
-  if (emulation.touch) {
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => applyTouch(true)); else applyTouch(true);
+  if (isEmulating()) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyEmulation); else applyEmulation();
+  }
+
+  // Animation controls: CSS animations, transitions and Web Animations run slowed down (10%) or paused at a position, like
+  // the animations panel of browser developer tools. New animations are caught as they start.
+  const motion = { mode: null, position: null, listening: false };
+
+  function seek(animation) {
+    try {
+      const timing = animation.effect && animation.effect.getComputedTiming();
+      if (!timing) return;
+      const duration = Number.isFinite(timing.duration) ? timing.duration : 0;
+      animation.currentTime = (timing.delay || 0) + duration * motion.position;
+    } catch { /* animation finished or removed */ }
+  }
+
+  function controlAnimations() {
+    const all = document.getAnimations ? document.getAnimations() : [];
+    for (const a of all) {
+      try {
+        if (!motion.mode) {
+          a.playbackRate = 1;
+          if (a.__wbPaused) { a.__wbPaused = false; a.play(); }
+        } else if (motion.mode === 'paused') {
+          if (a.playState !== 'paused') { a.pause(); a.__wbPaused = true; }
+          if (motion.position != null) seek(a);
+        } else {
+          a.playbackRate = 0.1;
+          if (a.__wbPaused) { a.__wbPaused = false; a.play(); }
+        }
+      } catch { /* animation finished or removed */ }
+    }
+    return all.length;
+  }
+
+  function applyAnimations(options) {
+    const mode = options && (options.mode === 'paused' || options.mode === 'slow') ? options.mode : null;
+    const position = mode === 'paused' && options && typeof options.position === 'number' && !isNaN(options.position)
+      ? Math.min(1, Math.max(0, options.position)) : null;
+    if (!mode && !motion.mode) return;
+    motion.mode = mode;
+    motion.position = position;
+    controlAnimations();
+    if (!motion.listening && mode) {
+      motion.listening = true;
+      const onStart = () => { if (motion.mode) requestAnimationFrame(controlAnimations); };
+      ['animationstart', 'transitionrun', 'transitionstart'].forEach((type) => document.addEventListener(type, onStart, true));
+    }
   }
 
   // Breakpoints: the widths at which a media query of the preview stylesheets starts or stops applying, each given as the
@@ -1117,7 +1218,7 @@
     if (force || json !== layoutState.breakpoints) { layoutState.breakpoints = json; post('breakpoints', list); }
   }
   function announceResponsive() {
-    if (emulation.touch) applyTouch(true);
+    if (isEmulating()) applyEmulation();
     reportBreakpoints();
     scheduleLayout(0);
   }
@@ -1428,6 +1529,7 @@
       state.callbackCounts[entry.name] = entry.invocation;
       post('callback', entry);
     },
+    jsCall(record) { post('js-call', record); },
     gates(list) { state.gates = list; post('gates', list); },
     argsChanged(json) { post('args-changed', JSON.parse(json)); },
     theme(t) { applyTheme(t); },
@@ -1448,6 +1550,7 @@
     serverMetrics: () => state.dotnet ? state.dotnet.invokeMethodAsync('GetMetrics').then(JSON.parse) : Promise.resolve(null),
     waitForIdle,
     callbackCount: (name) => state.callbackCounts[name] || 0,
+    jsCallCount,
     releaseGate: (name) => state.dotnet ? state.dotnet.invokeMethodAsync('ReleaseGate', name) : Promise.resolve(false),
     failGate: (name, message) => state.dotnet ? state.dotnet.invokeMethodAsync('FailGate', name, message || null) : Promise.resolve(false),
     advanceClock: (ms) => state.dotnet ? state.dotnet.invokeMethodAsync('AdvanceClock', ms) : Promise.resolve(false),

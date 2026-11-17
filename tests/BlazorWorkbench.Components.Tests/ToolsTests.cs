@@ -28,6 +28,27 @@ public class PreviewToolsTests
     }
 
     [Fact]
+    public void Media_emulation_and_animation_controls_survive_the_url()
+    {
+        var tools = new PreviewTools { Media = ["reduced-motion", "print"], Animation = "paused", AnimationPosition = 0.25 };
+        var query = tools.ToQuery().Select(p => p.Split('=', 2)).ToDictionary(p => p[0], p => Uri.UnescapeDataString(p[1]));
+        Assert.Equal("reduced-motion,print", query["media"]);
+        Assert.Equal("paused", query["anim"]);
+        Assert.Equal("0.25", query["animAt"]);
+
+        var parsed = PreviewTools.Parse(query.GetValueOrDefault);
+        Assert.Equal(tools.ToQuery(), parsed.ToQuery());
+        Assert.Equal(3, parsed.ActiveCount);
+
+        // A position applies only to paused animations; unknown features and modes are ignored.
+        var invalid = PreviewTools.Parse(new Dictionary<string, string> { ["media"] = "print,forced-colors", ["anim"] = "slow", ["animAt"] = "0.5" }.GetValueOrDefault);
+        Assert.Equal(["print"], invalid.Media);
+        Assert.Equal("slow", invalid.Animation);
+        Assert.Null(invalid.AnimationPosition);
+        Assert.Null(PreviewTools.Parse(new Dictionary<string, string> { ["anim"] = "rewind" }.GetValueOrDefault).Animation);
+    }
+
+    [Fact]
     public void Defaults_produce_no_query_and_invalid_values_are_ignored()
     {
         Assert.Empty(PreviewTools.None.ToQuery());
@@ -129,6 +150,18 @@ public class DocumentationViewTests : BunitContext
 
         cut.Find("#wb-search").Input("tokens");
         Assert.Contains(cut.FindAll(".wb-results a"), a => a.GetAttribute("href") == "pages/foundations-design-tokens");
+    }
+
+    [Fact]
+    public void Explorer_lists_pinned_scenarios_and_filters_them()
+    {
+        var cut = Render<Explorer>(p => p.Add(e => e.Catalog, Demo.Value).Add(e => e.Pinned, ["inputs-button--danger", "missing--scenario"]));
+        var pinned = cut.FindAll(".wb-pinned a");
+        Assert.Single(pinned);
+        Assert.Equal("scenario/inputs-button--danger", pinned[0].GetAttribute("href"));
+
+        cut.Find("#wb-search").Input("is:pinned");
+        Assert.Single(cut.FindAll(".wb-results a"));
     }
 
     [Fact]

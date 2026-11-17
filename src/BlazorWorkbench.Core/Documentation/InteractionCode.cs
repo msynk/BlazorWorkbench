@@ -53,6 +53,7 @@ public static class InteractionCode
             StepAction.ExpectAttribute => $".ExpectAttribute({target}, {value}, {expected})",
             StepAction.ExpectCount => $".ExpectCount({target}, {(step.Count ?? 0).ToString(CultureInfo.InvariantCulture)})",
             StepAction.ExpectCallback => step.Count is { } times ? $".ExpectCallback({value}, times: {times.ToString(CultureInfo.InvariantCulture)})" : $".ExpectCallback({value})",
+            StepAction.ExpectJSCall => step.Count is { } calls ? $".ExpectJSCall({value}, times: {calls.ToString(CultureInfo.InvariantCulture)})" : $".ExpectJSCall({value})",
             StepAction.ExpectNoErrors => ".ExpectNoErrors()",
             StepAction.ReleaseGate or StepAction.FailGate or StepAction.Checkpoint => $".{step.Action}({value})",
             StepAction.DragTo => $".DragTo({target}, {(step.Destination is null ? "null" : Locator(step.Destination))})",

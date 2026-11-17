@@ -132,6 +132,8 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private readonly List<CascadingValueDefinition> _cascading = [];
     private readonly List<Action<IServiceCollection, ScenarioContext>> _services = [];
     private readonly List<HttpRule> _httpRules = [], _setupHttpRules = [];
+    private readonly List<JSInteropRule> _jsRules = [], _setupJsRules = [];
+    private bool _jsConfigured, _jsStrict;
     private readonly List<InteractionTest> _interactions = [];
     private readonly List<string> _tags = [];
     private readonly List<string> _ignore = [], _visualViewports = [], _visualThemes = [], _disabledRules = [];
@@ -290,6 +292,24 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         return this;
     }
 
+    /// <summary>
+    /// Plans answers for JavaScript interop calls made through <c>IJSRuntime</c>: browser APIs (<c>localStorage.getItem</c>,
+    /// <c>navigator.clipboard.writeText</c>), your own functions and the exports of imported modules. Planned calls never reach
+    /// the browser, so a component can be previewed with a failing permission, an empty storage or a slow library. Calls
+    /// without a rule reach the browser unless the simulation is strict. Every call is recorded (Environment panel,
+    /// <see cref="InteractionBuilder.ExpectJSCall"/>).
+    /// </summary>
+    public ScenarioBuilder<TComponent> JSInterop(Action<JSInteropBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        var builder = new JSInteropBuilder();
+        configure(builder);
+        (InSetup ? _setupJsRules : _jsRules).AddRange(builder.BuildRules());
+        if (builder.StrictValue is { } strict) _jsStrict = strict;
+        _jsConfigured = true;
+        return this;
+    }
+
     /// <summary>Fails every HTTP request with a connection error.</summary>
     public ScenarioBuilder<TComponent> Offline(bool offline = true) { _offline = offline; return this; }
 
@@ -437,6 +457,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
             Http = _httpConfigured
                 ? new HttpSimulation { Rules = [.. _httpRules, .. _setupHttpRules], Latency = _httpLatency, UnmatchedStatus = _unmatched }
                 : null,
+            JSInterop = _jsConfigured ? new JSInteropSimulation { Rules = [.. _jsRules, .. _setupJsRules], Strict = _jsStrict } : null,
         },
         Visual = new VisualOptions
         {

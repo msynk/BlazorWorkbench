@@ -20,6 +20,8 @@ public static class WorkbenchTelemetry
 
     internal static Counter<long> HttpRequests { get; } = Meter.CreateCounter<long>("workbench.http.requests", description: "Requests answered by the fake HTTP backend.");
 
+    internal static Counter<long> JSInteropCalls { get; } = Meter.CreateCounter<long>("workbench.jsinterop.calls", description: "JavaScript interop calls made by previewed components.");
+
     internal static Counter<long> Diagnostics { get; } = Meter.CreateCounter<long>("workbench.diagnostics", description: "Diagnostics recorded by preview sessions.");
 
     internal static Histogram<double> ActivityDuration { get; } = Meter.CreateHistogram<double>("workbench.circuit.activity.duration", "ms",

@@ -32,6 +32,9 @@ public sealed class EnvironmentDefinition
     /// <summary>Fake HTTP backend. Null still installs a fake backend that answers 404 to every request.</summary>
     public HttpSimulation? Http { get; init; }
 
+    /// <summary>Planned JavaScript interop answers. Null lets every call reach the browser (calls are still recorded).</summary>
+    public JSInteropSimulation? JSInterop { get; init; }
+
     /// <summary>Fixed start time for the scenario's <see cref="TimeProvider"/>. Null uses the real clock.</summary>
     public DateTimeOffset? Clock { get; init; }
 

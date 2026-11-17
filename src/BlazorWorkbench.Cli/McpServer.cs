@@ -122,6 +122,27 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         return Json(new { suggestions, code = ScenarioSkeletonGenerator.GenerateSet(component, suggestions), note = "Generated code is a starting point; run validate_scenarios after adding it." });
     }
 
+    [McpServerTool(Name = "list_changed_scenarios", ReadOnly = true), Description("Lists the scenarios affected by uncommitted git changes (and, with baseRef, by the commits since that ref), including scenarios of components that render a changed component. Use it to decide what to review or test after editing components.")]
+    public async Task<string> ListChangedScenarios([Description("Optional git ref to compare with in addition to uncommitted changes, for example 'origin/main'")] string? baseRef = null, CancellationToken ct = default)
+    {
+        connection.Audit("list_changed_scenarios", new { baseRef });
+        var root = settings.Context.Config.RootDirectory;
+        var (files, description) = await GitWorkingCopy.ReadAsync(root, baseRef, ct);
+        if (files is null)
+            return $"Changes are not available: {description}";
+        var catalog = await (await connection.GetAsync(ct)).GetCatalogAsync(ct);
+        var selection = ChangeImpact.Select(catalog, files.Select(f => f.Path), root, settings.BaselineDirectory);
+        return Json(new
+        {
+            description,
+            selection.Reason,
+            runsEverything = selection.RunAll,
+            scenarios = selection.ScenarioIds?.Order(StringComparer.Ordinal).ToArray(),
+            unmappedFiles = selection.UnmappedFiles,
+            newFiles = files.Where(f => f.IsNew).Select(f => Path.GetRelativePath(root, f.Path).Replace('\\', '/')).ToArray(),
+        });
+    }
+
     [McpServerTool(Name = "run_tests"), Description("Runs scenario tests in a headless browser (render health, interactions; optionally accessibility, visual comparison and a responsive sweep for horizontal overflow) and returns a summary with failures. Never modifies baselines.")]
     public async Task<string> RunTests(
         [Description("Scenario filter (glob on ids/titles, tag:name)")] string? filter = null,

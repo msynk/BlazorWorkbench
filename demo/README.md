@@ -77,7 +77,7 @@ dotnet run --project demo/BlazorWorkbench.Demo.Maui -f net10.0-windows10.0.19041
 
 ## One definition, every test
 
-The 182 scenarios are also the test suite: render checks, 80 interaction tests, axe-core scans, visual comparisons and a reflow sweep
+The 184 scenarios are also the test suite: render checks, 82 interaction tests, axe-core scans, visual comparisons and a reflow sweep
 in Chromium, in WebAssembly and in the MAUI WebView, plus a bUnit smoke test per scenario. From the repository root:
 
 ```bash

@@ -89,6 +89,13 @@ public class WorkbenchOptions
     public bool IsolateBrowserStorage { get; set; } = true;
 
     /// <summary>
+    /// Hands the components of an active scenario an <c>IJSRuntime</c> that records their JavaScript interop calls and answers
+    /// the calls planned with <c>.JSInterop(...)</c>. Turn it off only for a component library that casts <c>IJSRuntime</c> to
+    /// a framework type; planned answers then do not apply.
+    /// </summary>
+    public bool InterceptJSInterop { get; set; } = true;
+
+    /// <summary>
     /// Standalone documentation pages (guides, foundations, patterns), listed in the explorer next to the components. Their
     /// Markdown can embed live scenarios and component tables; see <see cref="AddPage"/>.
     /// </summary>

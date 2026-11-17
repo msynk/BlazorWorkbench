@@ -98,6 +98,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
 
         Session.Diagnostics.Added += OnDiagnostic;
         Session.Callbacks.Added += OnCallback;
+        Session.JSInterop.Called += OnJSCall;
         Session.Gates.Changed += OnGatesChanged;
         Session.Activity.Changed += OnActivityChanged;
     }
@@ -471,6 +472,9 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     public int GetCallbackCount(string name) => Session.Callbacks.Count(name);
 
     [JSInvokable]
+    public int GetJSCallCount(string identifier) => Session.JSInterop.Count(identifier);
+
+    [JSInvokable]
     public string GetMetrics() => JsonSerializer.Serialize(new
     {
         sessionId = Session.SessionId,
@@ -486,6 +490,9 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         services = Session.DescribeServices(),
         gates = Session.Gates.Snapshot(),
         http = Session.Http.Exchanges,
+        js = Session.JSInterop.Calls,
+        jsRules = (Scenario.Environment.JSInterop?.Rules ?? []).Select(r => new { rule = r.ToString(), answer = r.Describe() }),
+        jsStrict = Scenario.Environment.JSInterop?.Strict == true,
         clock = Session.Clock?.GetUtcNow(),
         culture = Session.Culture?.Name,
         user = Session.Activation.User is not null ? (Session.User?.ToString() ?? "Anonymous") + " (chosen in the toolbar)" : null,
@@ -557,6 +564,23 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     {
         if (_bridgeAttached)
             Bridge("BlazorWorkbenchPreview.callback", entry);
+    }
+
+    // Components can call JavaScript many times a second (pointer tracking, animation frames). The shell only needs to
+    // know that the list changed, so notifications are coalesced: at most one every 250 ms, carrying the latest call.
+    private int _jsNotifyQueued;
+
+    private void OnJSCall(JSCallRecord call)
+    {
+        if (!_bridgeAttached || Interlocked.Exchange(ref _jsNotifyQueued, 1) == 1)
+            return;
+        _ = Task.Delay(250).ContinueWith(_ =>
+        {
+            Volatile.Write(ref _jsNotifyQueued, 0);
+            var calls = Session.JSInterop.Calls;
+            if (calls.Count > 0)
+                Bridge("BlazorWorkbenchPreview.jsCall", calls[^1]);
+        }, TaskScheduler.Default);
     }
 
     private void OnGatesChanged()
@@ -632,6 +656,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         _disposed = true;
         Session.Diagnostics.Added -= OnDiagnostic;
         Session.Callbacks.Added -= OnCallback;
+        Session.JSInterop.Called -= OnJSCall;
         Session.Gates.Changed -= OnGatesChanged;
         Session.Activity.Changed -= OnActivityChanged;
         _navigationRegistration?.Dispose();

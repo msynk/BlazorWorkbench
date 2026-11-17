@@ -15,6 +15,17 @@ git add demo/MyWorkbench/baselines  # 4. commit them with the change that caused
 - `approve --all` also re-approves screenshots that passed, for example after upgrading the browser.
 - `approve --prune` deletes baselines of scenarios that no longer exist. It requires an unfiltered run.
 
+## Approving in the Workbench
+
+The **Visual** panel of a scenario shows the screenshots of the last `workbench test --visual` run. A changed or new
+screenshot has an **Approve** button, and **Approve all** approves every one of the scenario's; this is
+`workbench approve --filter <id>` for that scenario (or variant), with the same manifest entry. Approved screenshots show as
+*Approved* until the next run.
+
+Approving from the Workbench is on for local hosts. A host with `AllowRemoteAccess` needs `AllowApprovalFromUi = true`,
+and `AllowApprovalFromUi = false` turns it off everywhere. In WebAssembly hosts the panel posts to
+`/_workbench/api/visual/{id}/approve`, which accepts only same-origin requests with the `X-Workbench-Request` header.
+
 ## Baseline layout
 
 ```

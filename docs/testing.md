@@ -59,6 +59,7 @@ Steps use Playwright's user-facing locators. The Playwright runner is authoritat
 - Actions wait until the element is visible, enabled and stable. Assertions retry for up to 5 s (`StepTimeout`).
 - After each action, the runner waits until Workbench-tracked work is idle and the DOM is quiet.
 - `ExpectCallback(name, times)` counts calls of the scenario's automatically instrumented `EventCallback` parameters.
+- `ExpectJSCall(identifier, times)` counts the component's JavaScript interop calls of a function or module export, whether a [planned answer](environment.md#javascript-interop) or the browser answered it. `window.__workbench.jsCallCount(identifier)` returns the same count (a promise).
 - `ExpectNoErrors()` fails if error diagnostics have been recorded so far.
 - `Checkpoint(name)` captures an extra visual baseline (`{viewport}-{theme}-{name}`) when `--visual` is set. Each checkpoint is reported as its own visual check (approve it with `workbench approve` like any other screenshot); a failed or missing checkpoint fails the scenario but does not stop the interaction.
 
@@ -141,8 +142,23 @@ preset stays a touch device). Each width is a step of the check in the reports.
 
 After `workbench test`, the host reads `report.json` from the results folder: every scenario in the explorer shows a dot for
 its result (passed, failed, flaky, skipped), components show their number of failures, and `is:failing` lists them. The
-**Visual** panel shows baseline, current and difference images. Hosts can serve results from elsewhere (for example a CI
-server) by registering an `ITestResultsProvider` and an `IVisualResultsProvider`.
+**Visual** panel shows baseline, current and difference images, and approves changed or new screenshots as baselines
+([visual regression](visual-regression.md#approving-in-the-workbench)). Hosts can serve results from elsewhere (for example
+a CI server) by registering an `ITestResultsProvider` and an `IVisualResultsProvider`.
+
+### Running tests from the Workbench
+
+The test runner at the bottom of the explorer runs scenarios without leaving the Workbench, like Storybook's test widget:
+choose **All scenarios**, the component on screen, **Failing** or **Changed** (scenarios affected by uncommitted changes),
+optionally tick **Accessibility**, and click **Run tests**. Each scenario is rendered in an invisible frame and checked for
+render errors (and scanned with axe-core, failing on serious and critical violations unless the scenario has an
+accessibility `Todo`); each interaction test then runs against a fresh session. Scenarios with `SkipTests` are skipped.
+Results replace the last CLI run's dots in the explorer for this session, failures link to the panel that explains them,
+and opening a scenario shows its interaction and accessibility results. **Watch** runs the same scenarios again whenever
+hot reload rebuilds the catalog.
+
+The runner uses the in-browser interaction runner, which simulates events. `workbench test` drives a real browser with
+Playwright, adds visual and responsive checks, retries and reports, and stays authoritative for CI.
 
 ## Change impact (`--changed-since`)
 

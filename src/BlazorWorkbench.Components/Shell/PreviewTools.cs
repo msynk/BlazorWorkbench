@@ -31,7 +31,23 @@ public sealed record PreviewTools
         ("blurred", "Blurred vision"), ("low-contrast", "Reduced contrast"),
     ];
 
+    /// <summary>CSS media features the canvas can emulate, by key (browser developer tools' "Emulate CSS media").</summary>
+    public static IReadOnlyList<(string Key, string Label)> MediaFeatures { get; } =
+        [("reduced-motion", "prefers-reduced-motion: reduce"), ("more-contrast", "prefers-contrast: more"), ("print", "print media type")];
+
+    /// <summary>Animation controls, by key: slowed to 10% or paused (with a position).</summary>
+    public static IReadOnlyList<(string Key, string Label)> AnimationModes { get; } = [("slow", "Slow (10%)"), ("paused", "Paused")];
+
     public double Zoom { get; init; } = 1;
+
+    /// <summary>Emulated media features (<see cref="MediaFeatures"/> keys).</summary>
+    public IReadOnlyList<string> Media { get; init; } = [];
+
+    /// <summary>Null (animations run), <c>slow</c> or <c>paused</c>.</summary>
+    public string? Animation { get; init; }
+
+    /// <summary>Position of paused animations, from 0 (start) to 1 (end of one iteration); null leaves them where they stopped.</summary>
+    public double? AnimationPosition { get; init; }
 
     /// <summary>Id of a <see cref="BackgroundPreset"/>, or null for the theme's background.</summary>
     public string? Background { get; init; }
@@ -60,7 +76,8 @@ public sealed record PreviewTools
     /// <summary>Number of tools that change the preview, for the toolbar badge.</summary>
     public int ActiveCount =>
         (Background is null ? 0 : 1) + (Grid ? 1 : 0) + (Outline ? 1 : 0) + (Measure ? 1 : 0) + Pseudo.Count + (TextScale != 100 ? 1 : 0) +
-        (TextSpacing ? 1 : 0) + (TabOrder ? 1 : 0) + (Updates ? 1 : 0) + (Vision is null ? 0 : 1) + (Overlay is null ? 0 : 1);
+        (TextSpacing ? 1 : 0) + (TabOrder ? 1 : 0) + (Updates ? 1 : 0) + (Vision is null ? 0 : 1) + (Overlay is null ? 0 : 1) +
+        Media.Count + (Animation is null ? 0 : 1);
 
     /// <summary>The CSS filter applied to the preview frame for <see cref="Vision"/>.</summary>
     public string? VisionFilter => Vision switch
@@ -96,6 +113,13 @@ public sealed record PreviewTools
         if (TextSpacing) yield return "spacing=1";
         if (TabOrder) yield return "tabs=1";
         if (Updates) yield return "updates=1";
+        if (Media.Count > 0) yield return "media=" + Uri.EscapeDataString(string.Join(',', Media));
+        if (Animation is not null)
+        {
+            yield return "anim=" + Animation;
+            if (Animation == "paused" && AnimationPosition is { } at) yield return "animAt=" + at.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
         if (Overlay is not null)
         {
             yield return "overlay=" + Uri.EscapeDataString(Overlay);
@@ -116,6 +140,8 @@ public sealed record PreviewTools
         spacing = TextSpacing,
         tabs = TabOrder,
         updates = Updates,
+        media = Media,
+        anim = Animation is null ? null : new { mode = Animation, position = Animation == "paused" ? AnimationPosition : null },
         overlay = Overlay is null ? null : new { url = Overlay, opacity = OverlayOpacity, blend = OverlayBlend },
     };
 
@@ -129,6 +155,10 @@ public sealed record PreviewTools
         var pseudo = (query("pseudo") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(p => PseudoStates.Any(s => s.Key == p)).Distinct().ToArray();
         var vision = query("vision");
+        var media = (query("media") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(m => MediaFeatures.Any(f => f.Key == m)).Distinct().ToArray();
+        var animation = AnimationModes.Any(a => a.Key == query("anim")) ? query("anim") : null;
+        double? position = animation == "paused" && double.TryParse(query("animAt"), NumberStyles.Float, CultureInfo.InvariantCulture, out var at) && at is >= 0 and <= 1 ? at : null;
         return new PreviewTools
         {
             Zoom = zoom,
@@ -141,6 +171,9 @@ public sealed record PreviewTools
             TextSpacing = Flag(query("spacing")),
             TabOrder = Flag(query("tabs")),
             Updates = Flag(query("updates")),
+            Media = media,
+            Animation = animation,
+            AnimationPosition = position,
             Vision = VisionModes.Any(v => v.Key == vision) ? vision : null,
             Rotate = Flag(query("rotate")),
             Overlay = query("overlay") is { Length: > 0 } overlay && Catalog.ScenarioValidator.IsSafeDesignUrl(overlay) ? overlay : null,

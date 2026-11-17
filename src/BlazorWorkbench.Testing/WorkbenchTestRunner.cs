@@ -413,6 +413,17 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         return new LoadResult(state, ready, updates, pending, watch.Elapsed.TotalMilliseconds, diagnostics);
     }
 
+    /// <summary>
+    /// Requests made by the SDK's development tooling (hot reload and browser refresh, Visual Studio Browser Link), which
+    /// the host injects when it runs in Development. They are not part of the component, and their endpoints exist only
+    /// under <c>dotnet watch</c> or Visual Studio, so a 404 says nothing about the scenario.
+    /// </summary>
+    internal static bool IsDevelopmentTooling(string url) =>
+        url.Contains("/_framework/dotnet-browser-tools/", StringComparison.OrdinalIgnoreCase) ||
+        url.Contains("/_framework/aspnetcore-browser-refresh.js", StringComparison.OrdinalIgnoreCase) ||
+        url.Contains("/_framework/blazor-hotreload", StringComparison.OrdinalIgnoreCase) ||
+        url.Contains("/_vs/browserLink", StringComparison.OrdinalIgnoreCase);
+
     private static (List<DiagnosticDto> Items, Action Detach) TrackResources(IPage page)
     {
         var list = new List<DiagnosticDto>();
@@ -422,7 +433,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         {
             try
             {
-                if (response.Status >= 400 && !response.Url.Contains("/_workbench/api/", StringComparison.Ordinal))
+                if (response.Status >= 400 && !response.Url.Contains("/_workbench/api/", StringComparison.Ordinal) && !IsDevelopmentTooling(response.Url))
                     Add($"{response.Request.ResourceType} {Redactor.Default.RedactUrl(response.Url)} → {response.Status}");
             }
             catch (PlaywrightException)
@@ -433,7 +444,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         {
             try
             {
-                if (request.Failure is { } failure && !failure.Contains("ERR_ABORTED", StringComparison.Ordinal))
+                if (request.Failure is { } failure && !failure.Contains("ERR_ABORTED", StringComparison.Ordinal) && !IsDevelopmentTooling(request.Url))
                     Add($"{request.ResourceType} {Redactor.Default.RedactUrl(request.Url)} failed: {failure}");
             }
             catch (PlaywrightException)

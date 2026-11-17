@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.JSInterop;
 
 namespace BlazorWorkbench.Testing.Bunit;
 
@@ -122,6 +123,15 @@ public static class WorkbenchBunit
         services.AddSingleton<IHttpClientFactory>(new WorkbenchHttpClientFactory(session));
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(session.Time);
+        // JavaScript interop: the scenario's planned calls are answered by Workbench; the others go to bUnit's JSInterop
+        // (strict by default, so unplanned calls fail unless the test sets them up or switches bUnit to loose mode).
+        if (catalog.Options.InterceptJSInterop)
+        {
+            var bunitRuntime = context.JSInterop.JSRuntime;
+            services.RemoveAll<IJSRuntime>();
+            services.AddSingleton(session.JSInterop.Wrap(bunitRuntime));
+        }
+
         foreach (var type in scenario.ServiceTypes.Where(t => t != typeof(TimeProvider)))
         {
             services.RemoveAll(type);
@@ -185,4 +195,7 @@ public static class WorkbenchBunit
 
     /// <summary>Number of times an automatically instrumented <c>EventCallback</c> parameter was invoked.</summary>
     public static int CallbackCount(this IRenderedComponent<ScenarioHost> cut, string parameterName) => cut.Session().Callbacks.Count(parameterName);
+
+    /// <summary>Number of times the scenario's components called the JavaScript function <paramref name="identifier"/>, planned or not.</summary>
+    public static int JSCallCount(this IRenderedComponent<ScenarioHost> cut, string identifier) => cut.Session().JSInterop.Count(identifier);
 }

@@ -67,6 +67,7 @@ public static class PlaywrightSteps
             case StepAction.ExpectFocused: await Assertions.Expect(Target()).ToBeFocusedAsync(new LocatorAssertionsToBeFocusedOptions { Timeout = ms }); break;
             case StepAction.ExpectCount: await Assertions.Expect(Target()).ToHaveCountAsync(step.Count ?? 0, new LocatorAssertionsToHaveCountOptions { Timeout = ms }); break;
             case StepAction.ExpectCallback: await ExpectCallbackAsync(page, step.Value!, step.Count, timeout); break;
+            case StepAction.ExpectJSCall: await ExpectCountAsync(page, "n => window.__workbench.jsCallCount ? window.__workbench.jsCallCount(n) : 0", step.Value!, step.Count, timeout, "the JavaScript function"); break;
             case StepAction.ExpectNoErrors:
                 var errors = (await LoadState.DiagnosticsAsync(page)).Where(d => d.Severity == Diagnostics.DiagnosticSeverity.Error).ToList();
                 if (errors.Count > 0)
@@ -104,13 +105,16 @@ public static class PlaywrightSteps
     public static Task WaitForIdleAsync(IPage page, TimeSpan timeout) =>
         page.EvaluateAsync<bool>("t => window.__workbench ? window.__workbench.waitForIdle(t) : true", (int)timeout.TotalMilliseconds);
 
-    private static async Task ExpectCallbackAsync(IPage page, string name, int? times, TimeSpan timeout)
+    private static Task ExpectCallbackAsync(IPage page, string name, int? times, TimeSpan timeout) =>
+        ExpectCountAsync(page, "n => window.__workbench.callbackCount(n)", name, times, timeout, "");
+
+    private static async Task ExpectCountAsync(IPage page, string script, string name, int? times, TimeSpan timeout, string what)
     {
         var watch = Stopwatch.StartNew();
         int count;
         while (true)
         {
-            count = await page.EvaluateAsync<int>("n => window.__workbench.callbackCount(n)", name);
+            count = await page.EvaluateAsync<int>(script, name);
             var ok = times is null ? count > 0 : count == times;
             if (ok && (times != 0 || watch.Elapsed > TimeSpan.FromMilliseconds(200)))
                 return;
@@ -119,6 +123,6 @@ public static class PlaywrightSteps
             await Task.Delay(50);
         }
 
-        throw new PlaywrightException($"Expected {name} to be invoked {(times is null ? "at least once" : $"{times} time(s)")} but it was invoked {count} time(s).");
+        throw new PlaywrightException($"Expected {(what.Length > 0 ? what + " " : "")}{name} to be invoked {(times is null ? "at least once" : $"{times} time(s)")} but it was invoked {count} time(s).");
     }
 }

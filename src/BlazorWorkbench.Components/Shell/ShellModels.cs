@@ -35,7 +35,22 @@ public interface IVisualResultsProvider
 
     /// <summary>Human readable description of where baselines and results are read from.</summary>
     string Describe();
+
+    /// <summary>True when this host lets the Visual panel approve screenshots as baselines.</summary>
+    ValueTask<bool> CanApproveAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
+
+    /// <summary>
+    /// Approves the screenshots of the scenario's failed or missing visual checks from the last run as baselines (only
+    /// <paramref name="variant"/> when given), like <c>workbench approve --filter id</c>.
+    /// </summary>
+    Task<VisualApprovalResult> ApproveAsync(string scenarioId, string? variant = null, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new VisualApprovalResult([], "Approving baselines is not available in this host; run workbench approve."));
 }
+
+/// <summary>The outcome of approving baselines from the Visual panel.</summary>
+/// <param name="Approved">The approved baseline files, relative to the baseline directory.</param>
+/// <param name="Message">What happened, for the panel.</param>
+public sealed record VisualApprovalResult(IReadOnlyList<string> Approved, string Message);
 
 /// <summary>
 /// Base class for custom parameter editors registered with <see cref="WorkbenchOptions.AddParameterEditor{TValue, TEditor}"/>.
@@ -66,4 +81,13 @@ public sealed record TestRunSummary(DateTimeOffset? FinishedAt, IReadOnlyDiction
 public interface ITestResultsProvider
 {
     Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Supplies the scenarios affected by the changes in the working copy to the explorer (<c>is:changed</c>, <c>is:new</c>,
+/// <c>is:related</c>). Implemented by the preview host from git; optional.
+/// </summary>
+public interface IChangesProvider
+{
+    Task<BlazorWorkbench.Catalog.CatalogChangeSummary> GetChangesAsync(CancellationToken cancellationToken = default);
 }

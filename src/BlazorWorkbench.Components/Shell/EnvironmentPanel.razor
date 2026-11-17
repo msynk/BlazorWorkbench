@@ -103,6 +103,45 @@
     </section>
 
     <section>
+        <h2 class="wb-h2">JavaScript interop</h2>
+        @if (Scenario.Environment.JSInterop is { Rules.Count: > 0 } js)
+        {
+            <p class="wb-muted wb-small">@(js.Strict ? "Strict: calls without a rule fail." : "Calls without a rule reach the browser.")</p>
+            <table class="wb-table" aria-label="Planned JavaScript calls">
+                <thead><tr><th scope="col">Call</th><th scope="col">Answer</th></tr></thead>
+                <tbody>
+                    @foreach (var rule in js.Rules)
+                    {
+                        <tr><td><code>@rule</code></td><td>@rule.Describe()</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="wb-muted">No planned calls: every call reaches the browser. Plan answers with <code>.JSInterop(js =&gt; js.Setup("localStorage.getItem").Returns("…"))</code>.</p>
+        }
+        @if (JSCalls.Count > 0)
+        {
+            <h3 class="wb-h3">Calls made by the component</h3>
+            <table class="wb-table" aria-label="JavaScript calls">
+                <thead><tr><th scope="col">Call</th><th scope="col">Arguments</th><th scope="col">Outcome</th><th scope="col">Duration</th></tr></thead>
+                <tbody>
+                    @foreach (var call in JSCalls.TakeLast(50))
+                    {
+                        <tr>
+                            <td><code>@(call.Module is null ? call.Identifier : $"{call.Module} → {call.Identifier}")</code></td>
+                            <td><code class="wb-small">@call.Arguments</code></td>
+                            <td><span class="wb-js-outcome wb-js-@call.Outcome.Split(' ')[0]">@call.Outcome</span></td>
+                            <td>@call.DurationMs ms</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section>
         <h2 class="wb-h2">Services <button type="button" class="wb-button wb-button-small" @onclick="() => OnRefresh.InvokeAsync()">Refresh</button></h2>
         @if (Services.Count > 0)
         {
@@ -161,6 +200,11 @@
     private List<HttpExchange> Exchanges =>
         Session is { } s && s.TryGetProperty("http", out var http)
             ? http.Deserialize<List<HttpExchange>>(WorkbenchJson.Options) ?? []
+            : [];
+
+    private List<JSCallRecord> JSCalls =>
+        Session is { } s && s.TryGetProperty("js", out var js)
+            ? js.Deserialize<List<JSCallRecord>>(WorkbenchJson.Options) ?? []
             : [];
 
     private System.Threading.Timer? _timer;

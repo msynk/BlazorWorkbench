@@ -45,4 +45,25 @@ public sealed class WorkbenchHostOptions : WorkbenchOptions
 
     /// <summary>Root used to turn absolute source paths into relative ones. Defaults to the <c>workbench.json</c> directory or the content root.</summary>
     public string? SourceRoot { get; set; }
+
+    /// <summary>
+    /// Marks scenarios affected by changes in the git working copy in the explorer (<c>is:changed</c>, <c>is:new</c>,
+    /// <c>is:related</c>). On by default; the host runs <c>git status</c> in <see cref="SourceRoot"/>.
+    /// </summary>
+    public bool ShowChanges { get; set; } = true;
+
+    /// <summary>
+    /// A git ref to compare with in addition to uncommitted changes, such as <c>origin/main</c>, so the explorer also marks
+    /// what the current branch changed (like a pull request). Null compares with the last commit only.
+    /// </summary>
+    public string? ChangesBase { get; set; }
+
+    /// <summary>
+    /// Lets the Visual panel approve screenshots from the last run as baselines (like <c>workbench approve</c>). On by
+    /// default for local hosts; a host with <see cref="AllowRemoteAccess"/> needs it set explicitly.
+    /// </summary>
+    public bool? AllowApprovalFromUi { get; set; }
+
+    /// <summary>True when the Visual panel may approve baselines.</summary>
+    public bool CanApproveFromUi => AllowApprovalFromUi ?? !AllowRemoteAccess;
 }

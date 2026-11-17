@@ -206,6 +206,30 @@ public sealed class WhatsNewBannerScenarios : ScenarioSet<WhatsNewBanner>
             .LocalStorage(WhatsNewBanner.StorageKey, "2025.12")
             .Notes("Seeded with `.LocalStorage(WhatsNewBanner.StorageKey, \"2025.12\")`: an older release was dismissed, so the new one shows.")
             .Interaction("shows the new release", i => i.ExpectVisible(By.Text("New in 2026.3"))));
+        set.Add("Storage blocked", s => s
+            .Description("The browser refuses storage (private mode, blocked cookies): the banner still shows and dismissing it does not fail.")
+            .JSInterop(js =>
+            {
+                js.Setup("localStorage.getItem").Throws("SecurityError: The operation is insecure.");
+                js.Setup("localStorage.setItem").Throws("SecurityError: The operation is insecure.");
+            })
+            .Notes("""
+                Planned with `.JSInterop(js => js.Setup("localStorage.getItem").Throws("SecurityError: …"))`: the calls never reach the
+                browser, so no browser setting is needed. **Environment → JavaScript interop** lists the planned answers and every
+                call the banner makes.
+                """)
+            .Interaction("works without storage", i => i
+                .ExpectVisible(By.Role("region", "What's new"))
+                .Click(By.Role("button", "Got it"))
+                .ExpectHidden(By.Role("region", "What's new"))
+                .ExpectJSCall("localStorage.setItem", times: 1)
+                .ExpectNoErrors()));
+        set.Add("Planned storage answer", s => s
+            .Description("localStorage answers from the scenario instead of the browser: this release was dismissed.")
+            .JSInterop(js => js.Setup("localStorage.getItem").When(call => call.Arguments is [WhatsNewBanner.StorageKey]).Returns("2026.3"))
+            .Interaction("asks storage once and stays hidden", i => i
+                .ExpectCount(By.Role("region", "What's new"), 0)
+                .ExpectJSCall("localStorage.getItem", times: 1)));
     }
 }
 

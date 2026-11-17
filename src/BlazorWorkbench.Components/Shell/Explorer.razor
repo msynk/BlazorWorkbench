@@ -8,7 +8,7 @@
                @bind="Query" @bind:event="oninput" @onkeydown="OnSearchKey" aria-describedby="wb-search-hint" />
         <span id="wb-search-hint" class="wb-visually-hidden">
             Matches component names, titles, tags, parameters, scenario names and pages. Filters: tag:name, status:beta, is:matrix,
-            is:generated, is:tested, is:skipped, is:deprecated, is:failing, is:passing. Press Enter to open the first result.
+            is:generated, is:tested, is:skipped, is:deprecated, is:failing, is:passing, is:pinned, is:changed, is:new, is:related, is:affected. Press Enter to open the first result.
         </span>
         <div class="wb-quick-filters" role="group" aria-label="Quick filters">
             @foreach (var (token, label) in QuickFilters)
@@ -37,7 +37,7 @@
                 <li>
                     <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")" aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">
                         <span class="wb-result-component">@component.Title @if (component.Status is { } status) { <StatusBadge Status="status" Compact="true" /> }</span>
-                        <span>@scenario.Name @RunDot(scenario.Id)</span>
+                        <span>@scenario.Name @RunDot(scenario.Id) @ChangeMark(scenario.Id)</span>
                     </a>
                 </li>
             }
@@ -46,6 +46,18 @@
     else
     {
         <nav aria-label="Components">
+            @if (PinnedScenarios.Count > 0)
+            {
+                <details class="wb-recent wb-pinned" open="@_pinnedOpen">
+                    <summary class="wb-node-group" @onclick="() => _pinnedOpen = !_pinnedOpen" @onclick:preventDefault>Pinned <span class="wb-muted wb-small">@PinnedScenarios.Count</span></summary>
+                    <ul class="wb-tree wb-recent-list">
+                        @foreach (var (component, scenario) in PinnedScenarios)
+                        {
+                            <li><a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")"><span class="wb-pin-mark" aria-hidden="true">★</span><span class="wb-muted">@component.DisplayName ·</span> @scenario.Name @RunDot(scenario.Id)</a></li>
+                        }
+                    </ul>
+                </details>
+            }
             @if (RecentScenarios.Count > 0)
             {
                 <details class="wb-recent" open="@_recentOpen">
@@ -62,6 +74,11 @@
         </nav>
     }
 
+    @if (UiRun is not null)
+    {
+        <TestRunnerBar Catalog="Catalog" Run="UiRun" Component="SelectedComponent" LastRun="_run" Changes="_changes" OnRun="OnRunTests" OnStop="OnStopTests" />
+    }
+
     <div class="wb-explorer-footer">
         <a href="">Overview</a>
         <a href="tokens">Tokens</a>
@@ -73,6 +90,12 @@
                 Last run: @(failing > 0 ? $"{failing} failing" : "all passed")
             </button>
         }
+        @if (_changes.Scenarios.Count > 0)
+        {
+            <button type="button" class="wb-chip wb-chip-changed" title="@($"{_changes.Description}: {string.Join(", ", _changes.Files.Take(8))}{(_changes.Files.Count > 8 ? ", …" : "")}")" @onclick='() => ToggleFilter("is:affected")'>
+                @ChangedDirectly changed@(_changes.Scenarios.Count > ChangedDirectly ? $" · {_changes.Scenarios.Count - ChangedDirectly} related" : "")
+            </button>
+        }
         @if (_errors > 0)
         {
             <a href="" class="wb-count wb-count-error" title="Catalog errors">@_errors</a>
@@ -82,7 +105,7 @@
 
 @code {
     private static readonly (string Token, string Label)[] QuickFilters =
-        [("is:tested", "Has tests"), ("is:failing", "Failing"), ("is:matrix", "Matrix"), ("status:beta", "Beta"), ("status:experimental", "Experimental"), ("is:deprecated", "Deprecated")];
+        [("is:pinned", "Pinned"), ("is:affected", "Changed"), ("is:tested", "Has tests"), ("is:failing", "Failing"), ("is:matrix", "Matrix"), ("status:beta", "Beta"), ("status:experimental", "Experimental"), ("is:deprecated", "Deprecated")];
 
     private TestRunSummary _run = TestRunSummary.Empty;
 
@@ -90,6 +113,7 @@
     private readonly Dictionary<string, bool> _expanded = new(StringComparer.Ordinal);
     private bool _large;
     private bool _recentOpen = true;
+    private bool _pinnedOpen = true;
     private List<(ComponentEntry Component, ScenarioDefinition Scenario)>? _matches;
     private List<DocumentationPage> _pageMatches = [];
     private string _query = "";
@@ -103,6 +127,31 @@
 
     /// <summary>Recently opened scenario ids, most recent first.</summary>
     [Parameter] public IReadOnlyList<string> Recent { get; set; } = [];
+
+    /// <summary>The test run started from the UI, if the shell offers one; its results take precedence over the last CLI run.</summary>
+    [Parameter] public UiTestRun? UiRun { get; set; }
+
+    [Parameter] public EventCallback<UiTestRequest> OnRunTests { get; set; }
+    [Parameter] public EventCallback OnStopTests { get; set; }
+
+    private ComponentEntry? SelectedComponent =>
+        SelectedScenarioId is not null && Catalog.FindScenario(SelectedScenarioId) is { } selected ? Catalog.GetComponentOf(selected)
+        : SelectedComponentId is not null ? Catalog.FindComponent(SelectedComponentId) : null;
+
+    /// <summary>The status of a scenario: from this session's UI run when it has one, else from the last CLI run.</summary>
+    private bool TryGetRun(string scenarioId, out ScenarioRunStatus status)
+    {
+        if (UiRun is not null && UiRun.Summary.Scenarios.TryGetValue(scenarioId, out status!))
+            return true;
+        return _run.Scenarios.TryGetValue(scenarioId, out status!);
+    }
+
+    /// <summary>Scenario ids pinned by the user, in the order they were pinned.</summary>
+    [Parameter] public IReadOnlyList<string> Pinned { get; set; } = [];
+
+    private List<(ComponentEntry Component, ScenarioDefinition Scenario)> PinnedScenarios =>
+        Pinned.Select(id => Catalog.FindScenario(id)).OfType<ScenarioDefinition>()
+            .Select(s => (Catalog.GetComponentOf(s)!, s)).Where(x => x.Item1 is not null).ToList();
 
     private List<(ComponentEntry Component, ScenarioDefinition Scenario)> RecentScenarios =>
         Recent.Where(id => id != SelectedScenarioId).Select(id => Catalog.FindScenario(id)).OfType<ScenarioDefinition>()
@@ -120,6 +169,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadChangesAsync();
         if (Services.GetService(typeof(ITestResultsProvider)) is ITestResultsProvider provider)
         {
             try { _run = await provider.GetSummaryAsync(); }
@@ -127,13 +177,56 @@
         }
     }
 
+    private CatalogChangeSummary _changes = CatalogChangeSummary.Empty;
+    private bool _changesLoaded;
+
+    private async Task LoadChangesAsync()
+    {
+        if (Services.GetService(typeof(IChangesProvider)) is not IChangesProvider provider)
+            return;
+        try { _changes = await provider.GetChangesAsync(); }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or HttpRequestException) { _changes = CatalogChangeSummary.Empty; }
+        if (_query.Length > 0)
+            Refresh();
+    }
+
+    private int ChangedDirectly => _changes.Scenarios.Count(c => c.Value != ScenarioChangeKind.Related);
+
+    /// <summary>A small mark for a scenario affected by the working copy's changes.</summary>
+    private RenderFragment ChangeMark(string scenarioId) => __builder =>
+    {
+        if (_changes.Scenarios.TryGetValue(scenarioId, out var kind))
+        {
+            var (letter, text) = kind switch
+            {
+                ScenarioChangeKind.New => ("N", "New since the last commit"),
+                ScenarioChangeKind.Modified => ("M", "Changed since the last commit"),
+                _ => ("R", "Renders a changed component"),
+            };
+            <span class="wb-change wb-change-@kind.ToString().ToLowerInvariant()" title="@text"><span aria-hidden="true">@letter</span><span class="wb-visually-hidden">@text</span></span>
+        }
+    };
+
+    /// <summary>The strongest change among a component's scenarios.</summary>
+    private ScenarioChangeKind? ComponentChange(ComponentEntry component)
+    {
+        ScenarioChangeKind? strongest = null;
+        foreach (var scenario in component.Scenarios)
+        {
+            if (_changes.Scenarios.TryGetValue(scenario.Id, out var kind) && (strongest is null || kind < strongest))
+                strongest = kind;
+        }
+
+        return strongest;
+    }
+
     private int FailedCount(ComponentEntry component) =>
-        _run.Scenarios.Count == 0 ? 0 : component.Scenarios.Count(s => _run.Scenarios.TryGetValue(s.Id, out var r) && r.Status is "Failed" or "Error");
+        component.Scenarios.Count(s => TryGetRun(s.Id, out var r) && r.Status is "Failed" or "Error");
 
     /// <summary>A small mark for the scenario's result in the last automated run.</summary>
     private RenderFragment RunDot(string scenarioId) => __builder =>
     {
-        if (_run.Scenarios.TryGetValue(scenarioId, out var result))
+        if (TryGetRun(scenarioId, out var result))
         {
             var (css, symbol, text) = result.Status switch
             {
@@ -156,6 +249,10 @@
             _errors = Catalog.Issues.Count(i => i.Severity == IssueSeverity.Error);
             if (_query.Length > 0)
                 Refresh();
+            // Hot reload rebuilt the catalog: the files probably changed too.
+            if (_changesLoaded)
+                _ = InvokeAsync(async () => { await LoadChangesAsync(); StateHasChanged(); });
+            _changesLoaded = true;
         }
     }
 
@@ -198,7 +295,7 @@
 
         var scenarios = Catalog.Components
             .SelectMany(c => c.Scenarios.Select(s => (c, s)))
-            .Where(x => filters.All(f => Matches(x.c, x.s, f, _run)))
+            .Where(x => filters.All(f => Matches(x.c, x.s, f)))
             .Select(x => (x.c, x.s, scores: terms.Select(t => Score(x.c, x.s, t)).ToArray()))
             .Where(x => x.scores.All(score => score > 0))
             .OrderByDescending(x => x.scores.Sum())
@@ -209,7 +306,7 @@
         return (scenarios, pages);
     }
 
-    private static bool Matches(ComponentEntry c, ScenarioDefinition s, string filter, TestRunSummary run)
+    private bool Matches(ComponentEntry c, ScenarioDefinition s, string filter)
     {
         var colon = filter.IndexOf(':');
         var key = filter[..colon].ToLowerInvariant();
@@ -226,9 +323,14 @@
                 "skipped" => s.SkipReason is not null,
                 "deprecated" => c.DeprecationMessage is not null || c.Status == ComponentStatus.Deprecated,
                 "documented" => c.Documentation is not null || c.Metadata.Summary is not null,
-                "failing" => run.Scenarios.TryGetValue(s.Id, out var failing) && failing.Status is "Failed" or "Error",
-                "passing" => run.Scenarios.TryGetValue(s.Id, out var passing) && passing.Status == "Passed",
-                "flaky" => run.Scenarios.TryGetValue(s.Id, out var flaky) && flaky.Flaky,
+                "failing" => TryGetRun(s.Id, out var failing) && failing.Status is "Failed" or "Error",
+                "passing" => TryGetRun(s.Id, out var passing) && passing.Status == "Passed",
+                "flaky" => TryGetRun(s.Id, out var flaky) && flaky.Flaky,
+                "pinned" => Pinned.Contains(s.Id, StringComparer.OrdinalIgnoreCase),
+                "changed" => _changes.Scenarios.TryGetValue(s.Id, out var changed) && changed != ScenarioChangeKind.Related,
+                "new" => _changes.Scenarios.TryGetValue(s.Id, out var added) && added == ScenarioChangeKind.New,
+                "related" => _changes.Scenarios.TryGetValue(s.Id, out var related) && related == ScenarioChangeKind.Related,
+                "affected" => _changes.Scenarios.ContainsKey(s.Id),
                 _ => false,
             },
             _ => false,
@@ -287,6 +389,10 @@
                                 {
                                     <StatusBadge Status="status" Compact="true" />
                                 }
+                                @if (ComponentChange(component) is { } change)
+                                {
+                                    <span class="wb-change wb-change-@change.ToString().ToLowerInvariant()" title="@(change == ScenarioChangeKind.Related ? "Renders a changed component" : "Changed in the working copy")"><span aria-hidden="true">@(change switch { ScenarioChangeKind.New => "N", ScenarioChangeKind.Modified => "M", _ => "R" })</span><span class="wb-visually-hidden">@(change == ScenarioChangeKind.Related ? "(renders a changed component)" : "(changed)")</span></span>
+                                }
                             </summary>
                             @if (open)
                             {
@@ -296,7 +402,7 @@
                                 {
                                     <li>
                                         <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")"
-                                           aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">@scenario.Name @RunDot(scenario.Id)</a>
+                                           aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">@scenario.Name @RunDot(scenario.Id) @ChangeMark(scenario.Id)</a>
                                     </li>
                                 }
                             </ul>

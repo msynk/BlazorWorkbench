@@ -227,6 +227,28 @@ public class BaselineAndReportTests : IDisposable
     }
 
     [Fact]
+    public void Approval_from_the_ui_takes_one_variant_and_records_the_png_size()
+    {
+        var report = ReportWithScreenshot(CheckStatus.Failed);
+        var baselines = Path.Combine(_root.FullName, "baselines");
+        Assert.Empty(BaselineApproval.Approve(report, Path.Combine(_root.FullName, "out"), baselines, _ => true, variant: "mobile-dark"));
+        var approved = Assert.Single(BaselineApproval.Approve(report, Path.Combine(_root.FullName, "out"), baselines, _ => true, variant: "laptop-light"));
+        Assert.Equal((4, 3), (approved.Width, approved.Height));
+        Assert.Equal((4, 3), BaselineApproval.TryReadPngSize(File.ReadAllBytes(Path.Combine(baselines, approved.File))));
+        Assert.Null(BaselineApproval.TryReadPngSize("not a png at all, really"u8));
+    }
+
+    [Fact]
+    public void Approval_never_copies_files_from_outside_the_report_directory()
+    {
+        var report = ReportWithScreenshot(CheckStatus.Failed);
+        File.WriteAllText(Path.Combine(_root.FullName, "secret.png"), "x");
+        var check = report.Scenarios[0].Checks[0];
+        report.Scenarios[0].Checks[0] = new CheckResult { Kind = check.Kind, Name = check.Name, Variant = check.Variant, Status = check.Status, Visual = new VisualComparison { Variant = "laptop-light", ActualPath = "../secret.png" } };
+        Assert.Empty(BaselineApproval.Approve(report, Path.Combine(_root.FullName, "out"), Path.Combine(_root.FullName, "baselines"), _ => true));
+    }
+
+    [Fact]
     public void Prune_removes_baselines_of_deleted_scenarios()
     {
         var store = new BaselineStore(Path.Combine(_root.FullName, "baselines"));

@@ -34,7 +34,7 @@ export function init(dotnetRef) {
     if (!e.altKey && !e.ctrlKey && !e.metaKey && e.target && e.target.classList && e.target.classList.contains('wb-resize') && resizeByKey(e)) {
       return;
     }
-    if (e.key === '/' && !editing) {
+    if ((e.key === '/' && !editing) || ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K'))) {
       e.preventDefault();
       const search = document.getElementById('wb-search');
       if (search) { search.focus(); search.select(); }
@@ -78,6 +78,7 @@ function shortcutFor(e) {
     case 'g': case 'G': return 'grid';
     case 'o': case 'O': return 'outline';
     case 'm': case 'M': return 'measure';
+    case 'b': case 'B': return 'pin';
     default: return null;
   }
 }
@@ -253,7 +254,137 @@ export function setPreference(key, value) {
   try { localStorage.setItem('blazor-workbench:' + key, value); } catch { /* storage unavailable */ }
 }
 
+// ---------- test runner (Run tests in the sidebar) ----------
+// Runs scenario checks in frames that are laid out but invisible: each job loads a fresh preview session, waits until it
+// is ready and then checks the render, runs axe-core or runs one interaction test, like `workbench test` does with
+// Playwright (which stays authoritative). Results go to .NET one by one.
+const IMPACT = { minor: 1, moderate: 2, serious: 3, critical: 4 };
+let testRun = null;
+let runCounter = 0;
+
+export function cancelTests() {
+  if (testRun) testRun.cancelled = true;
+  testRun = null;
+  const host = document.getElementById('wb-test-runner');
+  if (host) host.textContent = '';
+}
+
+// Starts a run without holding a JavaScript interop call open for its whole duration; .NET hears OnTestsFinished.
+export function startTests(jobs, dotnetRef, options) {
+  runTests(jobs, dotnetRef, options)
+    .then((completed) => dotnetRef.invokeMethodAsync('OnTestsFinished', completed))
+    .catch(() => { /* circuit closing */ });
+}
+
+export async function runTests(jobs, dotnetRef, options) {
+  cancelTests();
+  const run = { cancelled: false };
+  testRun = run;
+  let host = document.getElementById('wb-test-runner');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'wb-test-runner';
+    host.setAttribute('aria-hidden', 'true');
+    // Laid out inside the viewport (so intersection observers and focus behave) but invisible and inert.
+    host.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;overflow:visible;opacity:0;pointer-events:none;z-index:-1;';
+    document.body.appendChild(host);
+  }
+  const concurrency = Math.max(1, Math.min((options && options.concurrency) || 2, 4));
+  let next = 0;
+  const worker = async () => {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('tabindex', '-1');
+    frame.title = 'Workbench test runner';
+    frame.style.cssText = 'position:absolute;left:0;top:0;width:1280px;height:800px;border:0;';
+    host.appendChild(frame);
+    try {
+      while (!run.cancelled && next < jobs.length) {
+        const job = jobs[next++];
+        const result = await runJob(frame, job, run);
+        if (run.cancelled) break;
+        try { await dotnetRef.invokeMethodAsync('OnTestResult', JSON.stringify(result)); } catch { /* circuit closing */ }
+      }
+    } finally {
+      frame.remove();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, jobs.length)) }, worker));
+  if (testRun === run) testRun = null;
+  return !run.cancelled;
+}
+
+function waitForLoad(frame, url) {
+  return new Promise((resolve) => {
+    frame.onload = () => resolve();
+    frame.src = url + (url.includes('?') ? '&' : '?') + 'wbrun=' + (++runCounter);
+  });
+}
+
+async function loadPreview(frame, url, timeout, run) {
+  await waitForLoad(frame, url);
+  const start = performance.now();
+  for (;;) {
+    if (run.cancelled) throw new Error('Canceled.');
+    const win = frame.contentWindow;
+    const wb = win && win.__workbench;
+    if (wb && (wb.state === 'ready' || wb.state === 'error')) return wb;
+    if (performance.now() - start > timeout) throw new Error(`The preview was not ready after ${timeout} ms (state: ${wb ? wb.state : 'no preview script'}).`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+async function runJob(frame, job, run) {
+  const started = performance.now();
+  const result = { scenarioId: job.scenarioId, kind: job.kind, name: job.name || null, status: 'passed', message: null, durationMs: 0, details: null };
+  try {
+    frame.style.width = `${job.width || 1280}px`;
+    frame.style.height = `${job.height || 800}px`;
+    const wb = await loadPreview(frame, job.url, job.timeout || 15000, run);
+    const errors = () => wb.diagnostics.filter((d) => d.severity === 'Error');
+    if (wb.state === 'error') {
+      const first = errors()[0];
+      throw new Error('The scenario failed to render' + (first ? `: ${first.message}` : '.'));
+    }
+    if (job.kind === 'interaction') {
+      const outcome = await wb.runInteraction(job.test);
+      result.details = outcome;
+      if (!outcome.passed) {
+        const failed = outcome.results.find((r) => r.status === 'failed');
+        result.status = 'failed';
+        result.message = failed ? `Step ${failed.index + 1}, ${failed.description}: ${failed.error}` : 'The interaction test failed.';
+      }
+    } else {
+      const found = errors();
+      if (found.length) {
+        result.status = 'failed';
+        result.message = `${found.length} error diagnostic(s): ${found[0].message}`;
+      }
+      if (job.a11y) {
+        const outcome = await wb.runAxe({ disabledRules: job.a11y.disabledRules || [] });
+        result.details = outcome;
+        const failOn = IMPACT[job.a11y.failOn] || IMPACT.serious;
+        const blocking = outcome.violations.filter((v) => (IMPACT[v.impact] || 0) >= failOn);
+        if (blocking.length && !job.a11y.todo && result.status === 'passed') {
+          result.status = 'failed';
+          result.message = `${blocking.length} accessibility violation(s): ${blocking[0].id} (${blocking[0].impact}) — ${blocking[0].help}`;
+        } else if (outcome.violations.length && result.status === 'passed') {
+          result.status = 'warning';
+          result.message = job.a11y.todo
+            ? `${outcome.violations.length} accessibility violation(s), reported only (todo: ${job.a11y.todo}).`
+            : `${outcome.violations.length} minor accessibility violation(s).`;
+        }
+      }
+    }
+  } catch (e) {
+    result.status = run.cancelled ? 'canceled' : 'error';
+    result.message = String((e && e.message) || e);
+  }
+  result.durationMs = Math.round(performance.now() - started);
+  return result;
+}
+
 export function dispose() {
+  cancelTests();
   if (listener) window.removeEventListener('message', listener);
   if (keyListener) document.removeEventListener('keydown', keyListener);
   if (pointerListener) document.removeEventListener('pointerdown', pointerListener);

@@ -72,6 +72,9 @@ public enum StepAction
     ExpectDisabled,
     ExpectChecked,
     ExpectUnchecked,
+
+    /// <summary>Expects a JavaScript interop call made by the component (see <see cref="InteractionBuilder.ExpectJSCall"/>).</summary>
+    ExpectJSCall,
 }
 
 /// <summary>
@@ -169,6 +172,13 @@ public sealed class InteractionBuilder
     /// <summary>Expects an <c>EventCallback</c> parameter to have been invoked (exactly <paramref name="times"/> times when given).</summary>
     public InteractionBuilder ExpectCallback(string parameterName, int? times = null) =>
         Add(StepAction.ExpectCallback, null, parameterName, count: times);
+
+    /// <summary>
+    /// Expects the component to have called the JavaScript function <paramref name="identifier"/> through <c>IJSRuntime</c> or an
+    /// imported module (exactly <paramref name="times"/> times when given), whether the call was planned or reached the browser.
+    /// </summary>
+    public InteractionBuilder ExpectJSCall(string identifier, int? times = null) =>
+        Add(StepAction.ExpectJSCall, null, identifier, count: times);
 
     /// <summary>Expects no error diagnostics (exceptions, console errors, failed resources) so far.</summary>
     public InteractionBuilder ExpectNoErrors() => Add(StepAction.ExpectNoErrors);

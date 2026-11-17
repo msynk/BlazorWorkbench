@@ -1,0 +1,119 @@
+@* The sidebar's test runner (like Storybook's test widget): runs render checks, interaction tests and, optionally,
+   accessibility scans of a set of scenarios in the browser, shows progress and failures, and can re-run on hot reload. *@
+<section class="wb-runner" aria-label="Test runner">
+    <div class="wb-runner-row">
+        <label class="wb-field">
+            <span class="wb-visually-hidden">Scenarios to test</span>
+            <select id="wb-runner-scope" @bind="_scope" disabled="@Run.Running">
+                <option value="all">All scenarios</option>
+                @if (Component is not null)
+                {
+                    <option value="component">@Component.DisplayName</option>
+                }
+                <option value="failing">Failing</option>
+                @if (Changes.Scenarios.Count > 0)
+                {
+                    <option value="changed">Changed</option>
+                }
+            </select>
+        </label>
+        @if (Run.Running)
+        {
+            <button type="button" id="wb-runner-stop" class="wb-button wb-button-small" @onclick="() => OnStop.InvokeAsync()">Stop</button>
+        }
+        else
+        {
+            <button type="button" id="wb-runner-run" class="wb-button wb-button-small wb-button-primary" @onclick="RunAsync"
+                    title="Render every scenario in the browser, run its interaction tests and, optionally, scan it with axe-core">▶ Run tests</button>
+        }
+    </div>
+    <div class="wb-runner-row wb-small">
+        <label class="wb-check"><input id="wb-runner-a11y" type="checkbox" @bind="_accessibility" disabled="@Run.Running" /> Accessibility</label>
+        <label class="wb-check" title="Run again when the catalog changes (hot reload)"><input id="wb-runner-watch" type="checkbox" checked="@Run.Watch" @onchange="ToggleWatch" /> Watch</label>
+    </div>
+    @if (Run.Running)
+    {
+        <div class="wb-runner-progress" role="progressbar" aria-label="Test progress" aria-valuemin="0" aria-valuemax="@Run.Total" aria-valuenow="@Run.Done">
+            <span style="@($"width:{(Run.Total == 0 ? 0 : 100.0 * Run.Done / Run.Total).ToString("0.#", CultureInfo.InvariantCulture)}%")"></span>
+        </div>
+    }
+    @if (Run.Request is not null && Run.Done > 0 || _message is not null)
+    {
+        <p class="wb-runner-summary wb-small" role="status">
+            @if (_message is not null)
+            {
+                @_message
+            }
+            else
+            {
+                <span>@Run.Request!.Label: </span>
+                <span class="wb-runner-passed">✔ @Run.Passed</span>
+                @if (Run.Failed > 0) { <span class="wb-runner-failed"> · ✖ @Run.Failed</span> }
+                @if (Run.Warnings > 0) { <span class="wb-runner-warning"> · ⚠ @Run.Warnings</span> }
+                <span class="wb-muted"> · @Run.Done/@Run.Total@(Run.FinishedAt is { } end && Run.StartedAt is { } start ? $" in {(end - start).TotalSeconds:0.#} s" : "")</span>
+            }
+        </p>
+    }
+    @if (Run.Failed > 0)
+    {
+        <ul class="wb-runner-failures">
+            @foreach (var failure in Run.Results.Where(r => r.IsFailure).Take(6))
+            {
+                <li>
+                    <a href="@($"scenario/{failure.ScenarioId}?panel={(failure.Kind == "interaction" ? "interactions" : failure.Message?.Contains("accessibility", StringComparison.Ordinal) == true ? "accessibility" : "diagnostics")}")"
+                       title="@failure.Message">@ScenarioName(failure.ScenarioId)@(failure.Name is null ? "" : $" · {failure.Name}")</a>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    private string _scope = "all";
+    private bool _accessibility;
+    private string? _message;
+
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+    [Parameter, EditorRequired] public UiTestRun Run { get; set; } = default!;
+
+    /// <summary>The component on screen, offered as a scope.</summary>
+    [Parameter] public ComponentEntry? Component { get; set; }
+
+    /// <summary>Results of the last CLI run, for the "Failing" scope.</summary>
+    [Parameter] public TestRunSummary LastRun { get; set; } = TestRunSummary.Empty;
+
+    /// <summary>Scenarios affected by the working copy's changes, for the "Changed" scope.</summary>
+    [Parameter] public CatalogChangeSummary Changes { get; set; } = CatalogChangeSummary.Empty;
+
+    [Parameter] public EventCallback<UiTestRequest> OnRun { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+
+    private string ScenarioName(string id) =>
+        Catalog.FindScenario(id) is { } s ? $"{Catalog.GetComponentOf(s)?.DisplayName} / {s.Name}" : id;
+
+    private async Task RunAsync()
+    {
+        _message = null;
+        var (ids, label) = _scope switch
+        {
+            "component" when Component is not null => (Component.Scenarios.Select(s => s.Id).ToList(), Component.DisplayName),
+            "failing" => (Catalog.Scenarios.Select(s => s.Id).Where(IsFailing).ToList(), "Failing"),
+            "changed" => (Catalog.Scenarios.Select(s => s.Id).Where(Changes.Scenarios.ContainsKey).ToList(), "Changed"),
+            _ => (Catalog.Scenarios.Select(s => s.Id).ToList(), "All scenarios"),
+        };
+        if (ids.Count == 0)
+        {
+            _message = _scope == "failing" ? "No failing scenarios." : "No scenarios to test.";
+            return;
+        }
+
+        await OnRun.InvokeAsync(new UiTestRequest(ids, _accessibility, label));
+    }
+
+    /// <summary>Failing in this session's run, or in the last CLI run when this session has not run it.</summary>
+    private bool IsFailing(string id) =>
+        Run.Summary.Scenarios.TryGetValue(id, out var ui) ? ui.Status is "Failed" or "Error"
+        : LastRun.Scenarios.TryGetValue(id, out var cli) && cli.Status is "Failed" or "Error";
+
+    private void ToggleWatch() => Run.Watch = !Run.Watch;
+}

@@ -60,6 +60,17 @@ public static class ScenarioFacts
                 Simulates("HTTP", $"{Milliseconds(http.Latency)} latency");
         }
 
+        // JavaScript interop.
+        if (env.JSInterop is { } js)
+        {
+            foreach (var rule in js.Rules.Take(MaxHttpRules))
+                Simulates("JS", $"{rule} → {rule.Describe()}");
+            if (js.Rules.Count > MaxHttpRules)
+                Simulates("JS", $"+{js.Rules.Count - MaxHttpRules} more calls");
+            if (js.Strict)
+                Simulates("JS", "strict: unplanned calls fail");
+        }
+
         // Who, when and where.
         if (env.User is { } user)
             Simulates("User", user.IsAuthenticated ? DescribeUser(user) : "signed out");
