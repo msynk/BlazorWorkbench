@@ -4,6 +4,36 @@ All notable changes are documented here. The project follows [Semantic Versionin
 
 ## Unreleased
 
+### Added (round 4)
+- **Decorators**: `.Wrap(story => ...)`, `.Wrap((story, ctx) => ...)`, `.Wrap<TWrapper>(parameters)` and `.WrapStyle("width: 320px")` wrap a scenario in markup or a component; `set.Setup(...)` applies them to every scenario of a set and `options.AddDecorator(...)` to the whole catalog. Listed as *Wrapper* facts and in the Razor snippet. See [docs/scenarios.md](docs/scenarios.md#decorators).
+- **Controls from standard attributes**: `[Range]` adds a slider, `[Display]`/`[DisplayName]`/`[Category]`/`[Description]` set the label, section, order and help, `[DataType(MultilineText)]` and `[DataType("Color")]` choose a text area or color picker, `[StringLength]`/`[MaxLength]` limit text, `[EditorBrowsable(Never)]`/`[Browsable(false)]` hide plumbing parameters.
+- **JSON editing of complex parameters**: records, classes and collections of plain data get a JSON text area, deserialized into the declared type only (64 KB limit); **Save as scenario** exports them as `JsonSerializer.Deserialize<T>(...)`.
+- **Toolbar globals**: `options.AddGlobal("Density", [...])` adds a toolbar menu whose value is cascaded by id, set as `data-{id}` on the preview and available as `ctx.Global(id)`; scenarios fix it with `.Global(id, value)` (`WB1028`), links carry `?g.{id}=`.
+- **Panels and toolbar items of your own**: `options.AddPanel<T>(title)` and `options.AddToolbarItem<T>()` with `WorkbenchExtensionContext` (scenario, args, diagnostics, preview state, `SetArgsAsync`, `ReloadAsync`, `HighlightAsync`, `EvaluateAsync` in the preview). The demo's *Styles* panel is an example.
+- **Catalog composition**: `options.AddCatalogReference(title, url)` lists other teams' published catalogs in the explorer and search and frames their pages without scripts.
+- **Accessibility**: an **Outline** of headings and landmarks with structural warnings in the Accessibility panel; **accessibility baselines** (`workbench approve --accessibility`, `baselines/accessibility/{scenario}.json`) so runs fail only on new violations, applied by `workbench test` and the explorer's test runner, which now also follows `accessibility.failOn` and `accessibility.tags` (`IAccessibilityPolicyProvider`, `/_workbench/api/accessibility-policy`).
+- **Compare → Sync interactions** repeats clicks, typing, keys and scrolling of one frame in the others.
+- **Explorer**: `options.ExplorerOrder`, Alt+arrows in tree order, **Expand all**/**Collapse all**, `-tag:`/`-is:` exclusion filters, a result count that says when results are truncated.
+- **Edit scenario / Edit component** links (`options.EditorUrlTemplate`; VS Code by default in Development with remote access off).
+- **Markup snapshots** in bUnit: `cut.MatchMarkupSnapshot()` with `.verified.html`/`.received.html` files and `WORKBENCH_UPDATE_SNAPSHOTS=1`.
+- **Publishing**: `llms.txt` in published catalogs.
+- **Shell**: branding (`LogoUrl`, `AccentColor`, `AccentColorDark`, `ShellStylesheets`), error boundaries around panels, pages and custom editors, a skip link, ARIA tab keys, a focus-managed shortcuts dialog with a switch for single-key shortcuts, a not-found page, timestamps in the viewer's time zone, and hosting under a path base (`UsePathBase` followed by `UseRouting`).
+
+### Changed (round 4)
+- Each preview gets its own in-memory `localStorage` and `sessionStorage` instead of clearing the shared storage; reloading a preview starts from its declared storage.
+- `workbench test --changed-since` uses the merge base with the ref plus staged, unstaged and untracked files, the same as the explorer and MCP; deleted and renamed files count.
+- Running an interaction test from the panel resets the Controls to the scenario's declared values.
+- `AddToolbarItem` throws on a duplicate; options methods reject labels without letters or digits.
+- `AccessibilityBaseline` lives in `BlazorWorkbench.Contracts` (Core).
+
+### Fixed (round 4)
+- Security: the loopback-only host accepted any `Host` header (DNS rebinding); git base refs could inject options; the security headers overwrote a host's CSP; case-insensitive path checks on case-sensitive file systems; previews accepted commands from sibling frames; a crafted `report.json` platform could write outside the baselines; a path base starting with `//` could move `<base href>`; relative catalog references resolved against a client-supplied address on the server.
+- Preview and shell: callbacks raised before the bridge attached were not counted; the preview stayed in the error state after Recover; scans and interactions could stay "Running…"; a canceled UI test run could end the next one; test runner frames could hang; the Visual panel could show the previous scenario's results; the callback list grew without bound; links to the open scenario with another `panel` or `mode` were ignored; the DateTimeOffset editor dropped the offset; dark theme error badges failed contrast; a dark shell flashed light and loaded its preview twice; scenario ids with non-ASCII letters were not decoded.
+- Runner: axe-core results with a rule in both violations and incomplete (shared `tags` array) ended the scan with an infrastructure error; Blazor Hybrid runs now park the pointer so `:hover` does not depend on the real mouse.
+- Custom HTTP handler responses ended activity before the body was read and got no cancellation token; a JS module disposed during an import could throw or leak; faked modules imported as `IJSInProcessObjectReference` threw; strict JS interop rejected framework module imports.
+- Publishing and MCP: excluded-tag scenarios were published when every scenario was generated; empty viewport or theme lists crashed the publisher and runner; `get_last_report` with a filter returned the unfiltered summary.
+- Demo: the flash sale button lost its background on hover (dark text on dark).
+
 ### Added
 - **JavaScript interop simulation**: `.JSInterop(js => js.Setup("localStorage.getItem").Returns(...) / .Throws(...) / .Delay(...) / .Hold(gate) / .Times(n) / .When(...) / .Handle(...))` answers a component's `IJSRuntime` calls from the scenario, `js.Module(path, m => m.Setup(export)...)` fakes exports of imported modules, and `js.Strict()` fails unplanned calls. Every call the component makes is recorded: **Environment → JavaScript interop** lists them with arguments, outcome and duration, interaction tests assert with `.ExpectJSCall(identifier, times)`, bUnit tests with `cut.JSCallCount(identifier)`, and the catalog JSON lists the rules. Works with Interactive Server, WebAssembly (in-process), Blazor Hybrid and bUnit; `options.InterceptJSInterop = false` opts out (`WB1027`). See [docs/environment.md](docs/environment.md#javascript-interop).
 - **Test runner in the explorer** (like Storybook's test widget): run render checks, interaction tests and optional accessibility scans for all scenarios, the component on screen, failing or changed scenarios, in invisible frames; progress, failures linked to their panel, results in the tree and in the scenario's panels, and **Watch** to run again after hot reload. See [docs/testing.md](docs/testing.md#running-tests-from-the-workbench).

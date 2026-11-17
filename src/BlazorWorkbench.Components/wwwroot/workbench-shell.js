@@ -514,10 +514,14 @@ async function runJob(frame, job, run) {
         result.message = `${found.length} error diagnostic(s): ${found[0].message}`;
       }
       if (job.a11y) {
-        const outcome = await guarded(wb.runAxe({ disabledRules: job.a11y.disabledRules || [] }), run, job.timeout || 15000, 'The accessibility scan');
+        const outcome = await guarded(wb.runAxe({ disabledRules: job.a11y.disabledRules || [], tags: job.a11y.tags || [] }), run, job.timeout || 15000, 'The accessibility scan');
         result.details = outcome;
         const failOn = IMPACT[job.a11y.failOn] || IMPACT.serious;
-        const blocking = outcome.violations.filter((v) => (IMPACT[v.impact] || 0) >= failOn);
+        // Violations approved with 'workbench approve --accessibility' (every element known for the rule) do not block.
+        const known = new Set((job.a11y.known || []).map((k) => k.rule + '\u0000' + k.target));
+        const isKnown = (v) => v.nodes.length > 0 && v.nodes.every((n) => known.has(v.id + '\u0000' + n.target));
+        const knownCount = outcome.violations.filter(isKnown).length;
+        const blocking = outcome.violations.filter((v) => (IMPACT[v.impact] || 0) >= failOn && !isKnown(v));
         if (blocking.length && !job.a11y.todo && result.status === 'passed') {
           result.status = 'failed';
           result.message = `${blocking.length} accessibility violation(s): ${blocking[0].id} (${blocking[0].impact}) — ${blocking[0].help}`;
@@ -525,7 +529,9 @@ async function runJob(frame, job, run) {
           result.status = 'warning';
           result.message = job.a11y.todo
             ? `${outcome.violations.length} accessibility violation(s), reported only (todo: ${job.a11y.todo}).`
-            : `${outcome.violations.length} minor accessibility violation(s).`;
+            : knownCount > 0
+              ? `${outcome.violations.length} accessibility violation(s), ${knownCount} known from the accessibility baseline.`
+              : `${outcome.violations.length} accessibility violation(s) below the '${job.a11y.failOn || 'serious'}' threshold.`;
         }
       }
     }

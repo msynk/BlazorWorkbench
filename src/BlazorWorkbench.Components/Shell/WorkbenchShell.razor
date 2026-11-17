@@ -1549,6 +1549,13 @@
             return;
         var jobs = new List<object>();
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // The same fail threshold, rule tags and accessibility baselines as 'workbench test --a11y', when the host has them.
+        var policy = AccessibilityPolicy.Default;
+        if (request.Accessibility && Services.GetService(typeof(IAccessibilityPolicyProvider)) is IAccessibilityPolicyProvider policies)
+        {
+            try { policy = await policies.GetAsync(request.ScenarioIds); }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException or System.Text.Json.JsonException) { policy = AccessibilityPolicy.Default; }
+        }
         var skipped = new List<ScenarioDefinition>();
         foreach (var id in request.ScenarioIds)
         {
@@ -1564,7 +1571,14 @@
             var url = $"_workbench/preview/{Uri.EscapeDataString(scenario.Id)}" + (viewport?.IsMobile == true ? "?touch=1" : "");
             var size = new { width = viewport?.Width ?? 1280, height = viewport?.Height ?? 800 };
             var a11y = request.Accessibility && !scenario.Accessibility.Skip
-                ? new { disabledRules = scenario.Accessibility.DisabledRules, failOn = "serious", todo = scenario.Accessibility.TodoReason }
+                ? new
+                {
+                    disabledRules = scenario.Accessibility.DisabledRules,
+                    failOn = policy.FailOn,
+                    tags = policy.Tags,
+                    todo = scenario.Accessibility.TodoReason,
+                    known = policy.Known.GetValueOrDefault(scenario.Id) ?? [],
+                }
                 : null;
             jobs.Add(new { scenarioId = scenario.Id, kind = "render", url, size.width, size.height, timeout = 20000, a11y });
             foreach (var test in scenario.Interactions)

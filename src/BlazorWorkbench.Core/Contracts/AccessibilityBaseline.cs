@@ -1,7 +1,6 @@
 using System.Text.Json;
-using BlazorWorkbench.Contracts;
 
-namespace BlazorWorkbench.Testing;
+namespace BlazorWorkbench.Contracts;
 
 /// <summary>
 /// Known accessibility violations of a scenario, approved with <c>workbench approve --accessibility</c> (Chromatic's
@@ -27,7 +26,12 @@ public sealed class AccessibilityBaseline
 
     /// <summary>The file of <paramref name="scenarioId"/>'s baseline in <paramref name="baselineDirectory"/>.</summary>
     public static string PathFor(string baselineDirectory, string scenarioId) =>
-        Path.Combine(Path.GetFullPath(baselineDirectory), FolderName, BaselineStore.Sanitize(scenarioId) + ".json");
+        Path.Combine(Path.GetFullPath(baselineDirectory), FolderName, Sanitize(scenarioId) + ".json");
+
+    // The same characters on every operating system, so a committed baseline has one file name everywhere.
+    private static readonly char[] s_invalid = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+    private static string Sanitize(string value) => string.Concat(value.Select(c => c < 32 || s_invalid.Contains(c) ? '_' : c));
 
     /// <summary>Reads the baseline of a scenario, or null when there is none (or it cannot be read).</summary>
     public static AccessibilityBaseline? Load(string baselineDirectory, string scenarioId)

@@ -40,6 +40,15 @@ public sealed class WorkbenchHostOptions : WorkbenchOptions
     /// <summary>Visual baseline directory. Defaults to the value in <c>workbench.json</c>.</summary>
     public string? BaselineDirectory { get; set; }
 
+    /// <summary>
+    /// The impact at which the explorer's test runner fails an accessibility scan (<c>minor</c>, <c>moderate</c>,
+    /// <c>serious</c>, <c>critical</c>); defaults to <c>accessibility.failOn</c> in <c>workbench.json</c>, else <c>serious</c>.
+    /// </summary>
+    public string? AccessibilityFailOn { get; set; }
+
+    /// <summary>axe-core rule tags the explorer's test runner uses; defaults to <c>accessibility.tags</c> in <c>workbench.json</c>.</summary>
+    public IList<string> AccessibilityTags { get; } = [];
+
     /// <summary>Directory containing <c>report.json</c> from the last <c>workbench test</c> run. Defaults to <c>workbench.json</c>.</summary>
     public string? ResultsDirectory { get; set; }
 

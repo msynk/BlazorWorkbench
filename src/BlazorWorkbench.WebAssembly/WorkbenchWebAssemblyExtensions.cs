@@ -47,10 +47,30 @@ public static class WorkbenchWebAssemblyExtensions
         var overridable = ServiceOverrides.CollectTypes(catalog).ToHashSet();
         builder.Services.AddBlazorWorkbenchRuntime(options, catalog, overridable);
         builder.Services.AddScoped<IVisualResultsProvider>(_ => new HttpVisualResultsProvider(baseAddress));
+        builder.Services.AddScoped<IAccessibilityPolicyProvider>(_ => new HttpAccessibilityPolicyProvider(baseAddress));
         builder.Services.AddScoped<ITestResultsProvider>(_ => new HttpTestResultsProvider(baseAddress));
         builder.Services.AddScoped<IChangesProvider>(_ => new HttpChangesProvider(baseAddress));
         builder.ConfigureContainer(new DefaultServiceProviderFactory(), services => ServiceOverrides.Apply(services, overridable));
         return builder;
+    }
+}
+
+/// <summary>Reads the accessibility policy from the host's <c>/_workbench/api/accessibility-policy</c> endpoint.</summary>
+internal sealed class HttpAccessibilityPolicyProvider(Uri baseAddress) : IAccessibilityPolicyProvider
+{
+    public async Task<AccessibilityPolicy> GetAsync(IReadOnlyList<string> scenarioIds, CancellationToken cancellationToken = default)
+    {
+        using var http = new HttpClient { BaseAddress = baseAddress };
+        try
+        {
+            using var response = await http.PostAsJsonAsync("_workbench/api/accessibility-policy", scenarioIds, WorkbenchJson.Options, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<AccessibilityPolicy>(WorkbenchJson.Options, cancellationToken).ConfigureAwait(false) ?? AccessibilityPolicy.Default;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return AccessibilityPolicy.Default;
+        }
     }
 }
 

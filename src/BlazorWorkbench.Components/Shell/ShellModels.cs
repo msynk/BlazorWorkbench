@@ -1,4 +1,5 @@
 using BlazorWorkbench.Catalog;
+using BlazorWorkbench.Contracts;
 using Microsoft.AspNetCore.Components;
 
 namespace BlazorWorkbench.Components.Shell;
@@ -97,6 +98,24 @@ public sealed record TestRunSummary(DateTimeOffset? FinishedAt, IReadOnlyDiction
 public interface ITestResultsProvider
 {
     Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// How the explorer's test runner judges accessibility scans, so it agrees with <c>workbench test --a11y</c>: the impact that
+/// fails a scan, the axe-core rule tags, and each scenario's known violations (accessibility baselines).
+/// </summary>
+/// <param name="FailOn"><c>minor</c>, <c>moderate</c>, <c>serious</c> or <c>critical</c>.</param>
+/// <param name="Tags">axe-core rule tags to run; empty runs axe-core's defaults.</param>
+/// <param name="Known">Known violations by scenario id.</param>
+public sealed record AccessibilityPolicy(string FailOn, IReadOnlyList<string> Tags, IReadOnlyDictionary<string, IReadOnlyList<AccessibilityBaseline.KnownViolation>> Known)
+{
+    public static AccessibilityPolicy Default { get; } = new("serious", [], new Dictionary<string, IReadOnlyList<AccessibilityBaseline.KnownViolation>>());
+}
+
+/// <summary>Supplies the <see cref="AccessibilityPolicy"/> for a set of scenarios. Implemented by the preview host from <c>workbench.json</c> and the baselines; optional.</summary>
+public interface IAccessibilityPolicyProvider
+{
+    Task<AccessibilityPolicy> GetAsync(IReadOnlyList<string> scenarioIds, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

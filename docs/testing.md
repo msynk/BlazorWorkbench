@@ -151,17 +151,17 @@ a CI server) by registering an `ITestResultsProvider` and an `IVisualResultsProv
 The test runner at the bottom of the explorer runs scenarios without leaving the Workbench, like Storybook's test widget:
 choose **All scenarios**, the component on screen, **Failing** or **Changed** (scenarios affected by uncommitted changes),
 optionally tick **Accessibility**, and click **Run tests**. Each scenario is rendered in an invisible frame and checked for
-render errors (and scanned with axe-core, failing on serious and critical violations unless the scenario has an
+render errors (and scanned with axe-core, failing at the configured impact, serious by default, unless the scenario has an
 accessibility `Todo`); each interaction test then runs against a fresh session. Scenarios with `SkipTests` are skipped.
 Results replace the last CLI run's dots in the explorer for this session, failures link to the panel that explains them,
 and opening a scenario shows its interaction and accessibility results. **Watch** runs the same scenarios again whenever
 hot reload rebuilds the catalog.
 
 The runner uses the in-browser interaction runner, which simulates events. `workbench test` drives a real browser with
-Playwright, adds visual and responsive checks, retries and reports, and stays authoritative for CI. The runner always
-fails accessibility scans on serious and critical violations with axe-core's default rules: it does not read
-`accessibility.failOn` and `accessibility.tags` from `workbench.json`, or accessibility baselines, so a scenario with
-approved violations can fail there and pass in `workbench test --a11y`.
+Playwright, adds visual and responsive checks, retries and reports, and stays authoritative for CI. Accessibility scans
+in the runner follow the same rules as `workbench test --a11y`: `accessibility.failOn` and `accessibility.tags` from
+`workbench.json` (or `AccessibilityFailOn` and `AccessibilityTags` in the host options) and the accessibility baselines,
+so violations approved with `workbench approve --accessibility` do not fail there either.
 
 ## Change impact (`--changed-since`)
 

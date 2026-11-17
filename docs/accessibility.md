@@ -49,7 +49,7 @@ A baseline lists each known violation as a rule and the selector of its element.
 *known (baseline)* without failing, fail on any other blocking violation, and say when baseline violations were fixed; run
 `workbench approve --accessibility --all` then to shrink the baselines (it removes the file of a scenario without violations).
 Baselines depend on the DOM, not on the platform, so one file serves every operating system and hosting model. Review and
-commit them like screenshots. The test runner in the explorer does not read them; it reports every violation.
+commit them like screenshots. The test runner in the explorer applies them too.
 
 ## Disabling rules
 

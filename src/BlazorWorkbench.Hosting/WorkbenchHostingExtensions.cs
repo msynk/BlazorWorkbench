@@ -41,6 +41,12 @@ public static class WorkbenchHostingExtensions
 
         var config = WorkbenchConfig.Find(builder.Environment.ContentRootPath);
         options.BaselineDirectory ??= config?.Resolve(config.Baselines);
+        options.AccessibilityFailOn ??= config?.Accessibility.FailOn;
+        if (options.AccessibilityTags.Count == 0 && config is not null)
+        {
+            foreach (var tag in config.Accessibility.Tags)
+                options.AccessibilityTags.Add(tag);
+        }
         options.ResultsDirectory ??= config?.Resolve(config.Output);
         options.SourceRoot ??= config?.RootDirectory ?? builder.Environment.ContentRootPath;
         // Editor links reveal absolute paths: offer them by default only to the developer on this machine.
@@ -66,6 +72,7 @@ public static class WorkbenchHostingExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<CircuitHandler, WorkbenchCircuitHandler>());
         services.TryAddSingleton<IVisualResultsProvider, FileVisualResultsProvider>();
         services.TryAddSingleton<ITestResultsProvider, FileTestResultsProvider>();
+        services.TryAddSingleton<IAccessibilityPolicyProvider, FileAccessibilityPolicyProvider>();
         if (options.ShowChanges)
             services.TryAddSingleton<IChangesProvider, GitChangesProvider>();
 
@@ -159,6 +166,10 @@ public static class WorkbenchHostingExtensions
 
         group.MapGet("/api/results", async (ITestResultsProvider provider, CancellationToken ct) =>
             Results.Json(await provider.GetSummaryAsync(ct), WorkbenchJson.Options));
+
+        // Read-only: the explorer's test runner asks for the accessibility policy of the scenarios it is about to run.
+        group.MapPost("/api/accessibility-policy", async (string[] ids, IAccessibilityPolicyProvider provider, CancellationToken ct) =>
+            Results.Json(await provider.GetAsync(ids.Take(5000).ToArray(), ct), WorkbenchJson.Options));
 
         group.MapGet("/api/changes", async (IServiceProvider services, CancellationToken ct) =>
             Results.Json(services.GetService<IChangesProvider>() is { } provider ? await provider.GetChangesAsync(ct) : CatalogChangeSummary.Empty, WorkbenchJson.Options));
@@ -312,6 +323,26 @@ internal sealed class WorkbenchSecurityMiddleware(RequestDelegate next, Workbenc
 }
 
 /// <summary>Reads the status of every scenario from the last CLI run (<c>report.json</c> in the results directory).</summary>
+/// <summary>The accessibility policy from the options (filled from <c>workbench.json</c>) and the accessibility baselines.</summary>
+internal sealed class FileAccessibilityPolicyProvider(WorkbenchHostOptions options, WorkbenchCatalogAccessor catalogs) : IAccessibilityPolicyProvider
+{
+    public Task<AccessibilityPolicy> GetAsync(IReadOnlyList<string> scenarioIds, CancellationToken cancellationToken = default)
+    {
+        var known = new Dictionary<string, IReadOnlyList<AccessibilityBaseline.KnownViolation>>(StringComparer.OrdinalIgnoreCase);
+        if (options.BaselineDirectory is { } directory)
+        {
+            // Only scenarios of the catalog: ids become file names.
+            foreach (var id in scenarioIds.Where(id => catalogs.Catalog.FindScenario(id) is not null).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (AccessibilityBaseline.Load(directory, id) is { Violations.Count: > 0 } baseline)
+                    known[id] = baseline.Violations;
+            }
+        }
+
+        return Task.FromResult(new AccessibilityPolicy(options.AccessibilityFailOn ?? "serious", options.AccessibilityTags.ToArray(), known));
+    }
+}
+
 internal sealed class FileTestResultsProvider(WorkbenchHostOptions options) : ITestResultsProvider
 {
     public Task<TestRunSummary> GetSummaryAsync(CancellationToken cancellationToken = default)
