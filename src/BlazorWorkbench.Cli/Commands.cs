@@ -91,7 +91,7 @@ public static class Commands
 
         if (changedSince is not null)
         {
-            var changed = ChangeImpact.GitChangedFiles(context.Config.RootDirectory, changedSince);
+            var changed = await ChangeImpact.GitChangedFilesAsync(context.Config.RootDirectory, changedSince, ct);
             var selection = ChangeImpact.Select(await host.GetCatalogAsync(ct), changed, context.Config.RootDirectory, options.BaselineDirectory);
             Console.Error.WriteLine(selection.Reason);
             if (!selection.RunAll)

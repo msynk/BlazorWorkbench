@@ -1,5 +1,7 @@
 using System.Linq.Expressions;
 using System.Net;
+using System.Runtime.CompilerServices;
+using BlazorWorkbench.Catalog;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +14,7 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
 {
     private readonly Type? _declaringType;
     private readonly List<Action<ScenarioBuilder<TComponent>>> _setups = [];
-    private readonly List<(string Name, Action<ScenarioBuilder<TComponent>> Configure, MatrixCell? Cell)> _scenarios = [];
+    private readonly List<(string Name, Action<ScenarioBuilder<TComponent>> Configure, MatrixCell? Cell, SourceLocation? Source)> _scenarios = [];
     private readonly List<FixtureDefinition> _fixtures = [];
     private readonly List<DesignReference> _designs = [];
     private readonly List<string> _tags = [];
@@ -53,12 +55,19 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
     public ScenarioSetBuilder<TComponent> Setup(Action<ScenarioBuilder<TComponent>> setup) { _setups.Add(setup); return this; }
 
     /// <summary>Adds a scenario. The key defaults to the kebab-case name; override with <see cref="ScenarioBuilder{TComponent}.Key"/>.</summary>
-    public ScenarioSetBuilder<TComponent> Add(string name, Action<ScenarioBuilder<TComponent>>? configure = null)
+    /// <param name="name">Scenario name, shown in the explorer.</param>
+    /// <param name="configure">Parameters, environment and tests of the scenario.</param>
+    /// <param name="sourceFile">Filled in by the compiler: where the scenario is declared, for <b>Edit scenario</b> links.</param>
+    /// <param name="sourceLine">Filled in by the compiler.</param>
+    public ScenarioSetBuilder<TComponent> Add(string name, Action<ScenarioBuilder<TComponent>>? configure = null,
+        [CallerFilePath] string sourceFile = "", [CallerLineNumber] int sourceLine = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        _scenarios.Add((name, configure ?? (_ => { }), null));
+        _scenarios.Add((name, configure ?? (_ => { }), null, Source(sourceFile, sourceLine)));
         return this;
     }
+
+    private static SourceLocation? Source(string file, int line) => file.Length > 0 && line > 0 ? new SourceLocation(file, line) : null;
 
     /// <summary>
     /// Adds one scenario per combination of parameter values, for example every <c>Variant</c> in every <c>Size</c>. Each
@@ -69,10 +78,14 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
     /// <param name="name">Matrix name, used as the prefix of the scenario names.</param>
     /// <param name="axes">The parameters to vary and their values.</param>
     /// <param name="configure">Configuration applied to every combination before its values (child content, services, ...).</param>
-    public ScenarioSetBuilder<TComponent> Matrix(string name, Action<MatrixBuilder<TComponent>> axes, Action<ScenarioBuilder<TComponent>>? configure = null)
+    /// <param name="sourceFile">Filled in by the compiler: where the matrix is declared.</param>
+    /// <param name="sourceLine">Filled in by the compiler.</param>
+    public ScenarioSetBuilder<TComponent> Matrix(string name, Action<MatrixBuilder<TComponent>> axes, Action<ScenarioBuilder<TComponent>>? configure = null,
+        [CallerFilePath] string sourceFile = "", [CallerLineNumber] int sourceLine = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(axes);
+        var source = Source(sourceFile, sourceLine);
         var matrix = new MatrixBuilder<TComponent>();
         axes(matrix);
         foreach (var combination in matrix.Combinations())
@@ -86,7 +99,7 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
                 foreach (var choice in combination)
                     s.Parameter(choice.Parameter, choice.Value);
                 s.Tags("matrix");
-            }, cell));
+            }, cell, source));
         }
 
         return this;
@@ -95,9 +108,9 @@ public sealed class ScenarioSetBuilder<TComponent> where TComponent : IComponent
     public ScenarioSetDefinition Build()
     {
         var scenarios = new List<ScenarioDefinition>(_scenarios.Count);
-        foreach (var (name, configure, cell) in _scenarios)
+        foreach (var (name, configure, cell, source) in _scenarios)
         {
-            var builder = new ScenarioBuilder<TComponent>(name, _declaringType) { InSetup = true, MatrixCell = cell };
+            var builder = new ScenarioBuilder<TComponent>(name, _declaringType) { InSetup = true, MatrixCell = cell, Source = source };
             foreach (var setup in _setups)
                 setup(builder);
             builder.InSetup = false;
@@ -130,6 +143,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private readonly Type? _declaringType;
     private readonly List<ParameterAssignment> _parameters = [];
     private readonly List<CascadingValueDefinition> _cascading = [];
+    private readonly List<ScenarioDecorator> _decorators = [];
     private readonly List<Action<IServiceCollection, ScenarioContext>> _services = [];
     private readonly List<HttpRule> _httpRules = [], _setupHttpRules = [];
     private readonly List<JSInteropRule> _jsRules = [], _setupJsRules = [];
@@ -167,6 +181,8 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     internal bool InSetup { get; set; }
 
     internal MatrixCell? MatrixCell { get; init; }
+
+    internal SourceLocation? Source { get; init; }
 
     /// <summary>Overrides the scenario key (the part after <c>--</c> in the scenario id). Keep keys stable; they are used in URLs and baselines.</summary>
     public ScenarioBuilder<TComponent> Key(string key) { _key = Naming.ToKebabCase(key); return this; }
@@ -278,6 +294,52 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         _cascading.RemoveAll(c => c.ValueType == typeof(T) && c.Name == name);
         _cascading.Add(new CascadingValueDefinition { ValueType = typeof(T), Name = name, Factory = ctx => factory(ctx) });
         return this;
+    }
+
+    /// <summary>
+    /// Wraps the component in other markup, for example a form, a provider or a fixed-width box. Decorators added first are
+    /// outermost, so decorators from <see cref="ScenarioSetBuilder{TComponent}.Setup"/> wrap the scenario's own ones.
+    /// </summary>
+    /// <param name="wrap">Returns the wrapped content for the scenario's content, for example
+    /// <c>story =&gt; @&lt;div style="width: 320px"&gt;@story&lt;/div&gt;</c> in a Razor file.</param>
+    /// <param name="name">Name shown in the scenario facts and the Code panel.</param>
+    public ScenarioBuilder<TComponent> Wrap(Func<RenderFragment, RenderFragment> wrap, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(wrap);
+        return Wrap((story, _) => wrap(story), name);
+    }
+
+    /// <inheritdoc cref="Wrap(Func{RenderFragment, RenderFragment}, string?)"/>
+    public ScenarioBuilder<TComponent> Wrap(Func<RenderFragment, ScenarioContext, RenderFragment> wrap, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(wrap);
+        _decorators.Add(new ScenarioDecorator { Name = name ?? "Wrapper", Wrap = wrap });
+        return this;
+    }
+
+    /// <summary>
+    /// Wraps the component in <typeparamref name="TWrapper"/>, which receives the component as its <c>ChildContent</c>, for
+    /// example a <c>CascadingAuthenticationState</c>, a theme provider or a layout container.
+    /// </summary>
+    /// <param name="parameters">Other parameters of the wrapper, by name.</param>
+    public ScenarioBuilder<TComponent> Wrap<TWrapper>(IReadOnlyDictionary<string, object?>? parameters = null) where TWrapper : IComponent
+    {
+        _decorators.Add(ScenarioDecorator.Component(typeof(TWrapper), parameters));
+        return this;
+    }
+
+    /// <summary>Wraps the component in an element with the given inline style, for example <c>"width: 320px"</c> or <c>"max-width: 40rem"</c>.</summary>
+    public ScenarioBuilder<TComponent> WrapStyle(string style)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(style);
+        return Wrap(story => b =>
+        {
+            b.OpenElement(0, "div");
+            b.AddAttribute(1, "style", style);
+            b.AddAttribute(2, "data-workbench-wrapper", "");
+            b.AddContent(3, story);
+            b.CloseElement();
+        }, $"<div style=\"{style}\">");
     }
 
     /// <summary>Configures the fake HTTP backend used by the injected <see cref="HttpClient"/> and <c>IHttpClientFactory</c>.</summary>
@@ -431,6 +493,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         Tags = _tags.Distinct(StringComparer.Ordinal).ToArray(),
         Parameters = _parameters.ToArray(),
         CascadingValues = _cascading.ToArray(),
+        Decorators = _decorators.ToArray(),
         ServiceConfigurations = _services.ToArray(),
         Fixtures = fixtures,
         Layout = _layout,
@@ -440,6 +503,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         Notes = _notes,
         Designs = _designs.ToArray(),
         Matrix = MatrixCell,
+        Source = Source,
         Environment = new EnvironmentDefinition
         {
             Culture = _culture,
@@ -548,6 +612,7 @@ public sealed class HttpRuleBuilder
     private HttpFault _fault;
     private int? _times;
     private Func<HttpRequestMessage, ScenarioContext, Task<HttpResponseMessage>>? _handler;
+    private Func<HttpRequestMessage, ScenarioContext, CancellationToken, Task<HttpResponseMessage>>? _cancellableHandler;
 
     internal HttpRuleBuilder(string method, string pattern)
     {
@@ -599,7 +664,13 @@ public sealed class HttpRuleBuilder
     public HttpRuleBuilder Hold(string? gate = null) { _gate = gate ?? $"{_method} {_pattern}"; return this; }
 
     /// <summary>Produces the response with custom code.</summary>
-    public HttpRuleBuilder Handle(Func<HttpRequestMessage, ScenarioContext, Task<HttpResponseMessage>> handler) { _handler = handler; return this; }
+    public HttpRuleBuilder Handle(Func<HttpRequestMessage, ScenarioContext, Task<HttpResponseMessage>> handler) { _handler = handler; _cancellableHandler = null; return this; }
+
+    /// <summary>
+    /// Produces the response with custom code that observes the request's cancellation token (also canceled when the
+    /// preview session ends).
+    /// </summary>
+    public HttpRuleBuilder Handle(Func<HttpRequestMessage, ScenarioContext, CancellationToken, Task<HttpResponseMessage>> handler) { _cancellableHandler = handler; _handler = null; return this; }
 
     internal HttpRule Build() => new()
     {
@@ -614,6 +685,7 @@ public sealed class HttpRuleBuilder
         Gate = _gate,
         Times = _times,
         Handler = _handler,
+        CancellableHandler = _cancellableHandler,
     };
 }
 

@@ -124,6 +124,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         {
             builder.OpenComponent<WorkbenchErrorBoundary>(10);
             builder.AddComponentParameter(11, nameof(WorkbenchErrorBoundary.OnError), (Action<Exception>)OnRenderError);
+            builder.AddComponentParameter(14, nameof(WorkbenchErrorBoundary.OnRecovered), (Action)OnRecovered);
             builder.AddComponentParameter(12, nameof(WorkbenchErrorBoundary.ChildContent), (RenderFragment)RenderScenario);
             builder.AddComponentReferenceCapture(13, r => _boundary = (WorkbenchErrorBoundary)r);
             builder.CloseComponent();
@@ -155,6 +156,22 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
             b.AddComponentParameter(2, nameof(DynamicComponent.Parameters), parameters);
             b.CloseComponent();
         };
+
+        // Decorators: catalog-wide ones outermost, then the scenario's (set setups before the scenario's own).
+        var decorators = Session.Catalogs.Options.Decorators.Concat(Scenario.Decorators).ToArray();
+        if (decorators.Length > 0)
+        {
+            try
+            {
+                content = ScenarioDecorator.Apply(content, decorators, Session.Context!);
+            }
+            catch (Exception ex)
+            {
+                ReportSetupError(ex);
+                RenderSetupError(builder, ex);
+                return;
+            }
+        }
 
         foreach (var (type, name, value) in Enumerable.Reverse(_cascades))
         {
@@ -431,7 +448,19 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         if (remount)
             _componentKey++;
         _boundary?.Recover();
+        OnRecovered();
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// The error panel went away (Recover, or new arguments): the preview leaves its error state and checks readiness again.
+    /// A failure that remains is reported again.
+    /// </summary>
+    private void OnRecovered()
+    {
+        _reportedSetupError = null;
+        if (EnableBridge && _bridgeAttached)
+            Bridge("BlazorWorkbenchPreview.recovered", null);
     }
 
     [JSInvokable]
@@ -548,6 +577,10 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
                 OnDiagnostic(late);
             OnActivityChanged(Session.Activity.Pending);
             OnGatesChanged();
+            // Callbacks raised before the bridge attached (in OnInitialized or OnParametersSet) reach the Actions panel too.
+            // Nothing was forwarded before _bridgeAttached, and this runs on the renderer's thread, so none is sent twice.
+            foreach (var entry in Session.Callbacks.Snapshot())
+                OnCallback(entry);
         }
         catch (JSDisconnectedException)
         {
@@ -675,6 +708,15 @@ public sealed class WorkbenchErrorBoundary : ErrorBoundaryBase
 {
     [Parameter] public Action<Exception>? OnError { get; set; }
 
+    /// <summary>Called when the user clicks <b>Recover</b> on the error panel.</summary>
+    [Parameter] public Action? OnRecovered { get; set; }
+
+    private void RecoverClicked()
+    {
+        Recover();
+        OnRecovered?.Invoke();
+    }
+
     protected override Task OnErrorAsync(Exception exception)
     {
         OnError?.Invoke(exception);
@@ -709,7 +751,7 @@ public sealed class WorkbenchErrorBoundary : ErrorBoundaryBase
         builder.CloseElement();
         builder.OpenElement(14, "button");
         builder.AddAttribute(15, "type", "button");
-        builder.AddAttribute(16, "onclick", EventCallback.Factory.Create(this, Recover));
+        builder.AddAttribute(16, "onclick", EventCallback.Factory.Create(this, RecoverClicked));
         builder.AddContent(17, "Recover");
         builder.CloseElement();
         builder.CloseElement();

@@ -8,7 +8,8 @@
                @bind="Query" @bind:event="oninput" @onkeydown="OnSearchKey" aria-describedby="wb-search-hint" />
         <span id="wb-search-hint" class="wb-visually-hidden">
             Matches component names, titles, tags, parameters, scenario names and pages. Filters: tag:name, status:beta, is:matrix,
-            is:generated, is:tested, is:skipped, is:deprecated, is:failing, is:passing, is:pinned, is:changed, is:new, is:related, is:affected. Press Enter to open the first result.
+            is:generated, is:tested, is:skipped, is:deprecated, is:documented, is:failing, is:passing, is:flaky, is:pinned, is:changed, is:new, is:related, is:affected.
+            Start a filter with a minus sign to exclude, for example -tag:legacy. Press Enter to open the first result.
         </span>
         <div class="wb-quick-filters" role="group" aria-label="Quick filters">
             @foreach (var (token, label) in QuickFilters)
@@ -21,7 +22,8 @@
 
     @if (_matches is not null)
     {
-        <p class="wb-muted wb-small" role="status">@(_matches.Count + _pageMatches.Count) result@(_matches.Count + _pageMatches.Count == 1 ? "" : "s")</p>
+        var total = _matches.Count + _pageMatches.Count;
+        <p class="wb-muted wb-small" role="status">@total result@(total == 1 ? "" : "s")@(_matches.Count > MaxResults ? $", showing the first {MaxResults} scenarios; refine the search to see the rest" : "")</p>
         <ul class="wb-results">
             @foreach (var docPage in _pageMatches)
             {
@@ -32,7 +34,7 @@
                     </a>
                 </li>
             }
-            @foreach (var (component, scenario) in _matches.Take(200))
+            @foreach (var (component, scenario) in _matches.Take(MaxResults))
             {
                 <li>
                     <a href="@($"scenario/{scenario.Id}")" class="@(scenario.Id == SelectedScenarioId ? "active" : "")" aria-current="@(scenario.Id == SelectedScenarioId ? "page" : null)">
@@ -45,6 +47,10 @@
     }
     else
     {
+        <div class="wb-tree-actions" role="group" aria-label="Explorer tree">
+            <button type="button" class="wb-button wb-button-small" @onclick="() => SetAllExpanded(true)" title="Open every group (components stay closed)">Expand all</button>
+            <button type="button" class="wb-button wb-button-small" @onclick="() => SetAllExpanded(false)" title="Close every group and component">Collapse all</button>
+        </div>
         <nav aria-label="Components">
             @if (PinnedScenarios.Count > 0)
             {
@@ -106,6 +112,9 @@
 @code {
     private static readonly (string Token, string Label)[] QuickFilters =
         [("is:pinned", "Pinned"), ("is:affected", "Changed"), ("is:tested", "Has tests"), ("is:failing", "Failing"), ("is:matrix", "Matrix"), ("status:beta", "Beta"), ("status:experimental", "Experimental"), ("is:deprecated", "Deprecated")];
+
+    /// <summary>Search results rendered at once; the status line says when there are more.</summary>
+    private const int MaxResults = 200;
 
     private TestRunSummary _run = TestRunSummary.Empty;
 
@@ -308,6 +317,9 @@
 
     private bool Matches(ComponentEntry c, ScenarioDefinition s, string filter)
     {
+        // -tag:legacy, -is:generated: exclude what the filter matches (Storybook's !tag).
+        if (filter.Length > 1 && filter[0] == '-')
+            return !Matches(c, s, filter[1..]);
         var colon = filter.IndexOf(':');
         var key = filter[..colon].ToLowerInvariant();
         var value = filter[(colon + 1)..];
@@ -355,7 +367,8 @@
     private RenderFragment RenderGroup(Node node, int depth) => __builder =>
     {
         <ul class="wb-tree">
-            @foreach (var child in node.Children.Values.OrderBy(c => c.Component is null && c.Page is null ? 0 : c.Page is not null ? 1 : 2).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase))
+            @foreach (var child in ExplorerOrder.Sort(Catalog.Options.ExplorerOrder, node.Children.Values, c => (c.OrderPath, c.Name,
+                          c.Page is not null ? ExplorerOrder.EntryKind.Page : c.Component is not null ? ExplorerOrder.EntryKind.Component : ExplorerOrder.EntryKind.Group)))
             {
                 if (child.Page is { } docPage)
                 {
@@ -457,12 +470,40 @@
 
     private void Flip(string path, bool current) => _expanded[path] = !current;
 
+    /// <summary>Opens every group, or closes every group and component. The selected scenario's component stays reachable.</summary>
+    private void SetAllExpanded(bool open)
+    {
+        void Visit(Node node)
+        {
+            foreach (var child in node.Children.Values)
+            {
+                if (child.Page is not null)
+                    continue;
+                if (child.Component is not null)
+                {
+                    if (!open)
+                        _expanded[child.Path] = false;
+                    continue;
+                }
+
+                _expanded[child.Path] = open;
+                Visit(child);
+            }
+        }
+
+        Visit(_tree);
+    }
+
     private sealed class Node(string name, string path)
     {
         public int Count => Component is not null ? 1 : Page is not null ? 0 : Children.Values.Sum(c => c.Count);
 
         public string Name { get; } = name;
         public string Path { get; } = path;
+
+        /// <summary>The catalog path used by <see cref="WorkbenchOptions.ExplorerOrder"/> (pages without their <c>page:</c> prefix).</summary>
+        public string OrderPath => Page?.Title ?? Path;
+
         public ComponentEntry? Component { get; init; }
         public DocumentationPage? Page { get; init; }
         public Dictionary<string, Node> Children { get; } = new(StringComparer.Ordinal);

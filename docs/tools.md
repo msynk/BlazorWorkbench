@@ -167,7 +167,26 @@ The search box understands filters, and the chips under it toggle the common one
 | `is:pinned` | Scenarios you pinned |
 | `is:changed`, `is:new`, `is:related`, `is:affected` | Scenarios affected by uncommitted changes (see below) |
 
-Filters combine with text: `is:matrix button`. Documentation pages appear in search results and in the tree.
+Filters combine with text: `is:matrix button`. A minus sign excludes: `-tag:legacy`, `-is:generated`. Documentation pages
+appear in search results and in the tree. **Expand all** opens every group of the tree and **Collapse all** closes the groups
+and components.
+
+**Order.** Within a group, the tree lists groups, then documentation pages, then components, each alphabetically; scenarios
+keep the order in which they are declared. List catalog paths to put first, in that order:
+
+```csharp
+options.ExplorerOrder.Add("Introduction");          // a top-level group or page
+options.ExplorerOrder.Add("Foundations");
+options.ExplorerOrder.Add("Inputs/Button");         // a component within its group
+```
+
+Alt+arrows follow the same order.
+
+**Edit links.** Next to **Docs** above the preview, **Edit scenario** opens the line of `set.Add(...)` that declares the
+scenario, and **Edit component** the component's source file, in your editor. ASP.NET Core hosts offer them in Development
+when remote access is off, with Visual Studio Code; set `options.EditorUrlTemplate` for another editor
+(`"rider://open?file={path}&line={line}"`, `"vscode-insiders://file/{path}:{line}"`) or to `""` to hide them. The links
+contain absolute paths of the machine that runs the Workbench, so they are off by default for shared Workbenches.
 
 **Pins.** **☆ Pin** next to the scenario title (or B) pins the scenario to the top of the explorer, like bookmarks. Pins are
 kept in this browser.
@@ -201,6 +220,14 @@ Press **?** for the list. Shortcuts work while the Workbench, not the preview, h
 | Alt+9 | Zoom a fixed viewport to fit the canvas |
 | ← → ↑ ↓ (Shift) | On a resize handle: resize the preview by 1 px (10 px) |
 | Alt+F / Alt+D | Focus mode / panel position |
+| ← → Home End | In the panel's tabs: move to another tab |
+
+Single-key shortcuts (R, G, O, M, B and /) can be turned off in the **?** dialog, for example for speech input (WCAG 2.1.4);
+the choice is kept in this browser. The first Tab stop of the page is **Skip to preview**, which moves focus into the canvas.
+
+**Branding.** `options.LogoUrl` replaces the Workbench mark in the header, `options.AccentColor` (and `AccentColorDark` for
+the dark theme) sets the shell's accent, and `options.ShellStylesheets` adds your own stylesheets to the shell (not to
+previews; shell classes start with `wb-`).
 
 ## Documentation pages
 

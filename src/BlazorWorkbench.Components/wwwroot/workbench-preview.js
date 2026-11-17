@@ -12,10 +12,15 @@
   const MAX_DIAGNOSTICS = 500;
   const inFrame = window.parent && window.parent !== window;
 
+  function safeDecode(text) {
+    try { return decodeURIComponent(text); } catch { return text; }
+  }
+
   const state = {
     state: 'loading',
     sessionId: null,
-    scenarioId: (location.pathname.match(/\/_workbench\/preview\/([^/?#]+)/) || [])[1] || '',
+    // Decoded: ids keep Unicode letters (größe), which arrive percent-encoded in the path.
+    scenarioId: safeDecode((location.pathname.match(/\/_workbench\/preview\/([^/?#]+)/) || [])[1] || ''),
     attached: false,
     pending: 0,
     readySelector: null,
@@ -361,6 +366,13 @@
     return state.dotnet ? state.dotnet.invokeMethodAsync('GetJSCallCount', identifier) : Promise.resolve(0);
   }
 
+  // Callbacks too: a component may raise one in OnInitialized, before the bridge attached.
+  function callbackCount(name) {
+    return state.dotnet
+      ? state.dotnet.invokeMethodAsync('GetCallbackCount', name).catch(() => state.callbackCounts[name] || 0)
+      : Promise.resolve(state.callbackCounts[name] || 0);
+  }
+
   async function retry(fn, timeout) {
     const start = performance.now();
     let lastError;
@@ -449,8 +461,8 @@
       case 'ExpectAttribute': return retry(() => { const el = single(t); const v = el.getAttribute(step.value); if (v !== step.expected) throw new Error(`Expected ${step.value}="${step.expected}" but found ${v === null ? 'no attribute' : `"${v}"`}`); });
       case 'ExpectFocused': return retry(() => { const el = single(t); if (document.activeElement !== el) throw new Error(`Focus is on ${describe(document.activeElement)}`); });
       case 'ExpectCount': return retry(() => { const n = resolve(t).length; if (n !== step.count) throw new Error(`Expected ${step.count} elements but found ${n}`); });
-      case 'ExpectCallback': return retry(() => {
-        const n = state.callbackCounts[step.value] || 0;
+      case 'ExpectCallback': return retry(async () => {
+        const n = await callbackCount(step.value);
         if (step.count == null ? n === 0 : n !== step.count) throw new Error(`Expected ${step.value} to be invoked ${step.count == null ? 'at least once' : step.count + ' time(s)'} but it was invoked ${n} time(s)`);
       });
       case 'ExpectJSCall': return retry(async () => {
@@ -560,9 +572,10 @@
     if (!axeLoading) {
       axeLoading = new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = '/_workbench/axe.min.js';
+        // Relative to <base href>, so a host under a path base (behind a reverse proxy) still finds it.
+        s.src = new URL('_workbench/axe.min.js', document.baseURI).href;
         s.onload = () => resolve();
-        s.onerror = () => reject(new Error('axe-core could not be loaded from /_workbench/axe.min.js'));
+        s.onerror = () => reject(new Error(`axe-core could not be loaded from ${s.src}`));
         document.head.appendChild(s);
       });
     }
@@ -1229,9 +1242,47 @@
   const seeded = new Set();
   function storageArea(name) { try { return name === 'session' ? window.sessionStorage : window.localStorage; } catch { return null; } }
 
+  // An in-memory Storage for one preview. All previews share one origin, so clearing the real storage for each of them
+  // raced: a Gallery, Compare view, docs page or test runner loading several frames at once undid each other's seeds.
+  // Each frame now gets its own empty storage, seeded with its scenario's entries, and the real storage is never touched.
+  function memoryStorage() {
+    const items = new Map();
+    const target = {
+      getItem: (k) => (items.has(String(k)) ? items.get(String(k)) : null),
+      setItem: (k, v) => { items.set(String(k), String(v)); },
+      removeItem: (k) => { items.delete(String(k)); },
+      clear: () => { items.clear(); },
+      key: (i) => Array.from(items.keys())[i] ?? null,
+      get length() { return items.size; },
+    };
+    // Property access (storage.theme, storage['theme'] = 'x') works as with a real Storage.
+    return new Proxy(target, {
+      get: (t, p) => (p in t || typeof p === 'symbol' ? Reflect.get(t, p) : t.getItem(p)),
+      set: (t, p, v) => { if (p in t) return false; t.setItem(p, v); return true; },
+      deleteProperty: (t, p) => { t.removeItem(p); return true; },
+      has: (t, p) => p in t || items.has(String(p)),
+      ownKeys: () => Array.from(items.keys()),
+      getOwnPropertyDescriptor: (t, p) => (items.has(String(p)) ? { value: items.get(String(p)), enumerable: true, configurable: true, writable: true } : undefined),
+    });
+  }
+
+  let storageIsolated = false;
+  function isolateWithMemoryStorage() {
+    if (storageIsolated) return true;
+    try {
+      Object.defineProperty(window, 'localStorage', { value: memoryStorage(), configurable: true, enumerable: true });
+      Object.defineProperty(window, 'sessionStorage', { value: memoryStorage(), configurable: true, enumerable: true });
+      storageIsolated = window.localStorage.length === 0 && typeof window.localStorage.setItem === 'function';
+    } catch {
+      storageIsolated = false;
+    }
+    return storageIsolated;
+  }
+
   function isolateAndSeed(config) {
     if (!config) return;
-    if (config.isolateStorage) {
+    if (config.isolateStorage && !isolateWithMemoryStorage()) {
+      // The browser refused the replacement: fall back to clearing the shared storage.
       for (const name of ['local', 'session']) {
         const area = storageArea(name);
         if (!area) continue;
@@ -1429,7 +1480,9 @@
 
   // ---------- shell messages ----------
   window.addEventListener('message', async (e) => {
-    if (e.origin !== location.origin || !e.data || e.data.source !== SHELL) return;
+    // Only the window that embeds this preview (the shell) may command it: not a sibling frame of the Compare or Gallery
+    // view, the test runner, or script in another preview of the same origin.
+    if (e.origin !== location.origin || !e.data || e.data.source !== SHELL || e.source !== window.parent) return;
     const { type, payload } = e.data;
     try {
       switch (type) {
@@ -1522,6 +1575,18 @@
       state.error = message;
       setState('error', message);
     },
+    // The error panel went away (Recover, or arguments fixed in Controls): leave the error state and check readiness
+    // again. If the failure remains, the host reports it again.
+    recovered() {
+      if (state.state !== 'error') return;
+      state.error = null;
+      state.state = 'loading';
+      state.readyAt = null;
+      document.documentElement.setAttribute('data-workbench-state', 'loading');
+      post('state', { state: 'loading', detail: 'recovered', metrics: metrics() });
+      state.lastMutation = performance.now();
+      scheduleCheck();
+    },
     diagnostic(d) { addDiagnostic(d); },
     callback(entry) {
       state.callbacks.push(entry);
@@ -1549,7 +1614,7 @@
     metrics,
     serverMetrics: () => state.dotnet ? state.dotnet.invokeMethodAsync('GetMetrics').then(JSON.parse) : Promise.resolve(null),
     waitForIdle,
-    callbackCount: (name) => state.callbackCounts[name] || 0,
+    callbackCount,
     jsCallCount,
     releaseGate: (name) => state.dotnet ? state.dotnet.invokeMethodAsync('ReleaseGate', name) : Promise.resolve(false),
     failGate: (name, message) => state.dotnet ? state.dotnet.invokeMethodAsync('FailGate', name, message || null) : Promise.resolve(false),

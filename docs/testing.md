@@ -162,7 +162,7 @@ Playwright, adds visual and responsive checks, retries and reports, and stays au
 
 ## Change impact (`--changed-since`)
 
-`--changed-since <git ref>` collects the files changed since the ref, plus staged, unstaged and untracked files, and maps them to scenarios:
+`--changed-since <git ref>` collects the files changed by commits since the merge base of the ref and `HEAD` (like a pull request: `git diff <ref>...HEAD`, so commits that landed on the ref after you branched are not counted), plus staged, unstaged and untracked files, including deleted and renamed files. The explorer's change marks and the MCP `list_changed_scenarios` tool use the same source. The ref must be a plain revision (for example `origin/main`, `v1.2.0` or `HEAD~3`): values starting with `-` or containing whitespace or `..` are rejected. The files are mapped to scenarios:
 
 | Changed file | Selected scenarios |
 | --- | --- |

@@ -92,7 +92,7 @@
                     {
                         <tr>
                             <td><code>@rule.Method @rule.Pattern</code></td>
-                            <td>@(rule.Handler is not null ? "custom handler" : rule.Fault != HttpFault.None ? rule.Fault.ToString() : $"{(int)rule.Status} {rule.ContentType}")@(rule.Gate is null ? "" : $" · held at '{rule.Gate}'")</td>
+                            <td>@(rule.HasCustomHandler ? "custom handler" : rule.Fault != HttpFault.None ? rule.Fault.ToString() : $"{(int)rule.Status} {rule.ContentType}")@(rule.Gate is null ? "" : $" · held at '{rule.Gate}'")</td>
                             <td>@((rule.Latency ?? http.Latency).TotalMilliseconds) ms</td>
                             <td>@(rule.Times?.ToString(CultureInfo.InvariantCulture) ?? "∞")</td>
                         </tr>

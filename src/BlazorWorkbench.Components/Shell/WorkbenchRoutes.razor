@@ -4,4 +4,12 @@
     <Found Context="routeData">
         <RouteView RouteData="routeData" />
     </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <main class="wb-not-found" role="alert">
+            <h1>This Workbench page does not exist</h1>
+            <p>Scenarios are at <code>scenario/{id}</code>, documentation at <code>docs/{component}</code> and pages at <code>pages/{id}</code>.</p>
+            <p><a href="">Go to the overview</a></p>
+        </main>
+    </NotFound>
 </Router>

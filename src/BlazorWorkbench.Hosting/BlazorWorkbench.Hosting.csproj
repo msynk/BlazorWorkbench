@@ -18,4 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BlazorWorkbench.Components\BlazorWorkbench.Components.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlazorWorkbench.Components.Tests" />
+  </ItemGroup>
 </Project>

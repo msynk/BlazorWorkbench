@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BlazorWorkbench;
@@ -120,6 +121,10 @@ public sealed class ScenarioDefinition
 
     public IReadOnlyList<ParameterAssignment> Parameters { get; init; } = [];
     public IReadOnlyList<CascadingValueDefinition> CascadingValues { get; init; } = [];
+
+    /// <summary>Wrappers around the component, outermost first (<c>.Wrap(...)</c>). Catalog-wide decorators come from the options.</summary>
+    public IReadOnlyList<ScenarioDecorator> Decorators { get; init; } = [];
+
     public IReadOnlyList<Action<IServiceCollection, ScenarioContext>> ServiceConfigurations { get; init; } = [];
     public IReadOnlyList<FixtureDefinition> Fixtures { get; init; } = [];
     public EnvironmentDefinition Environment { get; init; } = new();
@@ -151,6 +156,12 @@ public sealed class ScenarioDefinition
 
     /// <summary>The scenario set that declared the scenario.</summary>
     public Type? DeclaringType { get; init; }
+
+    /// <summary>
+    /// Where <c>set.Add(...)</c> or <c>set.Matrix(...)</c> declared the scenario, as recorded by the compiler (an absolute path
+    /// on the build machine). Used for <b>Edit scenario</b> links; never published.
+    /// </summary>
+    public Catalog.SourceLocation? Source { get; init; }
 
     /// <summary>Service types registered by <see cref="ServiceConfigurations"/> (computed when the catalog is built).</summary>
     public IReadOnlyList<Type> ServiceTypes { get; internal set; } = [];
@@ -200,6 +211,62 @@ public sealed class CascadingValueDefinition
     public string? Name { get; init; }
     public required Func<ScenarioContext, object?> Factory { get; init; }
     public bool IsFixed { get; init; } = true;
+}
+
+/// <summary>
+/// Wraps a scenario's component in other markup: a form, a provider component, a fixed-width box or a theme container
+/// (Storybook's decorators). Declared with <c>.Wrap(...)</c> on a scenario (or in <c>set.Setup(...)</c> for every
+/// scenario of a component) and with <see cref="WorkbenchOptions.AddDecorator(string, Func{RenderFragment, RenderFragment})"/>
+/// for every scenario of the catalog. The wrapper renders inside the preview root, so readiness checks, locators,
+/// accessibility scans and screenshots include it.
+/// </summary>
+public sealed class ScenarioDecorator
+{
+    /// <summary>Name shown in the scenario facts and the Code panel, for example <c>EditForm</c> or <c>Fixed width</c>.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Returns the wrapped content for the scenario's content (<c>story</c>).</summary>
+    public required Func<RenderFragment, ScenarioContext, RenderFragment> Wrap { get; init; }
+
+    /// <summary>The wrapper component when the decorator renders one (<c>.Wrap&lt;TWrapper&gt;()</c>); otherwise null.</summary>
+    public Type? ComponentType { get; init; }
+
+    /// <summary>A decorator that renders <paramref name="wrapperType"/> with the content as its <c>ChildContent</c>.</summary>
+    /// <param name="wrapperType">A component with a <c>ChildContent</c> parameter of type <see cref="RenderFragment"/>.</param>
+    /// <param name="parameters">Other parameters of the wrapper.</param>
+    /// <param name="name">Display name; defaults to the component name.</param>
+    public static ScenarioDecorator Component(Type wrapperType, IReadOnlyDictionary<string, object?>? parameters = null, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(wrapperType);
+        if (!typeof(IComponent).IsAssignableFrom(wrapperType))
+            throw new ArgumentException($"{Naming.FormatTypeName(wrapperType)} is not a component.", nameof(wrapperType));
+        var copy = parameters?.ToArray() ?? [];
+        return new ScenarioDecorator
+        {
+            Name = name ?? Naming.FormatTypeName(wrapperType),
+            ComponentType = wrapperType,
+            Wrap = (story, _) => b =>
+            {
+                b.OpenComponent(0, wrapperType);
+                foreach (var (key, value) in copy)
+                    b.AddComponentParameter(1, key, value);
+                b.AddComponentParameter(2, "ChildContent", story);
+                b.CloseComponent();
+            },
+        };
+    }
+
+    /// <summary>Applies <paramref name="decorators"/> to <paramref name="content"/>; the first decorator is the outermost.</summary>
+    public static RenderFragment Apply(RenderFragment content, IEnumerable<ScenarioDecorator> decorators, ScenarioContext context)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(decorators);
+        foreach (var decorator in decorators.Reverse())
+            content = decorator.Wrap(content, context) ?? content;
+        return content;
+    }
+
+    public override string ToString() => Name;
 }
 
 /// <summary>A named value factory selectable in the parameter inspector for complex parameter types.</summary>

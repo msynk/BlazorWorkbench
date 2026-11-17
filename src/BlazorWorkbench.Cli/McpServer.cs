@@ -64,7 +64,7 @@ public sealed class WorkbenchConnection(McpSettings settings) : IAsyncDisposable
             var line = JsonSerializer.Serialize(new { timestamp = DateTimeOffset.UtcNow, tool, arguments }, WorkbenchJson.Options);
             File.AppendAllText(Path.Combine(settings.OutputDirectory, "mcp-audit.log"), line + Environment.NewLine);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Auditing must not break the tool call; failures surface in the server log.
         }
@@ -171,8 +171,14 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         if (report is null)
             return "No report yet. Call run_tests first.";
         if (filter is not null)
+        {
+            // The summary counts only the scenarios that match, so it agrees with the failures listed below.
+            // Infrastructure errors concern the whole run and stay counted; the duration is that of the whole run.
             report.Scenarios.RemoveAll(s => !Glob.IsMatch(s.ScenarioId, filter));
-        return Summarize(report);
+            report.Summarize();
+        }
+
+        return Summarize(report, filter);
     }
 
     [McpServerTool(Name = "approve_baselines", Destructive = true), Description("Approves current screenshots of failed or missing visual checks as new baselines. Requires the server to run with --allow-approve and confirm=true.")]
@@ -190,8 +196,9 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         return Json(new { approved = approved.Select(a => a.File), count = approved.Count });
     }
 
-    private static string Summarize(TestRunReport report) => Json(new
+    private static string Summarize(TestRunReport report, string? filter = null) => Json(new
     {
+        filter,
         report.Summary,
         failures = report.Scenarios.Where(s => s.Status is CheckStatus.Failed or CheckStatus.Error or CheckStatus.Missing).Select(s => new
         {

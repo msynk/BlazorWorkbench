@@ -8,15 +8,19 @@ Workbench is a development tool that runs next to application code. It is secure
 | --- | --- |
 | Development only | `MapBlazorWorkbench` throws outside the `Development` environment unless `AllowNonDevelopmentEnvironments = true`. |
 | Loopback only | Requests from non-loopback addresses get `403` unless `AllowRemoteAccess = true`. |
-| Defensive headers | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Content-Security-Policy: frame-ancestors 'self'`. |
+| Local host names only | Without `AllowRemoteAccess`, requests whose `Host` header is not `localhost`, `*.localhost` or a loopback address (`127.0.0.1`, `[::1]`; any port) get `403`. This blocks DNS rebinding, where a foreign site points its own host name at `127.0.0.1` to read the Workbench from a visitor's browser. A local reverse proxy that forwards another host name needs `AllowRemoteAccess` with a policy, or must forward `Host: localhost`. |
+| Defensive headers | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Content-Security-Policy: frame-ancestors 'self'`, added to every response of the host that does not already carry the header. A `Content-Security-Policy` (or the other two headers) set by the host is never overwritten. |
 | No real network for components | `HttpClient` points at `https://workbench.invalid/`, a reserved domain that never resolves. Unmatched requests return 404 and are reported; they are never passed through. |
 | Isolated simulations | Simulated users, clocks and service overrides exist only in the preview session that activated the scenario. Host authorization is never weakened. |
 | `noindex` | Workbench pages ask search engines not to index them. |
 | Baseline approval from the UI | On for local hosts, off for hosts with `AllowRemoteAccess` unless `AllowApprovalFromUi = true`. The HTTP endpoint (WebAssembly hosts) requires the `X-Workbench-Request` header and rejects cross-site requests (`Sec-Fetch-Site`), and only copies screenshots from inside the results directory. |
-| Version control | The explorer's change marks run `git status` (and `git diff` with `ChangesBase`) in the source root, read-only. `ShowChanges = false` turns it off. |
+| Version control | The explorer's change marks run `git status` (and `git diff` with `ChangesBase`) in the source root, read-only. `ShowChanges = false` turns it off. Base refs (`ChangesBase`, `--changed-since`, the MCP `baseRef` argument) that start with `-` or contain whitespace, control characters or `..` are rejected, and are passed after `--end-of-options`, so they can never be read as git options. A canceled git call is killed. |
 | JavaScript interop | Planned answers replace calls only in the preview session of the scenario. Arguments of recorded calls are redacted before they reach diagnostics or the Environment panel. |
 | Blazor Hybrid automation | The MAUI app opens its read-only automation API (loopback, `Host` header checked, no CORS) and the WebView2 DevTools port (loopback) only when the CLI starts it with the corresponding environment variables. See [Blazor Hybrid](hybrid.md#security). |
 | Simulated device data | `.Device(...)` fakes never call platform APIs. Secure storage values are never written to diagnostics. |
+| Editor links | **Edit scenario** and **Edit component** contain absolute paths of the machine running the Workbench. ASP.NET Core hosts offer them only in Development with remote access off; setting `EditorUrlTemplate` yourself shows them to everyone who can open the Workbench. Published catalogs never contain them. |
+| Preview commands | A preview obeys messages only from the window that embeds it (the shell), so script in a sibling frame (another preview, the Gallery, the test runner) cannot change its arguments, storage or gates. |
+| Browser storage | Each preview gets its own in-memory `localStorage` and `sessionStorage` (`IsolateBrowserStorage`); what components store never reaches the browser's real storage. |
 
 ## Remote access
 

@@ -19,6 +19,10 @@ The output contains:
 
 Publishing into an existing folder replaces only the entries above and keeps anything else (for example a `CNAME` file). The output folder must be new, empty, or a previously published catalog: `publish` refuses any other non-empty folder (such as `.` or `docs`) instead of deleting it.
 
+The catalog also contains `llms.txt` ([llmstxt.org](https://llmstxt.org/)): the library's title and one line per component,
+grouped by category, with a link to its page, its summary, its parameters and its scenarios. Coding agents and AI search
+read it to find the right component without crawling every page.
+
 ## What is published, and what is not
 
 The publisher works from the catalog API and screenshots. It never includes:

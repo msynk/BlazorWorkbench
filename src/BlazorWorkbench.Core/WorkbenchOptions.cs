@@ -40,8 +40,50 @@ public class WorkbenchOptions
     /// <summary>Resolve component source files from portable PDBs (absolute paths are never published).</summary>
     public bool ResolveSourceLocations { get; set; } = true;
 
+    /// <summary>
+    /// Opens source files in your editor from the scenario page (<b>Edit scenario</b>, <b>Edit component</b>): a URL with
+    /// <c>{path}</c> (the absolute file path, URL-encoded except for slashes) and <c>{line}</c>, for example
+    /// <c>vscode://file/{path}:{line}</c>, <c>vscode-insiders://file/{path}:{line}</c>,
+    /// <c>rider://open?file={path}&amp;line={line}</c> or <c>idea://open?file={path}&amp;line={line}</c>. Null or empty hides
+    /// the links. ASP.NET Core hosts default to Visual Studio Code in Development when remote access is off, because the
+    /// links reveal absolute paths of the machine running the Workbench.
+    /// </summary>
+    public string? EditorUrlTemplate { get; set; }
+
+    /// <summary>The editor link for <paramref name="source"/>, or null when <see cref="EditorUrlTemplate"/> is not set.</summary>
+    public string? EditorUrl(Catalog.SourceLocation? source)
+    {
+        if (string.IsNullOrWhiteSpace(EditorUrlTemplate) || source is null || string.IsNullOrEmpty(source.Path))
+            return null;
+        // Forward slashes, every segment URL-encoded (spaces, #, ?), drive colons kept: C:/src/My App/Button.razor.
+        var segments = source.Path.Replace('\\', '/').Split('/');
+        var encoded = string.Join('/', segments.Select((s, i) => i == 0 && s.Length == 2 && s[1] == ':' ? s : Uri.EscapeDataString(s)));
+        return EditorUrlTemplate
+            .Replace("{path}", encoded, StringComparison.Ordinal)
+            .Replace("{line}", Math.Max(1, source.Line).ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
     /// <summary>Title shown in the Workbench header and published catalogs.</summary>
     public string Title { get; set; } = "Blazor Workbench";
+
+    /// <summary>Your design system's logo in the Workbench header, instead of the Workbench mark: a URL relative to the host or absolute.</summary>
+    public string? LogoUrl { get; set; }
+
+    /// <summary>
+    /// The accent color of the Workbench shell (links, selection, focus rings), for example <c>#0f766e</c>, in the light theme.
+    /// Only color values are accepted: hex, <c>rgb()</c>, <c>hsl()</c>, <c>oklch()</c> or a color name.
+    /// </summary>
+    public string? AccentColor { get; set; }
+
+    /// <summary>The accent color in the dark Workbench theme; defaults to <see cref="AccentColor"/>. Pick a light color there for contrast.</summary>
+    public string? AccentColorDark { get; set; }
+
+    /// <summary>Stylesheets added to the Workbench shell (not to previews), to brand it further. Shell classes start with <c>wb-</c>.</summary>
+    public IList<string> ShellStylesheets { get; } = [];
+
+    /// <summary>True when <paramref name="value"/> is a plain CSS color value that is safe to place in a stylesheet.</summary>
+    public static bool IsSafeCssColor(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && value.Length <= 64 && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '#' or '(' or ')' or ',' or '.' or '%' or ' ' or '-' or '/');
 
     /// <summary>
     /// Markdown shown at the top of the Overview page, for example what the library is, how to find your way around the
@@ -49,6 +91,14 @@ public class WorkbenchOptions
     /// (<c>docs/{id}</c>). Rendered with the safe Markdown subset: raw HTML is escaped.
     /// </summary>
     public string? Introduction { get; set; }
+
+    /// <summary>
+    /// Catalog paths listed first in the explorer, in this order, among their siblings: top-level groups (<c>"Introduction"</c>,
+    /// <c>"Foundations"</c>), nested groups (<c>"Inputs/Forms"</c>), pages (<c>"Guides/Getting started"</c>) or components
+    /// (<c>"Inputs/Button"</c>). Entries not listed follow: groups, then pages, then components, each alphabetically.
+    /// Keyboard navigation and published catalogs use the same order.
+    /// </summary>
+    public IList<string> ExplorerOrder { get; } = [];
 
     public IList<ViewportPreset> Viewports { get; } = [.. ViewportPreset.Defaults];
 
@@ -83,8 +133,10 @@ public class WorkbenchOptions
     public int GridSize { get; set; } = 8;
 
     /// <summary>
-    /// Clears <c>localStorage</c> and <c>sessionStorage</c> before each preview starts (Workbench's own preferences are kept),
-    /// so state written by one scenario never leaks into another. Scenarios then seed storage with <c>.LocalStorage(...)</c>.
+    /// Gives each preview its own empty, in-memory <c>localStorage</c> and <c>sessionStorage</c> before it starts, so state
+    /// written by one scenario never leaks into another, previews loaded side by side (Gallery, Compare, docs pages, the test
+    /// runner) cannot disturb each other, and the browser's real storage is left alone. Scenarios seed storage with
+    /// <c>.LocalStorage(...)</c>. Browsers that refuse the replacement get their storage cleared instead.
     /// </summary>
     public bool IsolateBrowserStorage { get; set; } = true;
 
@@ -100,6 +152,12 @@ public class WorkbenchOptions
     /// Markdown can embed live scenarios and component tables; see <see cref="AddPage"/>.
     /// </summary>
     public IList<DocumentationPage> Pages { get; } = [];
+
+    /// <summary>
+    /// Decorators applied to every scenario of the catalog, outside the scenarios' own <c>.Wrap(...)</c> decorators: an app
+    /// shell, a theme provider or a global stylesheet container. Add them with <see cref="AddDecorator(string, Func{RenderFragment, RenderFragment})"/>.
+    /// </summary>
+    public IList<ScenarioDecorator> Decorators { get; } = [];
 
     public RedactionOptions Redaction { get; } = new();
 
@@ -161,6 +219,24 @@ public class WorkbenchOptions
     public WorkbenchOptions AddPage(string title, string markdown)
     {
         Pages.Add(new DocumentationPage(title, markdown));
+        return this;
+    }
+
+    /// <summary>Wraps every scenario of the catalog (see <see cref="Decorators"/>).</summary>
+    /// <param name="name">Name shown in the scenario facts.</param>
+    /// <param name="wrap">Returns the wrapped content for a scenario's content.</param>
+    public WorkbenchOptions AddDecorator(string name, Func<RenderFragment, RenderFragment> wrap)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(wrap);
+        Decorators.Add(new ScenarioDecorator { Name = name, Wrap = (story, _) => wrap(story) });
+        return this;
+    }
+
+    /// <summary>Wraps every scenario of the catalog in <typeparamref name="TWrapper"/>, which receives it as <c>ChildContent</c>.</summary>
+    public WorkbenchOptions AddDecorator<TWrapper>(IReadOnlyDictionary<string, object?>? parameters = null) where TWrapper : IComponent
+    {
+        Decorators.Add(ScenarioDecorator.Component(typeof(TWrapper), parameters));
         return this;
     }
 

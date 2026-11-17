@@ -10,6 +10,7 @@
 | Components under test | Any Razor component library usable from Interactive Server | Includes generic, templated and `EditContext`-dependent components, components with constructor injection, and `AuthorizeView`. |
 | Browsers for automation | Chromium (default), Firefox, WebKit through Playwright | Visual baselines are captured with Chromium in CI and are specific to browser and platform. |
 | Workbench UI browsers | Current Chromium, Firefox and Safari | |
+| Path base | Hosts behind a reverse proxy under a path (`app.UsePathBase("/workbench")`) | The pages' `<base href>` follows the request's path base, and the preview loads axe-core relative to it. Not yet covered by the automated tests. |
 | Operating systems | Windows, Linux, macOS | Baselines are stored per platform. |
 
 ## Not supported (yet)
@@ -40,8 +41,8 @@
 - **JavaScript interop simulation** answers calls made through `IJSRuntime` by components created after the scenario is active. A faked module is a .NET stand-in and cannot be passed back to JavaScript as an argument. Libraries that cast `IJSRuntime` to a framework type need `InterceptJSInterop = false`.
 - **The test runner in the explorer** uses the in-browser interaction runner and does no visual or responsive checks; `workbench test` is authoritative.
 - **Media emulation** rewrites same-origin stylesheets and `matchMedia()`; it cannot emulate `forced-colors` rendering, which automated runs do with `.Media(m => m.ForcedColors())`.
-- **Change marks** need git and PDBs with source paths; files outside the source root are listed but not mapped.
-- **Change impact** (`--changed-since`) maps files through PDB source paths. Shared code and global assets select every scenario.
+- **Change marks** need git (2.24 or later when comparing with a base ref) and PDBs with source paths; files outside the source root are listed but not mapped.
+- **Change impact** (`--changed-since`) needs git 2.24 or later and maps files through PDB source paths. Shared code and global assets select every scenario.
 
 ## Versioning policy
 

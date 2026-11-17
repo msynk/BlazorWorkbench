@@ -48,7 +48,7 @@ public static class BaselineApproval
                     continue;
                 var source = Path.GetFullPath(Path.Combine(reports, visual.ActualPath!));
                 // Report paths never point outside the report directory.
-                if (!source.StartsWith(reports + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(source))
+                if (!PathSafety.IsInside(source, reports) || !File.Exists(source))
                     continue;
 
                 var relative = RelativePath(platform, scenario.ScenarioId, visual.Variant);

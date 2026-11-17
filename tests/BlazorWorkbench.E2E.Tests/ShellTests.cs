@@ -202,17 +202,18 @@ public class ShellTests(WorkbenchFixture fixture)
         await page.GotoAsync("scenario/display-card--text-content");
         await WaitReadyAsync(page);
         await Expect(page.Locator(".wb-shell")).ToHaveAttributeAsync("data-shell-theme", "dark");
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Dark Workbench theme" })).ToHaveAttributeAsync("aria-pressed", "true");
         await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
 
         // Toggling the Workbench theme switches the preview live.
-        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Dark Workbench theme" }).ClickAsync();
         await Expect(page.Locator(".wb-shell")).ToHaveAttributeAsync("data-shell-theme", "light");
         await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "light");
 
         // An explicit choice sticks, and the deep link records it.
         await page.Locator("#wb-theme").SelectOptionAsync("dark");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Toggle Workbench theme" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Dark Workbench theme" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Dark Workbench theme" }).ClickAsync();
         await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-theme", "dark");
         await Expect(page).ToHaveURLAsync(new Regex("theme=dark"));
         await context.CloseAsync();

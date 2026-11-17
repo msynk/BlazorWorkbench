@@ -184,11 +184,15 @@ slug (`?network=slow-3g`).
 
 ## Browser storage
 
-Previews share the browser's storage with each other (they have the same origin), so Workbench clears `localStorage` and
-`sessionStorage` before every preview starts, keeping only its own `blazor-workbench:` keys. A scenario then writes what it
-needs with `.LocalStorage(key, value)` and `.SessionStorage(key, value)`. In Server and WebAssembly hosts the values are in
-place before Blazor starts, so `OnInitializedAsync` and the first `OnAfterRenderAsync` see them; in a .NET MAUI app they are
-written when the scenario attaches. Set `options.IsolateBrowserStorage = false` to keep storage between previews.
+Previews have the same origin, so they would share the browser's storage. Instead, each preview starts with its own empty,
+in-memory `localStorage` and `sessionStorage`: a value written by one scenario never leaks into another, frames loaded side
+by side (Gallery, Compare, documentation embeds, the test runner) cannot disturb each other's seeds, and the browser's real
+storage is left alone. A scenario writes what it needs with `.LocalStorage(key, value)` and `.SessionStorage(key, value)`.
+In Server and WebAssembly hosts the values are in place before Blazor starts, so `OnInitializedAsync` and the first
+`OnAfterRenderAsync` see them; in a .NET MAUI app they are written when the scenario attaches. Because the storage lives
+in memory, reloading a preview starts it from its declared storage again. A browser that refuses the replacement gets the
+real storage cleared before the preview starts (keeping Workbench's own `blazor-workbench:` keys). Set
+`options.IsolateBrowserStorage = false` to use the real storage and keep it between previews.
 
 ## Clock, randomness and culture
 

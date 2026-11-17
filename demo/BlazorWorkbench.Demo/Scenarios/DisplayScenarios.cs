@@ -182,9 +182,9 @@ public sealed class WhatsNewBannerScenarios : ScenarioSet<WhatsNewBanner>
            .Tags("storage")
            .Status(ComponentStatus.Beta)
            .Documentation("""
-               The banner reads and writes `localStorage` through `IJSRuntime`. Workbench clears the preview's storage before every
-               scenario (`IsolateBrowserStorage`), so what one scenario writes never leaks into the next, and scenarios seed it with
-               `.LocalStorage(key, value)`. Open **Storage** to see, edit or clear the values while the preview runs.
+               The banner reads and writes `localStorage` through `IJSRuntime`. Workbench gives every preview its own empty storage
+               (`IsolateBrowserStorage`), so what one scenario writes never leaks into another, even in the Gallery where all of them
+               load at once, and scenarios seed it with `.LocalStorage(key, value)`. Open **Storage** to see, edit or clear the values while the preview runs.
                """);
         set.Setup(s => s
             .Parameter(b => b.Release, "2026.3")

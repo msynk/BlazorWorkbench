@@ -1,41 +1,58 @@
 <div class="wb-dialog-backdrop" @onclick="() => OnClose.InvokeAsync()">
-    <div class="wb-dialog" role="dialog" aria-modal="true" aria-labelledby="wb-shortcuts-title" @onclick:stopPropagation="true">
+    <div class="wb-dialog" id="wb-shortcuts" role="dialog" aria-modal="true" aria-labelledby="wb-shortcuts-title" @onclick:stopPropagation="true">
         <header class="wb-code-header">
             <h2 class="wb-h2" id="wb-shortcuts-title">Keyboard shortcuts</h2>
-            <button type="button" class="wb-button" id="wb-shortcuts-close" @onclick="() => OnClose.InvokeAsync()" aria-label="Close">×</button>
+            <button type="button" class="wb-button" id="wb-shortcuts-close" data-autofocus @onclick="() => OnClose.InvokeAsync()" aria-label="Close">×</button>
         </header>
         <table class="wb-table">
+            <caption class="wb-visually-hidden">Keys and what they do</caption>
             <tbody>
-                @foreach (var (keys, action) in Shortcuts)
+                @foreach (var (keys, action, single) in Shortcuts)
                 {
-                    <tr><td>@foreach (var key in keys.Split(' ')) { <kbd>@key</kbd> }</td><td>@action</td></tr>
+                    <tr class="@(single && !SingleKeyShortcuts ? "wb-shortcut-off" : "")">
+                        <td>@foreach (var key in keys.Split(' ')) { <kbd>@key</kbd> }</td>
+                        <td>@action@if (single && !SingleKeyShortcuts) { <span class="wb-muted"> (off)</span> }</td>
+                    </tr>
                 }
             </tbody>
         </table>
-        <p class="wb-muted wb-small">Shortcuts work while the Workbench has focus; click outside the preview first.</p>
+        <label class="wb-check">
+            <input type="checkbox" checked="@SingleKeyShortcuts" @onchange="e => SingleKeyShortcutsChanged.InvokeAsync(e.Value is true)" />
+            Single-key shortcuts (R, G, O, M, B and /)
+        </label>
+        <p class="wb-muted wb-small">
+            Turn single-key shortcuts off if you use speech input or press keys by accident; the choice is kept in this browser.
+            Shortcuts work while the Workbench has focus; click outside the preview first.
+        </p>
     </div>
 </div>
 
 @code {
-    private static readonly (string Keys, string Action)[] Shortcuts =
+    private static readonly (string Keys, string Action, bool SingleKey)[] Shortcuts =
     [
-        ("/ Ctrl+K", "Search components, scenarios and pages"),
-        ("Alt+← Alt+→", "Previous or next scenario"),
-        ("Alt+↑ Alt+↓", "Previous or next component"),
-        ("R", "Reload the preview, keeping changes"),
-        ("Shift+R", "Reset to the declared scenario"),
-        ("G", "Toggle the grid"),
-        ("O", "Toggle outlines"),
-        ("M", "Toggle the measure tool"),
-        ("B", "Pin or unpin the scenario in the explorer"),
-        ("Alt+= Alt+- Alt+0", "Zoom in, zoom out, reset zoom"),
-        ("Alt+9", "Zoom to fit a fixed viewport in the canvas"),
-        ("← → ↑ ↓", "On a resize handle of the preview: change the size by 1 px (Shift: 10 px)"),
-        ("Alt+F", "Focus mode: hide the explorer and the panel"),
-        ("Alt+D", "Panel at the bottom or on the right"),
-        ("?", "Show this list"),
-        ("Esc", "Close this list or leave the search box"),
+        ("/ Ctrl+K", "Search components, scenarios and pages", false),
+        ("Alt+← Alt+→", "Previous or next scenario", false),
+        ("Alt+↑ Alt+↓", "Previous or next component", false),
+        ("R", "Reload the preview, keeping changes", true),
+        ("Shift+R", "Reset to the declared scenario", true),
+        ("G", "Toggle the grid", true),
+        ("O", "Toggle outlines", true),
+        ("M", "Toggle the measure tool", true),
+        ("B", "Pin or unpin the scenario in the explorer", true),
+        ("Alt+= Alt+- Alt+0", "Zoom in, zoom out, reset zoom", false),
+        ("Alt+9", "Zoom to fit a fixed viewport in the canvas", false),
+        ("← → Home End", "In the panel's tabs: move between tabs", false),
+        ("← → ↑ ↓", "On a resize handle of the preview: change the size by 1 px (Shift: 10 px)", false),
+        ("Alt+F", "Focus mode: hide the explorer and the panel", false),
+        ("Alt+D", "Panel at the bottom or on the right", false),
+        ("?", "Show this list", false),
+        ("Esc", "Close this list or leave the search box", false),
     ];
 
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Whether single-character shortcuts are on (WCAG 2.1.4 asks for a way to turn them off).</summary>
+    [Parameter] public bool SingleKeyShortcuts { get; set; } = true;
+
+    [Parameter] public EventCallback<bool> SingleKeyShortcutsChanged { get; set; }
 }

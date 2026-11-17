@@ -74,6 +74,30 @@ public sealed class ParameterDescriptor
 
     /// <summary>The declaring type (for inherited parameters).</summary>
     public string? DeclaredBy { get; init; }
+
+    /// <summary>Label shown in the inspector, from <c>[Display(Name = ...)]</c> or <c>[DisplayName]</c>; null uses <see cref="Name"/>.</summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>Inspector section, from <c>[Display(GroupName = ...)]</c> or <c>[Category]</c>.</summary>
+    public string? Group { get; init; }
+
+    /// <summary>Position in the inspector, from <c>[Display(Order = ...)]</c>; parameters without one follow.</summary>
+    public int? Order { get; init; }
+
+    /// <summary>
+    /// Hidden from the inspector by default (<c>[EditorBrowsable(EditorBrowsableState.Never)]</c> or <c>[Browsable(false)]</c>):
+    /// plumbing parameters that users of the component rarely set. The inspector can still show them.
+    /// </summary>
+    public bool IsHidden { get; init; }
+
+    /// <summary>Smallest allowed value, from <c>[Range]</c>; with <see cref="Maximum"/>, numbers get a slider.</summary>
+    public double? Minimum { get; init; }
+
+    /// <summary>Largest allowed value, from <c>[Range]</c>.</summary>
+    public double? Maximum { get; init; }
+
+    /// <summary>Longest allowed text, from <c>[StringLength]</c> or <c>[MaxLength]</c>.</summary>
+    public int? MaxLength { get; init; }
 }
 
 /// <summary>A dependency injected into the component with <c>[Inject]</c> / <c>@inject</c>.</summary>

@@ -12,9 +12,22 @@
 
 <div class="wb-shell @(_focusMode && _scenario is not null ? "wb-focus-mode" : "") @(_panelRight ? "wb-panel-right" : "")" data-shell-theme="@_shellTheme">
     <VisionFilters />
+    @* A button, not an in-page link: with <base href> a fragment link would navigate to the Overview. *@
+    <button type="button" class="wb-skip-link" @onclick="SkipToMain">Skip to @(_scenario is not null ? "preview" : "content")</button>
     <header class="wb-header">
+        @if (BrandCss is { } brandCss)
+        {
+            <style>@brandCss</style>
+        }
         <a class="wb-brand" href="">
-            <span class="wb-logo" aria-hidden="true">◧</span>
+            @if (Options.LogoUrl is { Length: > 0 } logo)
+            {
+                <img class="wb-logo-image" src="@logo" alt="" />
+            }
+            else
+            {
+                <span class="wb-logo" aria-hidden="true">◧</span>
+            }
             <span>@Options.Title</span>
         </a>
         @if (_scenario is not null && ComponentId is null)
@@ -87,7 +100,12 @@
                   UiRun="_uiRun" OnRunTests="RunTests" OnStopTests="StopTests" />
     </aside>
 
-    <main class="wb-main" id="wb-main">
+    <main class="wb-main" id="wb-main" tabindex="-1">
+        <ErrorBoundary @key="@($"{ScenarioId}|{ComponentId}|{PageId}|{IsTokensPage}")" @ref="_mainBoundary">
+        <ErrorContent Context="mainError">
+            <ShellError Error="mainError" What="This page" OnRecover="() => _mainBoundary?.Recover()" />
+        </ErrorContent>
+        <ChildContent>
         @if (ComponentId is not null)
         {
             @if (Catalog.FindComponent(ComponentId) is { } docComponent)
@@ -165,9 +183,18 @@
                             <span class="wb-state wb-state-@_previewState" role="status">@StateText</span>
                         }
                         @if (_mode == "canvas" && _metrics?.ReadyMs is { } ready) { <span class="wb-muted" title="Time from navigation start until ready">ready in @ready.ToString("0") ms · @_metrics.DomUpdates DOM updates</span> }
+                        @* The state is conveyed by aria-pressed only; the visible label stays "Pin" so it is not announced twice. *@
                         <button type="button" class="wb-button wb-button-small wb-pin @(IsPinned ? "active" : "")" aria-pressed="@(IsPinned ? "true" : "false")"
-                                title="Pin this scenario to the top of the explorer (B)" @onclick="TogglePin">@(IsPinned ? "★ Pinned" : "☆ Pin")</button>
+                                title="Pin this scenario to the top of the explorer (B)" @onclick="TogglePin"><span aria-hidden="true">@(IsPinned ? "★" : "☆")</span> Pin</button>
                         <a class="wb-link" href="@($"docs/{_component?.Id}")">Docs</a>
+                        @if (Options.EditorUrl(_scenario.Source) is { } editScenario)
+                        {
+                            <a class="wb-link" href="@editScenario" title="@($"Open {Path.GetFileName(_scenario.Source!.Path)}, line {_scenario.Source.Line}, in your editor")">Edit scenario</a>
+                        }
+                        @if (Options.EditorUrl(_component?.Metadata.Source) is { } editComponent)
+                        {
+                            <a class="wb-link" href="@editComponent" title="@($"Open {Path.GetFileName(_component!.Metadata.Source!.Path)} in your editor")">Edit component</a>
+                        }
                     </div>
                 </div>
                 @if (_scenarioIssues.Count > 0)
@@ -200,7 +227,7 @@
                                 <BreakpointRuler Marks="_marks" Presets="Options.Viewports" Zoom="_tools.Zoom" CurrentWidth="CurrentWidth" OnSelect="SetWidth" />
                                 <div class="wb-device" data-zoom="@Z" data-width="@CurrentWidth" data-height="@CurrentHeight">
                                     <div class="wb-zoom @(EffectiveViewport is null ? "wb-zoom-fill" : "")" style="@ZoomStyle">
-                                        <iframe id="wb-preview-frame" title="Preview of @_scenario.Name" src="@_frameSrc"
+                                        <iframe id="wb-preview-frame" title="Preview of @_scenario.Name" src="@(_prefsLoaded ? _frameSrc : "about:blank")"
                                                 style="@FrameStyle" class="wb-frame"></iframe>
                                     </div>
                                     @* Drag to resize; the arrow keys change the size by 1 px (Shift: 10 px). The resize runs in workbench-shell.js. *@
@@ -223,13 +250,18 @@
                     @foreach (var (key, label) in Tabs)
                     {
                         <button type="button" role="tab" id="wb-tab-@key" aria-selected="@(_tab == key ? "true" : "false")" aria-controls="wb-tabpanel"
-                                class="wb-tab @(_tab == key ? "active" : "")" @onclick="() => SelectTab(key)">
+                                tabindex="@(_tab == key ? 0 : -1)" class="wb-tab @(_tab == key ? "active" : "")" @onclick="() => SelectTab(key)">
                             @label
                             @if (TabCount(key) is > 0 and var n) { <span class="wb-count @(key == "diagnostics" && HasErrors ? "wb-count-error" : "")">@n</span> }
                         </button>
                     }
                 </div>
-                <div class="wb-tabpanel" role="tabpanel" id="wb-tabpanel" aria-labelledby="wb-tab-@_tab">
+                <div class="wb-tabpanel" role="tabpanel" id="wb-tabpanel" aria-labelledby="wb-tab-@_tab" tabindex="0">
+                    <ErrorBoundary @key="@($"{_scenario.Id}:{_tab}")" @ref="_panelBoundary">
+                        <ErrorContent Context="panelError">
+                            <ShellError Error="panelError" What="@($"The {_tab} panel")" OnRecover="() => _panelBoundary?.Recover()" />
+                        </ErrorContent>
+                        <ChildContent>
                     @switch (_tab)
                     {
                         case "controls":
@@ -270,14 +302,18 @@
                             <CodePanel Scenario="_scenario" Component="_component!" Overrides="_overrides" />
                             break;
                     }
+                        </ChildContent>
+                    </ErrorBoundary>
                 </div>
             </section>
         }
+        </ChildContent>
+        </ErrorBoundary>
     </main>
 
     @if (_shortcutsOpen)
     {
-        <ShortcutsDialog OnClose="() => _shortcutsOpen = false" />
+        <ShortcutsDialog OnClose="CloseShortcuts" SingleKeyShortcuts="_singleKeyShortcuts" SingleKeyShortcutsChanged="SetSingleKeyShortcuts" />
     }
 </div>
 
@@ -325,7 +361,8 @@
     private string _frameSrc = "about:blank";
     private string _tab = "controls";
     private string _mode = "canvas";
-    private string _shellTheme = "light";
+    // "" until the saved preference is read after the first render; the CSS then follows the host page's early theme script.
+    private string _shellTheme = "";
     // True while the preview theme is not chosen by the URL, the scenario or the user: it then follows the Workbench theme.
     private bool _themeFollowsShell = true;
     private ViewportPreset? _viewport;
@@ -337,6 +374,8 @@
     private List<DetectedBreakpoint> _detected = [];
     private IReadOnlyList<BreakpointMark> _marks = [];
     private string? _loadedScenarioId;
+    private string? _appliedPanelQuery, _appliedModeQuery;
+    private ErrorBoundary? _mainBoundary, _panelBoundary;
     private PreviewTools _tools = PreviewTools.None;
     private bool _focusMode;
     private bool _panelRight;
@@ -435,8 +474,9 @@
 
     private RenderFragment ShellButtons => __builder =>
     {
-        <button type="button" class="wb-button" @onclick="() => _shortcutsOpen = true" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
-        <button type="button" class="wb-button" @onclick="ToggleShellTheme" aria-label="Toggle Workbench theme">@(_shellTheme == "dark" ? "☀" : "☾")</button>
+        <button type="button" class="wb-button" @onclick="OpenShortcuts" aria-label="Keyboard shortcuts and settings" title="Keyboard shortcuts and settings (?)">?</button>
+        <button type="button" class="wb-button" @onclick="ToggleShellTheme" aria-label="Dark Workbench theme" aria-pressed="@(_shellTheme == "dark" ? "true" : "false")"
+                title="@(_shellTheme == "dark" ? "Switch the Workbench to the light theme" : "Switch the Workbench to the dark theme")"><span aria-hidden="true">@(_shellTheme == "dark" ? "☀" : "☾")</span></button>
     };
 
     protected override void OnInitialized()
@@ -450,9 +490,29 @@
         _scenario = ScenarioId is null ? null : Catalog.FindScenario(ScenarioId);
         _component = _scenario is null ? null : Catalog.GetComponentOf(_scenario);
         if (_scenario?.Id == _loadedScenarioId && _scenario is not null)
+        {
+            // Same scenario, new query: a link to this scenario with another panel or mode (a tour, a docs page) applies it.
+            if (PanelQuery != _appliedPanelQuery)
+            {
+                _appliedPanelQuery = PanelQuery;
+                if (PanelQuery is { } p && p != _tab && Tabs.Any(t => t.Key == p))
+                    SelectTab(p);
+            }
+
+            if (ModeQuery != _appliedModeQuery)
+            {
+                _appliedModeQuery = ModeQuery;
+                var requested = ModeQuery is { } m && Modes.Any(x => x.Key == m) ? m : "canvas";
+                if (requested != _mode)
+                    SetMode(requested);
+            }
+
             return;
+        }
 
         _loadedScenarioId = _scenario?.Id;
+        _appliedPanelQuery = PanelQuery;
+        _appliedModeQuery = ModeQuery;
         ResetLiveState();
         if (_scenario is null)
             return;
@@ -484,6 +544,8 @@
         NetworkName = Options.FindNetworkProfile(NetworkQuery)?.Id ?? "";
         if (PanelQuery is { } panel && Tabs.Any(t => t.Key == panel))
             _tab = panel;
+        else if (!Tabs.Any(t => t.Key == _tab))
+            _tab = "controls"; // for example Design, kept from a scenario with designs
         if (ModeQuery is { } mode && Modes.Any(m => m.Key == mode))
             _mode = mode;
         _frameSrc = BuildPreviewUrl(includeArgs: true);
@@ -496,12 +558,23 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
+        {
+            if (_focusDialog && _shortcutsOpen && _module is not null)
+            {
+                _focusDialog = false;
+                try { await _module.InvokeVoidAsync("openDialog", "wb-shortcuts"); }
+                catch (JSDisconnectedException) { }
+            }
+
             return;
+        }
+
         try
         {
             _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/BlazorWorkbench.Components/workbench-shell.js");
             _self = DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("init", _self);
+            _singleKeyShortcuts = await _module.InvokeAsync<bool>("getSingleKeyShortcuts");
             // A theme the user chose earlier, otherwise the operating system's color scheme.
             var theme = await _module.InvokeAsync<string?>("getPreference", "shell-theme");
             if (theme is not ("dark" or "light"))
@@ -518,18 +591,28 @@
                 _shellTheme = theme;
                 if (_scenario is not null && _themeFollowsShell && ThemeName != ShellMatchedTheme)
                 {
-                    // The preview has only started loading and may not listen for messages yet: load it with the theme.
+                    // The preview has not loaded yet (it waits for the preferences): it loads once, with the theme.
                     ThemeName = ShellMatchedTheme;
                     _frameSrc = BuildPreviewUrl(includeArgs: true);
                 }
             }
-
-            StateHasChanged();
         }
         catch (JSDisconnectedException)
         {
         }
+        catch (JSException)
+        {
+            // The shell module failed to load: the preview still works, without shortcuts and preferences.
+        }
+        finally
+        {
+            _prefsLoaded = true;
+            StateHasChanged();
+        }
     }
+
+    // The canvas frame loads only after the saved preferences are known, so it is not loaded twice (once per theme).
+    private bool _prefsLoaded;
 
     /// <summary>Uses the theme from the URL or the scenario; without one, the preview follows the Workbench theme.</summary>
     private void ApplyDeclaredTheme(bool useQuery = true)
@@ -640,12 +723,23 @@
         Navigation.NavigateTo($"scenario/{Uri.EscapeDataString(_scenario.Id)}" + (query.Count > 0 ? "?" + string.Join('&', query) : ""), replace: true);
     }
 
-    private async Task Post(string type, object? payload)
+    /// <summary>Sends a message to the canvas preview. False when there is no canvas frame (Compare or Gallery mode) or no circuit.</summary>
+    private async Task<bool> Post(string type, object? payload)
     {
         if (_module is null)
-            return;
-        try { await _module.InvokeVoidAsync("post", type, payload); }
-        catch (JSDisconnectedException) { }
+            return false;
+        try { return await _module.InvokeAsync<bool>("post", type, payload); }
+        catch (JSDisconnectedException) { return false; }
+    }
+
+    /// <summary>Clears the "Running…" and "Scanning…" states of checks that will never get an answer from the preview.</summary>
+    private void CancelPendingChecks()
+    {
+        _a11yRunning = false;
+        _pendingA11y = false;
+        if (_runningInteraction is not null && _pendingInteraction is null)
+            _runningInteraction = null;
+        _paused = null;
     }
 
     private async Task ReloadFrame(bool keepArgs)
@@ -659,6 +753,12 @@
         _paused = null;
         _recording = false;
         _assertMode = false;
+        // A scan sent to the old preview gets no answer: run it again on the new one. An interaction that was running
+        // (not one waiting for this reload) is abandoned.
+        if (_a11yRunning)
+            _pendingA11y = true;
+        if (_runningInteraction is not null && _pendingInteraction is null)
+            _runningInteraction = null;
         var url = BuildPreviewUrl(keepArgs);
         _sentTouch = EffectiveTouch;
         _frameSrc = url + (url.Contains('?') ? "&" : "?") + "r=" + System.Environment.TickCount64;
@@ -700,8 +800,8 @@
     {
         switch (action)
         {
-            case "shortcuts": _shortcutsOpen = !_shortcutsOpen; break;
-            case "escape": _shortcutsOpen = false; break;
+            case "shortcuts": if (_shortcutsOpen) await CloseShortcuts(); else await OpenShortcuts(); break;
+            case "escape": if (_shortcutsOpen) await CloseShortcuts(); break;
             case "focus" or "panel": await OnLayout(action); break;
             case "previous-scenario" or "next-scenario" or "previous-component" or "next-component": Step(action); break;
             case "pin": await TogglePin(); break;
@@ -732,7 +832,9 @@
     /// <summary>Moves to the previous or next scenario (Alt+←/→) or component (Alt+↑/↓) in explorer order.</summary>
     private void Step(string action)
     {
-        var scenarios = Catalog.Components.SelectMany(c => c.Scenarios).ToList();
+        // The explorer's tree order (groups, pages, components, ExplorerOrder), not the catalog's alphabetical title order.
+        var components = ExplorerOrder.Components(Catalog);
+        var scenarios = components.SelectMany(c => c.Scenarios).ToList();
         if (scenarios.Count == 0)
             return;
         var index = _scenario is null ? -1 : scenarios.FindIndex(s => s.Id == _scenario.Id);
@@ -740,12 +842,14 @@
         if (action is "next-scenario" or "previous-scenario")
         {
             var next = action == "next-scenario" ? index + 1 : index - 1;
+            if (index < 0 && action == "previous-scenario") next = scenarios.Count - 1;
             target = scenarios[(next + scenarios.Count) % scenarios.Count];
         }
         else
         {
-            var components = Catalog.Components;
-            var current = _component is null ? -1 : components.ToList().IndexOf(_component);
+            // Compare by id: after hot reload the catalog holds new entry instances.
+            var current = _component is null ? -1 : components.ToList().FindIndex(c => c.Id == _component.Id);
+            if (current < 0 && action == "previous-component") current = 0;
             var next = action == "next-component" ? current + 1 : current - 1;
             target = components[(next + components.Count) % components.Count].Scenarios.FirstOrDefault();
         }
@@ -896,6 +1000,13 @@
             _frameSrc = BuildPreviewUrl(includeArgs: true);
             _sentTouch = EffectiveTouch;
         }
+        else
+        {
+            // The canvas frame goes away, and with it any check it was running.
+            CancelPendingChecks();
+            _pendingInteraction = null;
+            _runningInteraction = null;
+        }
 
         UpdateAddress();
     }
@@ -966,7 +1077,63 @@
         }
     }
 
-    private bool IsPinned => _scenario is not null && _pinned.Contains(_scenario.Id, StringComparer.OrdinalIgnoreCase);
+    /// <summary>The shell's accent colors from the options; values that are not plain colors are ignored.</summary>
+    private string? BrandCss
+    {
+        get
+        {
+            var light = WorkbenchOptions.IsSafeCssColor(Options.AccentColor) ? Options.AccentColor : null;
+            var dark = WorkbenchOptions.IsSafeCssColor(Options.AccentColorDark) ? Options.AccentColorDark : light;
+            if (light is null && dark is null)
+                return null;
+            var css = light is null ? "" : $".wb-shell {{ --wb-accent: {light}; --wb-focus: {light}; }} ";
+            if (dark is not null)
+                css += $".wb-shell[data-shell-theme=\"dark\"], html[data-wb-theme=\"dark\"] .wb-shell[data-shell-theme=\"\"] {{ --wb-accent: {dark}; --wb-focus: {dark}; }}";
+            return css;
+        }
+    }
+
+    private bool _singleKeyShortcuts = true;
+    private bool _focusDialog;
+
+    private Task OpenShortcuts()
+    {
+        _shortcutsOpen = true;
+        _focusDialog = true; // moved into the dialog after it renders
+        return Task.CompletedTask;
+    }
+
+    private async Task CloseShortcuts()
+    {
+        _shortcutsOpen = false;
+        StateHasChanged();
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("closeDialog"); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private async Task SetSingleKeyShortcuts(bool on)
+    {
+        _singleKeyShortcuts = on;
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("setSingleKeyShortcuts", on); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private async Task SkipToMain()
+    {
+        if (_module is null)
+            return;
+        // The preview frame when there is one (its content is what the skip link is for), else the main region.
+        try { await _module.InvokeVoidAsync("focusElement", _scenario is not null && _mode == "canvas" ? "wb-preview-frame" : "wb-main"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private bool IsPinned =>_scenario is not null && _pinned.Contains(_scenario.Id, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Pins or unpins the current scenario (like bookmarks in other workbenches); pins are kept in this browser.</summary>
     private async Task TogglePin()
@@ -1014,12 +1181,18 @@
 
     private async Task RunInteraction((string Name, bool Debug) run)
     {
-        // Interactions run against a fresh session so results match automated runs.
+        if (_mode != "canvas")
+            SetMode("canvas");
+        // Interactions run against a fresh session with the scenario's declared state, so results match automated runs:
+        // the controls go back to the declared values too, so what the panel shows is what the test runs on.
+        _overrides = new(StringComparer.Ordinal);
+        _argErrors = new(StringComparer.Ordinal);
         _runningInteraction = run.Name;
         _interactionResults.Remove(run.Name);
         _pendingInteraction = run.Name;
         _pendingDebug = run.Debug;
         await ReloadFrame(keepArgs: false);
+        UpdateAddress();
     }
 
     private Task ContinueInteraction(string command)
@@ -1039,12 +1212,20 @@
 
     private async Task RunAccessibility()
     {
+        if (_mode != "canvas")
+            SetMode("canvas");
         _a11yRunning = true;
         _a11y = null;
-        if (_previewState == "ready")
-            await Post("a11y", new { disabledRules = _scenario?.Accessibility.DisabledRules ?? [] });
+        // A preview in the error state never becomes ready: scan what it shows (the error panel) rather than wait.
+        if (_previewState is "ready" or "error")
+        {
+            if (!await Post("a11y", new { disabledRules = _scenario?.Accessibility.DisabledRules ?? [] }))
+                _pendingA11y = true;
+        }
         else
+        {
             _pendingA11y = true;
+        }
     }
 
     private int TabCount(string key) => key switch
@@ -1109,6 +1290,8 @@
                 if (payload.Deserialize<CallbackEntry>(WorkbenchJson.Options) is { } entry)
                 {
                     _callbacks.Add(entry);
+                    // Bounded like the diagnostics: a component raising a callback on a timer must not grow the circuit.
+                    if (_callbacks.Count > Options.MaxDiagnostics) _callbacks.RemoveAt(0);
                     _callbackCounts[entry.Name] = entry.Invocation;
                 }
                 break;
@@ -1120,7 +1303,7 @@
                 if (_tab == "environment" && !_sessionRefreshQueued)
                 {
                     _sessionRefreshQueued = true;
-                    _ = Task.Delay(300).ContinueWith(_ => InvokeAsync(async () => { _sessionRefreshQueued = false; await RequestSession(); }), TaskScheduler.Default);
+                    _ = RefreshSessionSoonAsync();
                 }
 
                 return;
@@ -1221,9 +1404,12 @@
             return;
         }
 
-        try { await _module.InvokeVoidAsync("startTests", jobs, _self, new { concurrency = 2 }); }
+        try { await _module.InvokeVoidAsync("startTests", jobs, _self, new { concurrency = 2, runId = ++_runId }); }
         catch (JSDisconnectedException) { }
     }
+
+    // Identifies the current UI test run; callbacks of a canceled run carry an older id and are ignored.
+    private int _runId;
 
     private async Task StopTests()
     {
@@ -1239,7 +1425,7 @@
     [JSInvokable]
     public Task OnTestResult(string json) => InvokeAsync(() =>
     {
-        if (!_uiRun.Running || JsonSerializer.Deserialize<UiTestResult>(json, WorkbenchJson.Options) is not { } result || result.Status == "canceled")
+        if (!_uiRun.Running || JsonSerializer.Deserialize<UiTestResult>(json, WorkbenchJson.Options) is not { } result || result.Status == "canceled" || result.RunId != _runId)
             return;
         _uiRun.Add(result);
         if (_scenario is not null && string.Equals(result.ScenarioId, _scenario.Id, StringComparison.OrdinalIgnoreCase))
@@ -1248,8 +1434,10 @@
     });
 
     [JSInvokable]
-    public Task OnTestsFinished(bool completed) => InvokeAsync(() =>
+    public Task OnTestsFinished(bool completed, int runId) => InvokeAsync(() =>
     {
+        if (runId != _runId)
+            return;
         if (_uiRun.Running)
             _uiRun.Finish();
         StateHasChanged();
@@ -1292,8 +1480,29 @@
         }
     });
 
+    private readonly CancellationTokenSource _disposed = new();
+
+    private async Task RefreshSessionSoonAsync()
+    {
+        try
+        {
+            await Task.Delay(300, _disposed.Token);
+            await InvokeAsync(async () =>
+            {
+                _sessionRefreshQueued = false;
+                await RequestSession();
+            });
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // The shell went away meanwhile.
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (!_disposed.IsCancellationRequested)
+            await _disposed.CancelAsync();
         Catalogs.Changed -= OnCatalogChanged;
         if (_module is not null)
         {

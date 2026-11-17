@@ -36,7 +36,8 @@ The repository contained only `LICENSE` (MIT, 2026) and a one-line `README.md`. 
 | Interaction recorder / step debugger | debugger; recorder experimental | – | – | codegen | ✔ both, with accessible locators and C# output |
 | Docs pages with live embeds, design tokens | MDX, doc blocks (manual tokens) | Markdown pages | – | – | ✔ pages with `{{scenario}}` embeds; tokens read from stylesheets |
 | Component status, relationships, value coverage | tags; change detection | – | – | – | ✔ status, "renders / rendered by" from IL, value coverage |
-| Sidebar test status | ✔ test widget | – | – | – | ✔ last-run dots, `is:failing` (runs stay in the CLI) |
+| Sidebar test status | ✔ test widget | – | – | – | ✔ last-run dots, `is:failing`, test runner with watch mode in the explorer |
+| Decorators | ✔ decorators | ✔ | manual | – | ✔ `.Wrap(...)` per scenario, set and catalog |
 | License | MIT (Chromatic commercial) | MPL-2.0 | MIT | Apache-2.0/MIT | MIT |
 
 Sources: the Storybook 9 release announcement (storybook.js.org) and community guides on Storybook 10 testing; the Blazing Story repository README (github.com/jsakamoto/BlazingStory); official bUnit and Playwright documentation.
@@ -65,7 +66,7 @@ repositories and release notes. The features most worth having in a developer-fa
 | Lifecycle status (Pattern Lab, Fractal, zeroheight) | Done |
 | Lineage, "uses / used by" (Pattern Lab, Fractal) | Done (from compiled render code) |
 | Docs pages with live embeds, design tokens (MDX doc blocks, Lookbook embeds) | Done |
-| Sidebar test status and failure filter (Storybook test widget) | Done for the last CLI run |
+| Sidebar test status and failure filter (Storybook test widget) | Done for the last CLI run, and for UI runs since round 3 |
 | Accessibility `todo` mode (Storybook `a11y.test`) | Done |
 | Media features in visual runs (Chromatic media features) | Done (forced colors, print; reduced motion always) |
 | Browser storage per scenario (storybook-addon-cookie, Cosmos fixtures) | Done, with isolation |
@@ -112,6 +113,67 @@ Problems found while doing it, both fixed:
   shared scenarios). The warning concerns trimming and AOT, which the app does not use; it is suppressed and documented.
 - The explorer's screen-reader-only labels are absolutely positioned; deep in a long tree they stretched the page and made
   it scroll. The tree's scroll areas now contain them.
+
+## Round 4: ecosystem refresh and code audit (November 2026)
+
+A fourth study looked at Storybook 10.4 to 10.6 (change review, agentic review, agent skills; 11 is in alpha with CSF
+factories as the default), Chromatic accessibility tests, Ladle, Histoire, React Cosmos, Playroom, Widgetbook 4, Lookbook,
+Phoenix Storybook, Kitbook, Jetpack Compose previews (`@PreviewWrapper`, screenshot testing), SwiftUI `PreviewModifier`,
+Paparazzi, Polypane (outline panel, synced panes), Figma Code Connect, Supernova and zeroheight, Blazing Story and PlayBlazor.
+Backlight shut down in June 2025 and was dropped. Sources were release notes, official documentation and package pages.
+A code audit of the shell, the preview bridge, hosting, the test runner and the CLI ran alongside it.
+
+Features added:
+
+| Feature (inspired by) | State |
+| --- | --- |
+| Decorators: wrap a scenario in markup or a component, per scenario, set or catalog (Storybook decorators, SwiftUI `PreviewModifier`, Compose `@PreviewWrapper`) | Done: `.Wrap(...)`, `.Wrap<T>()`, `.WrapStyle(...)`, `options.AddDecorator(...)` ([scenarios](scenarios.md#decorators)) |
+| Controls from standard attributes: sliders, labels, sections, order, hidden parameters (Storybook argTypes, Lookbook `@param`) | Done: `[Range]`, `[Display]`, `[DisplayName]`, `[Category]`, `[Description]`, `[DataType]`, `[StringLength]`, `[EditorBrowsable]` ([editors](parameter-editors.md)) |
+| Explorer order (Storybook `storySort`) | Done: `options.ExplorerOrder`; Alt+arrows follow the tree |
+| Open in editor (storybook-addon-source-link, Kitbook) | Done: **Edit scenario** (compiler-recorded line of `set.Add`) and **Edit component**, `options.EditorUrlTemplate` |
+| Markup snapshots (Paparazzi, Verify, Jest) | Done: `cut.MatchMarkupSnapshot()` in bUnit ([bUnit](bunit.md#markup-snapshots)) |
+| `llms.txt` in published catalogs (Storybook manifests, llmstxt.org) | Done |
+| Shell branding (Storybook manager theming) | Done: logo, accent colors, shell stylesheets |
+| Tag exclusion in search (Storybook `!tag`), expand/collapse all | Done: `-tag:x`, `-is:x` |
+| Configurable single-key shortcuts, ARIA tabs, skip link, error boundaries in the shell (Storybook 10.3 accessibility work) | Done |
+
+Still open, with the reason:
+
+| Gap | Why |
+| --- | --- |
+| Extension API for custom panels and toolbar items (Storybook addons) | Needs a stable public contract for the shell's internal messages first; planned for a later version. |
+| Custom globals and toolbars, feature flags (Storybook `globalTypes`) | User and network switching cover the common cases; a general mechanism needs the extension API. |
+| JSON editor for complex parameters (Storybook object control) | Fixtures cover it safely; arbitrary deserialization into component parameters needs a type allowlist. |
+| Accessibility baselines (Chromatic) | `.Accessibility(a => a.Todo(...))` covers gradual adoption per scenario; per-violation baselines are planned. |
+| Synchronized interaction across Compare frames (Polypane) | Needs replaying recorder events across frames; planned. |
+| Accessibility outline panel (Polypane) | Planned; axe and the tab order overlay cover part of it. |
+| Live Razor playground (Playroom) | Still needs Razor compilation in the browser (now feasible on WebAssembly only). |
+| Catalog composition (Storybook refs) | Still open; composing manifests for MCP first is the cheaper step. |
+
+Problems found by the audit and fixed:
+
+- **Security.** A loopback-only host answered any `Host` header, so DNS rebinding could read the catalog and approve
+  baselines; the host now also checks the `Host` header. A base ref given to `list_changed_scenarios` could inject git
+  options; refs are validated and passed after `--end-of-options`. The security headers no longer overwrite a host's CSP.
+  Path containment checks are case-sensitive on case-sensitive file systems. The preview accepts commands only from the
+  window that embeds it.
+- **Browser storage.** Clearing the shared storage for each preview raced when the Gallery, Compare view, docs pages or the
+  test runner loaded several frames at once, so seeds were lost. Each preview now gets its own in-memory storage.
+- **Test runner.** A canceled run that finished late ended the next run; results now carry a run id. A frame that never
+  loaded or a paused interaction could block a worker forever; loads, interactions and scans are bounded by the job timeout
+  and canceled with the run.
+- **Readiness and state.** Callbacks raised in `OnInitialized` were not counted by `ExpectCallback` (in Playwright and the
+  UI runner) or listed in Actions. The preview stayed in the error state after **Recover** or after fixing arguments, and
+  scans or interactions started in Compare or Gallery mode, or in the error state, stayed "Scanning…" forever. Custom HTTP
+  handler responses ended activity before the body was read, and handlers got no cancellation token.
+- **Shell.** No error boundary: a failing panel or custom editor ended the circuit. Links to the current scenario with
+  another `panel` or `mode` were ignored. The Visual panel could show the previous scenario's results. The shell's callback
+  list grew without bound. Alt+arrows did not follow the tree. The DateTimeOffset editor dropped the offset. The dark theme
+  error badges failed contrast. Unknown routes rendered a blank page. A dark shell flashed light and loaded its preview twice.
+- **CLI and publishing.** `--changed-since` and the host used different git commands (and non-ASCII paths were quoted);
+  both now share one implementation based on the merge base. `get_last_report` with a filter returned the unfiltered
+  summary. Publishing excluded-tag scenarios when every scenario was generated, and empty viewport or theme lists crashed
+  the publisher and the runner. A JS module disposed during an import could throw or leak.
 
 ## Dependency and licensing review
 

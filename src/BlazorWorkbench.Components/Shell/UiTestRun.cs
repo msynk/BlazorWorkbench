@@ -12,6 +12,9 @@ namespace BlazorWorkbench.Components.Shell;
 /// <param name="Details">The interaction outcome or the axe-core results, as the preview reported them.</param>
 public sealed record UiTestResult(string ScenarioId, string Kind, string? Name, string Status, string? Message, double DurationMs, JsonElement? Details)
 {
+    /// <summary>The run that produced the result; results of an earlier, canceled run are ignored.</summary>
+    public int RunId { get; init; }
+
     public bool IsFailure => Status is "failed" or "error";
 }
 

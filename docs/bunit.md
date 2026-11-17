@@ -67,6 +67,27 @@ public class AllScenarios : BunitContext
 
 Assemblies that declare scenario sets or providers are scanned only for scenarios, like a host's entry assembly. The other assemblies are scanned for components.
 
+## Markup snapshots
+
+`MatchMarkupSnapshot()` compares a scenario's rendered HTML with a committed `{scenario-id}.verified.html` file, like Verify
+or Jest snapshots. It needs no browser and gives the same result on every operating system, so it is a cheap regression
+check for every CI job, next to the screenshots of `workbench test --visual` (which catch CSS changes that markup cannot show).
+
+```csharp
+[Theory, MemberData(nameof(Ids))]
+public void Markup_is_unchanged(string id)
+{
+    var cut = this.RenderScenario(id, Assemblies);
+    cut.WaitForScenarioIdle();
+    cut.MatchMarkupSnapshot();          // __snapshots__/{id}.verified.html next to this test file
+}
+```
+
+The markup is the inside of the preview root, pretty-printed, without Blazor's internal `blazor:` attributes. A missing or
+different snapshot fails the test and writes `{id}.received.html` next to it, with the first different line in the message.
+Review it and rename it to `.verified.html` to accept it, or run the tests with `WORKBENCH_UPDATE_SNAPSHOTS=1` to accept
+every change at once. Use fixed data, a fixed clock and a fixed culture so snapshots stay stable.
+
 ## A complete example
 
 [demo/BlazorWorkbench.Demo.Components.Tests](../demo/BlazorWorkbench.Demo.Components.Tests) tests the demo library this way: a smoke test for every scenario, plus focused tests that submit a checkout against the scenario's fake backend, release a gate, evaluate authorization policies for each simulated user, and fast-forward a session timeout with the scenario clock:

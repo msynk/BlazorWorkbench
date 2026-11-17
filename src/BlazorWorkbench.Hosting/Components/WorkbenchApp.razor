@@ -7,7 +7,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
-    <base href="/" />
+    @* The request's path base (UsePathBase, a reverse proxy) keeps every relative URL of the shell and previews working. *@
+    <base href="@BaseHref" />
+    @if (!IsPreview)
+    {
+        @* Before Blazor starts: the Workbench theme the user chose (or the system's), so a dark shell never flashes light. *@
+        <script>
+            (function () {
+                var t = null;
+                try { t = localStorage.getItem('blazor-workbench:shell-theme'); } catch (e) { }
+                if (t !== 'dark' && t !== 'light') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-wb-theme', t);
+            })();
+        </script>
+    }
     @if (IsPreview)
     {
         @* Read by the preview script before Blazor starts: browser storage isolation and the scenario's storage seed. *@
@@ -23,6 +36,10 @@
     else
     {
         <link rel="stylesheet" href="_content/BlazorWorkbench.Components/workbench.css" />
+        @foreach (var href in Options.ShellStylesheets)
+        {
+            <link rel="stylesheet" href="@href" />
+        }
     }
     <HeadOutlet @rendermode="RenderMode" />
 </head>
@@ -49,6 +66,8 @@
     private IComponentRenderMode RenderMode => Options.Interactivity == WorkbenchInteractivity.WebAssembly ? WebAssemblyMode : ServerMode;
 
     [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string BaseHref => (HttpContext?.Request.PathBase.Value ?? "").TrimEnd('/') + "/";
 
     private bool IsPreview => HttpContext?.Request.Path.StartsWithSegments("/_workbench/preview") == true ||
                               HttpContext?.Request.Path.StartsWithSegments("/_workbench/tokens") == true;

@@ -43,6 +43,9 @@ public static class WorkbenchHostingExtensions
         options.BaselineDirectory ??= config?.Resolve(config.Baselines);
         options.ResultsDirectory ??= config?.Resolve(config.Output);
         options.SourceRoot ??= config?.RootDirectory ?? builder.Environment.ContentRootPath;
+        // Editor links reveal absolute paths: offer them by default only to the developer on this machine.
+        if (options.EditorUrlTemplate is null && builder.Environment.IsDevelopment() && !options.AllowRemoteAccess)
+            options.EditorUrlTemplate = "vscode://file/{path}:{line}";
 
         if (options.AllowRemoteAccess && options.RemoteAccessPolicy is null && !options.AllowAnonymousRemoteAccess)
             throw new InvalidOperationException(
@@ -193,8 +196,7 @@ public static class WorkbenchHostingExtensions
             if (directory is null || !path.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 return Results.NotFound();
             var full = Path.GetFullPath(Path.Combine(directory, path));
-            var rootFull = Path.GetFullPath(directory) + Path.DirectorySeparatorChar;
-            if (!full.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase) || !File.Exists(full))
+            if (!PathSafety.IsInside(full, directory) || !File.Exists(full))
                 return Results.NotFound();
             return Results.File(full, "image/png");
         });
@@ -243,23 +245,69 @@ internal sealed class WorkbenchCircuitHandler(ScenarioSession session) : Circuit
         };
 }
 
-/// <summary>Restricts Workbench to loopback clients (unless configured otherwise) and adds defensive headers.</summary>
+/// <summary>
+/// Restricts Workbench to loopback clients that address it by a local host name (unless remote access is configured) and
+/// adds defensive headers that the host has not set itself.
+/// </summary>
 internal sealed class WorkbenchSecurityMiddleware(RequestDelegate next, WorkbenchHostOptions options)
 {
+    internal const string DefaultContentSecurityPolicy = "frame-ancestors 'self'";
+
     public Task InvokeAsync(HttpContext context)
     {
-        var remote = context.Connection.RemoteIpAddress;
-        if (!options.AllowRemoteAccess && remote is not null && !IPAddress.IsLoopback(remote))
+        if (!options.AllowRemoteAccess)
         {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return context.Response.WriteAsync("Blazor Workbench accepts local connections only. Enable AllowRemoteAccess with an authorization policy to share it.");
+            var remote = context.Connection.RemoteIpAddress;
+            if (remote is not null && !IPAddress.IsLoopback(remote))
+                return ForbidAsync(context, "Blazor Workbench accepts local connections only. Enable AllowRemoteAccess with an authorization policy to share it.");
+
+            // A loopback connection can still come from a browser that a foreign site pointed at 127.0.0.1 through DNS
+            // rebinding (evil.example resolving to 127.0.0.1). Such requests carry the foreign name in the Host header.
+            if (!IsLocalHost(context.Request.Host))
+                return ForbidAsync(context, "Blazor Workbench answers requests addressed to localhost, 127.0.0.1 or [::1] only. Enable AllowRemoteAccess with an authorization policy to use another host name.");
         }
 
-        var headers = context.Response.Headers;
-        headers.XContentTypeOptions = "nosniff";
-        headers["Referrer-Policy"] = "no-referrer";
-        headers.ContentSecurityPolicy = "frame-ancestors 'self'";
+        // Applied when the response starts, so headers the host sets (before or after this middleware) are never overwritten.
+        context.Response.OnStarting(static state =>
+        {
+            AddDefaultHeaders(((HttpResponse)state).Headers);
+            return Task.CompletedTask;
+        }, context.Response);
         return next(context);
+    }
+
+    internal static void AddDefaultHeaders(IHeaderDictionary headers)
+    {
+        if (!headers.ContainsKey(Microsoft.Net.Http.Headers.HeaderNames.XContentTypeOptions))
+            headers.XContentTypeOptions = "nosniff";
+        if (!headers.ContainsKey("Referrer-Policy"))
+            headers["Referrer-Policy"] = "no-referrer";
+        if (!headers.ContainsKey(Microsoft.Net.Http.Headers.HeaderNames.ContentSecurityPolicy))
+            headers.ContentSecurityPolicy = DefaultContentSecurityPolicy;
+    }
+
+    /// <summary>True for <c>localhost</c>, <c>*.localhost</c> and loopback IP addresses, with any port.</summary>
+    internal static bool IsLocalHost(HostString host)
+    {
+        if (!host.HasValue)
+            return false;
+        var name = host.Host;
+        if (name.Length > 2 && name[0] == '[' && name[^1] == ']')
+            name = name[1..^1];
+        name = name.TrimEnd('.');
+        if (name.Length == 0)
+            return false;
+        return name.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+               || (IPAddress.TryParse(name, out var ip) && IPAddress.IsLoopback(ip));
+    }
+
+    private static Task ForbidAsync(HttpContext context, string message)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        context.Response.Headers.XContentTypeOptions = "nosniff";
+        return context.Response.WriteAsync(message);
     }
 }
 

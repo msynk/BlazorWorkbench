@@ -1,0 +1,23 @@
+@* Shown by the shell's error boundaries: a failing panel, documentation page or custom parameter editor is contained
+   instead of ending the circuit. *@
+<div class="wb-shell-error" role="alert">
+    <strong>@What failed to render.</strong>
+    <p class="wb-muted">@Error.GetType().Name: @Error.Message</p>
+    <details>
+        <summary>Details</summary>
+        <pre class="wb-pre"><code>@Error.ToString()</code></pre>
+    </details>
+    @if (OnRecover.HasDelegate)
+    {
+        <button type="button" class="wb-button" @onclick="() => OnRecover.InvokeAsync()">Try again</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Exception Error { get; set; } = default!;
+
+    /// <summary>What failed, as the start of a sentence, for example <c>The Controls panel</c>.</summary>
+    [Parameter] public string What { get; set; } = "This part of the Workbench";
+
+    [Parameter] public EventCallback OnRecover { get; set; }
+}

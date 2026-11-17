@@ -84,6 +84,9 @@ public static class ScenarioFacts
         if (replaced.Count > 0)
             Simulates("Services", string.Join(", ", replaced.Take(MaxServices)) + (replaced.Count > MaxServices ? $" +{replaced.Count - MaxServices}" : ""));
 
+        foreach (var decorator in options.Decorators.Concat(scenario.Decorators))
+            Simulates("Wrapper", decorator.Name, panel: null);
+
         foreach (var cascade in scenario.CascadingValues)
             Simulates("Cascade", Naming.FormatTypeName(cascade.ValueType) + (cascade.Name is null ? "" : $" '{cascade.Name}'"));
 
@@ -170,7 +173,7 @@ public static class ScenarioFacts
 
     internal static string Response(HttpRule rule)
     {
-        var text = rule.Handler is not null ? "custom handler"
+        var text = rule.HasCustomHandler ? "custom handler"
             : rule.Fault == HttpFault.NetworkError ? "network error"
             : rule.Fault == HttpFault.Timeout ? "timeout"
             : $"{(int)rule.Status} {ReasonPhrase(rule.Status)}".TrimEnd();

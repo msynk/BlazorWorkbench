@@ -235,4 +235,69 @@ public class ToolsTests(WorkbenchFixture fixture)
         await page.Keyboard.PressAsync("Shift+Slash");
         await Expect(page.GetByRole(AriaRole.Dialog, new() { Name = "Keyboard shortcuts" })).ToBeVisibleAsync();
     }
+
+    [Fact]
+    public async Task Gallery_previews_keep_their_own_storage_seeds()
+    {
+        // Every scenario of the banner loads at once; each must see its own seed, not another frame's (or a cleared one).
+        var page = await OpenAsync("scenario/feedback-whats-new-banner--first-visit?mode=gallery");
+        var first = page.FrameLocator("iframe[title='Preview of First visit']");
+        var dismissed = page.FrameLocator("iframe[title='Preview of Already dismissed']");
+        var older = page.FrameLocator("iframe[title='Preview of Dismissed an older release']");
+        await Expect(first.Locator(".whats-new-host[data-checked]")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(dismissed.Locator(".whats-new-host[data-checked]")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(older.Locator(".whats-new-host[data-checked]")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(first.GetByRole(AriaRole.Region, new() { Name = "What's new" })).ToBeVisibleAsync();
+        await Expect(dismissed.GetByRole(AriaRole.Region, new() { Name = "What's new" })).ToHaveCountAsync(0);
+        await Expect(older.GetByText("New in 2026.3")).ToBeVisibleAsync();
+        Assert.Equal("2026.3", await dismissed.Locator("html").EvaluateAsync<string>("() => localStorage.getItem('trailhead:whats-new-dismissed')"));
+        Assert.Null(await first.Locator("html").EvaluateAsync<string?>("() => localStorage.getItem('trailhead:whats-new-dismissed')"));
+    }
+
+    [Fact]
+    public async Task Panel_tabs_follow_the_aria_tabs_pattern_and_single_key_shortcuts_can_be_turned_off()
+    {
+        var page = await OpenAsync("scenario/inputs-button--primary");
+        await WaitReadyAsync(page);
+        var controls = page.GetByRole(AriaRole.Tab, new() { Name = "Controls" });
+        await Expect(controls).ToHaveAttributeAsync("tabindex", "0");
+        await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Environment" })).ToHaveAttributeAsync("tabindex", "-1");
+        await controls.FocusAsync();
+        await page.Keyboard.PressAsync("ArrowRight");
+        await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Environment" })).ToHaveAttributeAsync("aria-selected", "true");
+        await Expect(page).ToHaveURLAsync(new Regex("panel=environment"));
+        await page.Keyboard.PressAsync("Home");
+        await Expect(controls).ToHaveAttributeAsync("aria-selected", "true");
+
+        // The shortcuts dialog takes focus, keeps it, and turns single-key shortcuts off.
+        await page.Locator(".wb-brand").FocusAsync();
+        await page.Keyboard.PressAsync("Shift+Slash");
+        var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Keyboard shortcuts" });
+        await Expect(dialog).ToBeVisibleAsync();
+        await Expect(page.Locator("#wb-shortcuts-close")).ToBeFocusedAsync();
+        await dialog.GetByRole(AriaRole.Checkbox, new() { Name = "Single-key shortcuts" }).UncheckAsync();
+        await page.Keyboard.PressAsync("Escape");
+        await Expect(dialog).ToHaveCountAsync(0);
+        await page.Locator(".wb-brand").FocusAsync();
+        await page.Keyboard.PressAsync("g");
+        await Expect(page).Not.ToHaveURLAsync(new Regex("grid=1"));
+        Assert.Equal("off", await page.EvaluateAsync<string>("() => localStorage.getItem('blazor-workbench:single-key-shortcuts')"));
+    }
+
+    [Fact]
+    public async Task Fixing_a_failing_scenario_in_controls_leaves_the_error_state()
+    {
+        var page = await OpenAsync("scenario/feedback-flaky-widget--throws-while-rendering");
+        await Expect(page.Locator(".wb-state-error")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        // Turning the failure off recovers the error boundary; the preview checks readiness again instead of staying "Error".
+        await page.Locator("#wb-param-ThrowOnRender").UncheckAsync();
+        await WaitReadyAsync(page);
+        await Expect(Preview(page).Locator("[data-workbench-error]")).ToHaveCountAsync(0);
+
+        // An accessibility scan started now finishes (it used to wait for a readiness that never came).
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Accessibility" }).ClickAsync();
+        await page.Locator(".wb-a11y").GetByRole(AriaRole.Button).First.ClickAsync();
+        await Expect(page.Locator(".wb-a11y")).Not.ToContainTextAsync("Scanning", new() { Timeout = 20_000 });
+    }
 }

@@ -134,6 +134,32 @@ s.Service<IProductService>(ctx => new FakeProductService(DemoData.Products))  //
 
 Overrides apply only to the preview session that activates the scenario; see [environment](environment.md#services). `TimeProvider` cannot be replaced this way. Use `.Clock(...)` instead (`WB1022`).
 
+## Decorators
+
+A decorator wraps the component in other markup: a form, a provider component, a layout container or a fixed-width box
+(Storybook's decorators, SwiftUI's preview modifiers). Decorators render inside the preview root, so readiness checks,
+locators, accessibility scans and screenshots include them, and the scenario's facts list them as *Wrapper*.
+
+```csharp
+set.Setup(s => s.Wrap<ThemeProvider>(new Dictionary<string, object?> { ["Theme"] = "brand" }));  // every scenario of the set
+set.Add("In a narrow column", s => s
+    .ChildContent("Save")
+    .WrapStyle("width: 320px")                                     // <div style="width: 320px">
+    .Wrap(story => @<EditForm Model="new object()">@story</EditForm>, "EditForm"));   // Razor syntax in a .razor file
+set.Add("Seeded", s => s.Wrap((story, ctx) => b => { /* RenderTreeBuilder code using ctx.Random */ }, "Custom"));
+```
+
+`Wrap<TWrapper>()` renders a component that takes the scenario as its `ChildContent`. Decorators added first are outermost,
+so the ones from `set.Setup(...)` wrap the scenario's own. Decorators for every scenario of the catalog go in the options;
+they wrap everything else:
+
+```csharp
+builder.AddBlazorWorkbench(o => o.AddDecorator<CascadingAuthenticationState>());
+```
+
+A decorator that throws is reported like any setup error. Cascading values from `.Cascade(...)` surround the decorators,
+so decorator components can use them too.
+
 ## Environment
 
 ```csharp
@@ -160,8 +186,8 @@ s.ForceState(PseudoState.FocusVisible, ".btn")      // force :focus-visible on m
 ```
 
 - Forced states apply in the preview, in screenshots and in accessibility scans. See [tools](tools.md#forced-states).
-- The preview clears `localStorage` and `sessionStorage` before every scenario (Workbench keeps its own preferences), then
-  writes the scenario's entries, so a value written by one scenario never leaks into the next. Turn the clearing off with
+- Each preview gets its own empty, in-memory `localStorage` and `sessionStorage` with the scenario's entries, so a value
+  written by one scenario never leaks into another, even when several previews load side by side. Use the real storage with
   `options.IsolateBrowserStorage = false`. The **Storage** panel shows and edits the values.
 - Browsers cannot emulate media features inside the Workbench's preview frame, so `.Media(...)` affects automated runs only.
   Automated runs always emulate `prefers-reduced-motion: reduce`.

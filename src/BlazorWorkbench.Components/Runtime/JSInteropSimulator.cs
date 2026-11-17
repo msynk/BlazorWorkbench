@@ -358,19 +358,37 @@ internal sealed class WorkbenchInProcessJSRuntime(JSInteropSimulator simulator, 
 /// </summary>
 internal sealed class WorkbenchJSModule(JSInteropSimulator simulator, string path, Func<CancellationToken, ValueTask<IJSObjectReference>> import) : IJSObjectReference
 {
+    // Never disposed: an import can still be waiting on it when the module is disposed, and a SemaphoreSlim that never
+    // allocated a wait handle holds no unmanaged resources.
     private readonly SemaphoreSlim _importLock = new(1, 1);
     private IJSObjectReference? _real;
+    private int _disposed;
 
     public string Path { get; } = path;
 
     internal async ValueTask<IJSObjectReference> GetRealModuleAsync(CancellationToken cancellationToken)
     {
-        if (_real is not null)
-            return _real;
+        if (Volatile.Read(ref _real) is { } existing)
+            return existing;
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         await _importLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return _real ??= await import(cancellationToken).ConfigureAwait(false);
+            if (Volatile.Read(ref _real) is { } imported)
+                return imported;
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            var module = await import(cancellationToken).ConfigureAwait(false);
+            Interlocked.Exchange(ref _real, module);
+            // Disposed while importing: DisposeAsync may have run before the module was stored, so release it here.
+            // Both sides use full fences, so at least one of them sees the module and Exchange lets only one dispose it.
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                if (Interlocked.Exchange(ref _real, null) is { } orphan)
+                    await DisposeRealAsync(orphan).ConfigureAwait(false);
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+
+            return module;
         }
         finally
         {
@@ -403,13 +421,15 @@ internal sealed class WorkbenchJSModule(JSInteropSimulator simulator, string pat
 
     public async ValueTask DisposeAsync()
     {
-        var real = Interlocked.Exchange(ref _real, null);
-        if (real is not null)
-        {
-            try { await real.DisposeAsync().ConfigureAwait(false); }
-            catch (JSDisconnectedException) { }
-        }
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+        if (Interlocked.Exchange(ref _real, null) is { } real)
+            await DisposeRealAsync(real).ConfigureAwait(false);
+    }
 
-        _importLock.Dispose();
+    private static async ValueTask DisposeRealAsync(IJSObjectReference module)
+    {
+        try { await module.DisposeAsync().ConfigureAwait(false); }
+        catch (JSDisconnectedException) { }
     }
 }

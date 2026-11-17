@@ -11,13 +11,20 @@
             <tr><th scope="col">Parameter</th><th scope="col">Value</th><th scope="col">Source</th><th scope="col"><span class="wb-visually-hidden">Actions</span></th></tr>
         </thead>
         <tbody>
+            @{ string? group = null; }
             @foreach (var p in Parameters)
             {
                 var id = $"wb-param-{p.Name}";
                 var error = _errors.GetValueOrDefault(p.Name) ?? ArgErrors.GetValueOrDefault(p.Name);
-                <tr class="@(error is null ? "" : "wb-row-error")">
+                if (HasGroups && p.Group != group)
+                {
+                    group = p.Group;
+                    <tr class="wb-param-group"><th scope="rowgroup" colspan="4">@(group ?? "Other")</th></tr>
+                }
+                <tr class="@(error is null ? "" : "wb-row-error") @(p.IsHidden ? "wb-param-hidden" : "")">
                     <th scope="row">
-                        <label for="@id" class="wb-param-name">@p.Name</label>
+                        <label for="@id" class="wb-param-name">@(p.DisplayName ?? p.Name)</label>
+                        @if (p.DisplayName is not null && p.DisplayName != p.Name) { <code class="wb-muted wb-small">@p.Name</code> }
                         @if (p.IsRequired) { <span class="wb-badge wb-badge-required" title="[EditorRequired]">required</span> }
                         @if (p.IsObsolete) { <span class="wb-badge" title="@p.ObsoleteMessage">obsolete</span> }
                         <div class="wb-type"><code>@p.TypeName</code></div>
@@ -46,9 +53,16 @@
             }
         </tbody>
     </table>
-    @if (Parameters.Count == 0)
+    @if (Parameters.Count == 0 && HiddenCount == 0)
     {
         <p class="wb-empty">@Component.Metadata.Name has no parameters.</p>
+    }
+    @if (HiddenCount > 0)
+    {
+        <button type="button" class="wb-button wb-button-small" aria-pressed="@(_showHidden ? "true" : "false")" @onclick="() => _showHidden = !_showHidden"
+                title="Parameters marked [EditorBrowsable(Never)] or [Browsable(false)]">
+            @(_showHidden ? "Hide" : "Show") @HiddenCount hidden parameter@(HiddenCount == 1 ? "" : "s")
+        </button>
     }
 </div>
 
@@ -63,8 +77,41 @@
     [Parameter] public IReadOnlyDictionary<string, int> CallbackCounts { get; set; } = new Dictionary<string, int>();
     [Parameter] public EventCallback<Dictionary<string, ArgOverride>> OverridesChanged { get; set; }
 
-    private IReadOnlyList<ParameterDescriptor> Parameters =>
-        Component.Metadata.Parameters.Where(p => p.Kind is not (ParameterKind.Cascading or ParameterKind.Expression)).ToList();
+    private bool _showHidden;
+
+    private IEnumerable<ParameterDescriptor> Editable =>
+        Component.Metadata.Parameters.Where(p => p.Kind is not (ParameterKind.Cascading or ParameterKind.Expression));
+
+    // A hidden parameter the scenario or the URL sets stays visible: its value matters for what is on screen.
+    private bool IsShown(ParameterDescriptor p) => !p.IsHidden || _showHidden || Overrides.ContainsKey(p.Name) || Scenario.FindParameter(p.Name) is not null;
+
+    private int HiddenCount => Editable.Count(p => p.IsHidden && (_showHidden || !IsShown(p)));
+
+    private bool HasGroups => Editable.Any(p => p.Group is not null);
+
+    /// <summary>
+    /// Parameters in inspector order: by section (<c>[Display(GroupName)]</c>, <c>[Category]</c>; sections in the order of
+    /// their first parameter, ungrouped last), then <c>[Display(Order)]</c>, then the reader's order (required first, by name).
+    /// </summary>
+    private IReadOnlyList<ParameterDescriptor> Parameters
+    {
+        get
+        {
+            var shown = Editable.Where(IsShown).Select((p, i) => (p, i)).ToList();
+            var groupRank = shown.Where(x => x.p.Group is not null)
+                .GroupBy(x => x.p.Group!, StringComparer.Ordinal)
+                .Select(g => (g.Key, Rank: g.Min(x => (x.p.Order ?? int.MaxValue, x.i))))
+                .OrderBy(g => g.Rank)
+                .Select((g, n) => (g.Key, n))
+                .ToDictionary(g => g.Key, g => g.n, StringComparer.Ordinal);
+            return shown
+                .OrderBy(x => x.p.Group is { } g ? groupRank[g] : int.MaxValue)
+                .ThenBy(x => x.p.Order ?? int.MaxValue)
+                .ThenBy(x => x.i)
+                .Select(x => x.p)
+                .ToList();
+        }
+    }
 
     private IEnumerable<FixtureDefinition> FixturesFor(ParameterDescriptor p) =>
         Scenario.Fixtures.Where(f => p.Type.IsAssignableFrom(f.ValueType));
@@ -160,18 +207,51 @@
             case EditorKind.Text:
             case EditorKind.Guid:
             case EditorKind.TimeSpan:
-                <input id="@id" type="text" value="@text" placeholder="@(isNull ? "null" : PlaceholderFor(p))" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                <input id="@id" type="text" value="@text" placeholder="@(isNull ? "null" : PlaceholderFor(p))" aria-describedby="@describedBy"
+                       maxlength="@p.MaxLength" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.Color:
+                <span class="wb-color-editor">
+                    <input type="color" value="@(IsHexColor(text) ? text : "#000000")" aria-label="@($"{p.DisplayName ?? p.Name} color picker")"
+                           @onchange="e => OnText(p, e.Value as string)" />
+                    <input id="@id" type="text" value="@text" placeholder="@(isNull ? "null" : "#rrggbb or any CSS color")" aria-describedby="@describedBy"
+                           @onchange="e => OnText(p, e.Value as string)" />
+                </span>
                 break;
             case EditorKind.Integer:
             case EditorKind.Decimal:
-                <input id="@id" type="text" inputmode="@(editor == EditorKind.Integer ? "numeric" : "decimal")" value="@text" placeholder="@(isNull ? "null" : "")"
-                       aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                @if (p is { Minimum: { } min, Maximum: { } max } && max > min)
+                {
+                    // [Range]: a slider next to the number. Values out of range are still accepted in the text box (to preview them).
+                    var step = editor == EditorKind.Integer ? 1 : RangeStep(min, max);
+                    <span class="wb-range-editor">
+                        <input type="range" min="@Invariant(min)" max="@Invariant(max)" step="@Invariant(step)" value="@(text ?? Invariant(min))"
+                               aria-label="@($"{p.DisplayName ?? p.Name}, {Invariant(min)} to {Invariant(max)}")" disabled="@isNull"
+                               @onchange="e => OnText(p, e.Value as string)" />
+                        <input id="@id" type="text" inputmode="@(editor == EditorKind.Integer ? "numeric" : "decimal")" value="@text" placeholder="@(isNull ? "null" : "")"
+                               aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                    </span>
+                }
+                else
+                {
+                    <input id="@id" type="text" inputmode="@(editor == EditorKind.Integer ? "numeric" : "decimal")" value="@text" placeholder="@(isNull ? "null" : "")"
+                           aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                }
                 break;
             case EditorKind.Date:
                 <input id="@id" type="date" value="@text" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
                 break;
             case EditorKind.Time:
                 <input id="@id" type="time" step="1" value="@text" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
+                break;
+            case EditorKind.DateTime when (Nullable.GetUnderlyingType(p.Type) ?? p.Type) == typeof(DateTimeOffset):
+                // The picker has no offset: keep the value's offset (shown next to it) instead of the server's time zone.
+                var offset = OffsetOf(text);
+                <span class="wb-datetime-editor">
+                    <input id="@id" type="datetime-local" step="1" value="@ToLocalInput(text)" aria-describedby="@describedBy"
+                           @onchange="e => OnText(p, WithOffset(e.Value as string, offset))" />
+                    <span class="wb-muted wb-small" title="UTC offset of the value; type a full value with another offset in the URL or the Code tab">UTC@(offset)</span>
+                </span>
                 break;
             case EditorKind.DateTime:
                 <input id="@id" type="datetime-local" step="1" value="@ToLocalInput(text)" aria-describedby="@describedBy" @onchange="e => OnText(p, e.Value as string)" />
@@ -206,6 +286,23 @@
         EditorKind.TimeSpan => "d.hh:mm:ss",
         _ => "",
     };
+
+    private static string Invariant(double value) => value.ToString("0.############", CultureInfo.InvariantCulture);
+
+    /// <summary>About a hundred steps across the range, rounded to a power of ten (0.01 for 0–1, 1 for 0–100).</summary>
+    private static double RangeStep(double min, double max) => Math.Pow(10, Math.Floor(Math.Log10((max - min) / 100)));
+
+    private static bool IsHexColor(string? text) =>
+        text is { Length: 7 } && text[0] == '#' && text.Skip(1).All(Uri.IsHexDigit);
+
+    /// <summary>The UTC offset of an ISO date and time, such as <c>+02:00</c> (<c>+00:00</c> when there is none).</summary>
+    private static string OffsetOf(string? iso) =>
+        iso is not null && DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto)
+            ? (dto.Offset < TimeSpan.Zero ? "-" : "+") + dto.Offset.ToString(@"hh\:mm", CultureInfo.InvariantCulture)
+            : "+00:00";
+
+    private static string? WithOffset(string? local, string offset) =>
+        string.IsNullOrEmpty(local) ? local : (local.Length == 16 ? local + ":00" : local) + offset;
 
     private static string? ToLocalInput(string? iso) =>
         iso is not null && DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto) ? dto.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture) : iso;

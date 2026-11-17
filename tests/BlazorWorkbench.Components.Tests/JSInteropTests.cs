@@ -294,3 +294,51 @@ public class JSInteropTests
         _ = typeof(WhatsNewBanner);
     }
 }
+
+public class WorkbenchJSModuleTests
+{
+    private sealed class TrackedModule : IJSObjectReference
+    {
+        public int Disposals { get; private set; }
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args) => ValueTask.FromResult(default(TValue)!);
+
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Disposing_during_an_import_releases_the_imported_module()
+    {
+        var import = new TaskCompletionSource<IJSObjectReference>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new WorkbenchJSModule(null!, "./m.js", _ => new ValueTask<IJSObjectReference>(import.Task));
+        var pending = module.GetRealModuleAsync(CancellationToken.None).AsTask();
+
+        await module.DisposeAsync(); // must not dispose the lock the import holds
+        var real = new TrackedModule();
+        import.SetResult(real);
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => pending);
+        Assert.Equal(1, real.Disposals);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => module.GetRealModuleAsync(CancellationToken.None).AsTask());
+        await module.DisposeAsync(); // idempotent
+        Assert.Equal(1, real.Disposals);
+    }
+
+    [Fact]
+    public async Task Disposing_after_an_import_disposes_the_module_once()
+    {
+        var real = new TrackedModule();
+        var module = new WorkbenchJSModule(null!, "./m.js", _ => ValueTask.FromResult<IJSObjectReference>(real));
+        Assert.Same(real, await module.GetRealModuleAsync(CancellationToken.None));
+        Assert.Same(real, await module.GetRealModuleAsync(CancellationToken.None));
+        await module.DisposeAsync();
+        await module.DisposeAsync();
+        Assert.Equal(1, real.Disposals);
+    }
+}

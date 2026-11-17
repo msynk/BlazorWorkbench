@@ -9,10 +9,18 @@ let dotnet = null;
 let listener = null;
 let keyListener = null;
 let pointerListener = null;
+let singleKey = true;
+let dialogReturnFocus = null;
+
+const invoke = (method, ...args) => {
+  if (!dotnet) return;
+  dotnet.invokeMethodAsync(method, ...args).catch(() => { /* circuit closing */ });
+};
 
 export function init(dotnetRef) {
   dispose();
   dotnet = dotnetRef;
+  singleKey = getPreference('single-key-shortcuts') !== 'off';
   listener = (e) => {
     if (e.origin !== location.origin || !e.data || e.data.source !== PREVIEW) return;
     const frame = document.getElementById('wb-preview-frame');
@@ -34,19 +42,25 @@ export function init(dotnetRef) {
     if (!e.altKey && !e.ctrlKey && !e.metaKey && e.target && e.target.classList && e.target.classList.contains('wb-resize') && resizeByKey(e)) {
       return;
     }
-    if ((e.key === '/' && !editing) || ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K'))) {
+    if (trapDialogFocus(e) || moveTabFocus(e)) return;
+    // While a dialog is open, Escape closes it (wherever focus is inside it) and no other shortcut applies.
+    if (document.querySelector('.wb-dialog')) {
+      if (e.key === 'Escape') { e.preventDefault(); invoke('OnShortcut', 'escape'); }
+      return;
+    }
+    if ((e.key === '/' && !editing && singleKey) || ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'k' || e.key === 'K'))) {
       e.preventDefault();
       const search = document.getElementById('wb-search');
       if (search) { search.focus(); search.select(); }
     } else if (e.key === 'Escape' && tag === 'INPUT' && e.target.id === 'wb-search') {
       e.target.blur();
-    } else if (!editing && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
-      dotnet.invokeMethodAsync('OnShortcut', e.shiftKey ? 'reset' : 'reload');
+    } else if (!editing && singleKey && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'r' || e.key === 'R')) {
+      invoke('OnShortcut', e.shiftKey ? 'reset' : 'reload');
     } else if (!editing && !e.ctrlKey && !e.metaKey) {
       const action = shortcutFor(e);
       if (action) {
         e.preventDefault();
-        dotnet.invokeMethodAsync('OnShortcut', action);
+        invoke('OnShortcut', action);
       }
     }
   };
@@ -75,6 +89,11 @@ function shortcutFor(e) {
   switch (e.key) {
     case '?': return 'shortcuts';
     case 'Escape': return 'escape';
+    default: break;
+  }
+  // Single-character shortcuts can be turned off (WCAG 2.1.4 Character Key Shortcuts), for example for speech input.
+  if (!singleKey) return null;
+  switch (e.key) {
     case 'g': case 'G': return 'grid';
     case 'o': case 'O': return 'outline';
     case 'm': case 'M': return 'measure';
@@ -226,12 +245,19 @@ export async function copy(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
+    // Fallback for insecure origins: a read-only, off-screen text area; focus goes back where it was.
+    const active = document.activeElement;
     const area = document.createElement('textarea');
     area.value = text;
+    area.setAttribute('readonly', '');
+    area.setAttribute('aria-hidden', 'true');
+    area.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
     document.body.appendChild(area);
     area.select();
-    const ok = document.execCommand('copy');
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
     area.remove();
+    if (active && typeof active.focus === 'function') active.focus();
     return ok;
   }
 }
@@ -239,6 +265,78 @@ export async function copy(text) {
 export function focusElement(id) {
   const el = document.getElementById(id);
   if (el) el.focus();
+}
+
+// ---------- dialogs: focus moves in, stays in, and goes back ----------
+export function openDialog(id) {
+  const dialog = document.getElementById(id);
+  if (!dialog) return;
+  dialogReturnFocus = document.activeElement;
+  const first = dialog.querySelector('[data-autofocus]') || focusables(dialog)[0] || dialog;
+  if (first === dialog) dialog.setAttribute('tabindex', '-1');
+  first.focus();
+}
+
+export function closeDialog() {
+  const target = dialogReturnFocus;
+  dialogReturnFocus = null;
+  if (target && target.isConnected && typeof target.focus === 'function') target.focus();
+}
+
+function focusables(root) {
+  return Array.from(root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    .filter((el) => el.getClientRects().length > 0);
+}
+
+function trapDialogFocus(e) {
+  if (e.key !== 'Tab') return false;
+  const dialog = document.querySelector('.wb-dialog');
+  if (!dialog) return false;
+  const items = focusables(dialog);
+  if (!items.length) { e.preventDefault(); return true; }
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (!dialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); return true; }
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); return true; }
+  if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); return true; }
+  return false;
+}
+
+// ---------- tabs: the ARIA tabs pattern (arrow keys, Home and End move between tabs) ----------
+function moveTabFocus(e) {
+  const tab = e.target && e.target.closest && e.target.closest('[role="tab"]');
+  if (!tab || e.altKey || e.ctrlKey || e.metaKey) return false;
+  const list = tab.closest('[role="tablist"]');
+  if (!list) return false;
+  const tabs = Array.from(list.querySelectorAll('[role="tab"]'));
+  const index = tabs.indexOf(tab);
+  const vertical = list.getAttribute('aria-orientation') === 'vertical';
+  const rtl = getComputedStyle(list).direction === 'rtl';
+  let next;
+  switch (e.key) {
+    case 'ArrowRight': if (vertical) return false; next = index + (rtl ? -1 : 1); break;
+    case 'ArrowLeft': if (vertical) return false; next = index + (rtl ? 1 : -1); break;
+    case 'ArrowDown': if (!vertical) return false; next = index + 1; break;
+    case 'ArrowUp': if (!vertical) return false; next = index - 1; break;
+    case 'Home': next = 0; break;
+    case 'End': next = tabs.length - 1; break;
+    default: return false;
+  }
+  next = (next + tabs.length) % tabs.length;
+  e.preventDefault();
+  tabs[next].focus();
+  tabs[next].click();
+  return true;
+}
+
+// Single-character shortcuts (R, G, O, M, B, /) can be turned off; the choice is kept in this browser.
+export function setSingleKeyShortcuts(on) {
+  singleKey = !!on;
+  setPreference('single-key-shortcuts', singleKey ? 'on' : 'off');
+}
+
+export function getSingleKeyShortcuts() {
+  return singleKey;
 }
 
 export function getPreference(key) {
@@ -263,22 +361,28 @@ let testRun = null;
 let runCounter = 0;
 
 export function cancelTests() {
-  if (testRun) testRun.cancelled = true;
+  if (testRun) {
+    testRun.cancelled = true;
+    for (const abort of testRun.aborts) abort();
+    testRun.aborts.clear();
+  }
   testRun = null;
   const host = document.getElementById('wb-test-runner');
   if (host) host.textContent = '';
 }
 
 // Starts a run without holding a JavaScript interop call open for its whole duration; .NET hears OnTestsFinished.
+// Every callback carries the run id, so a canceled run that ends late never finishes or fills a newer run.
 export function startTests(jobs, dotnetRef, options) {
+  const runId = (options && options.runId) || 0;
   runTests(jobs, dotnetRef, options)
-    .then((completed) => dotnetRef.invokeMethodAsync('OnTestsFinished', completed))
+    .then((completed) => dotnetRef.invokeMethodAsync('OnTestsFinished', completed, runId))
     .catch(() => { /* circuit closing */ });
 }
 
 export async function runTests(jobs, dotnetRef, options) {
   cancelTests();
-  const run = { cancelled: false };
+  const run = { cancelled: false, aborts: new Set(), id: (options && options.runId) || 0 };
   testRun = run;
   let host = document.getElementById('wb-test-runner');
   if (!host) {
@@ -302,6 +406,7 @@ export async function runTests(jobs, dotnetRef, options) {
         const job = jobs[next++];
         const result = await runJob(frame, job, run);
         if (run.cancelled) break;
+        result.runId = run.id;
         try { await dotnetRef.invokeMethodAsync('OnTestResult', JSON.stringify(result)); } catch { /* circuit closing */ }
       }
     } finally {
@@ -313,6 +418,22 @@ export async function runTests(jobs, dotnetRef, options) {
   return !run.cancelled;
 }
 
+// Races a promise against the job's time limit and the run's cancellation, so a frame that never loads or a test that
+// never ends (a paused debugger step, a gate nobody releases) cannot block a worker forever.
+function guarded(promise, run, timeout, what) {
+  let timer = 0;
+  let abort = null;
+  const stop = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${timeout} ms.`)), timeout);
+    abort = () => reject(new Error('Canceled.'));
+    run.aborts.add(abort);
+  });
+  return Promise.race([promise, stop]).finally(() => {
+    clearTimeout(timer);
+    run.aborts.delete(abort);
+  });
+}
+
 function waitForLoad(frame, url) {
   return new Promise((resolve) => {
     frame.onload = () => resolve();
@@ -321,7 +442,8 @@ function waitForLoad(frame, url) {
 }
 
 async function loadPreview(frame, url, timeout, run) {
-  await waitForLoad(frame, url);
+  if (run.cancelled) throw new Error('Canceled.');
+  await guarded(waitForLoad(frame, url), run, timeout, 'Loading the preview');
   const start = performance.now();
   for (;;) {
     if (run.cancelled) throw new Error('Canceled.');
@@ -346,7 +468,7 @@ async function runJob(frame, job, run) {
       throw new Error('The scenario failed to render' + (first ? `: ${first.message}` : '.'));
     }
     if (job.kind === 'interaction') {
-      const outcome = await wb.runInteraction(job.test);
+      const outcome = await guarded(wb.runInteraction(job.test), run, job.timeout || 15000, 'The interaction test');
       result.details = outcome;
       if (!outcome.passed) {
         const failed = outcome.results.find((r) => r.status === 'failed');
@@ -360,7 +482,7 @@ async function runJob(frame, job, run) {
         result.message = `${found.length} error diagnostic(s): ${found[0].message}`;
       }
       if (job.a11y) {
-        const outcome = await wb.runAxe({ disabledRules: job.a11y.disabledRules || [] });
+        const outcome = await guarded(wb.runAxe({ disabledRules: job.a11y.disabledRules || [] }), run, job.timeout || 15000, 'The accessibility scan');
         result.details = outcome;
         const failOn = IMPACT[job.a11y.failOn] || IMPACT.serious;
         const blocking = outcome.violations.filter((v) => (IMPACT[v.impact] || 0) >= failOn);

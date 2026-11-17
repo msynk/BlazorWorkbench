@@ -48,7 +48,7 @@ Validates every scenario without rendering it ([codes](diagnostics-codes.md)). E
 | `--fail-on <impact>` | Lowest accessibility impact that fails: `minor`, `moderate`, `serious`, `critical`. |
 | `--allow-missing-baselines` | Report missing baselines without failing. |
 | `--include-anti-aliasing` | Count anti-aliasing-only pixel differences as changes. |
-| `--changed-since <ref>` | Run only scenarios affected by files changed since a git ref (conservative; see [testing](testing.md#change-impact---changed-since)). |
+| `--changed-since <ref>` | Run only scenarios affected by files changed since the merge base with a git ref, plus uncommitted and untracked files (conservative; see [testing](testing.md#change-impact---changed-since)). |
 | `--browser <name>` | `chromium` (default), `firefox` or `webkit`. |
 | `--headed` | Show the browser window. |
 | `--no-trace` | Do not record Playwright traces for failures. |

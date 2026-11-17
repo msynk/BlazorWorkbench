@@ -124,6 +124,7 @@
         {
             _loaded = ScenarioId;
             _approval = null;
+            _results = [];
             await LoadAsync();
             if (_provider is not null)
                 _canApprove = await _provider.CanApproveAsync();
@@ -133,9 +134,21 @@
     private async Task LoadAsync()
     {
         if (_provider is null) return;
+        // The scenario can change while a request is in flight: only the answer for the scenario still shown is kept,
+        // so the panel never shows (or approves next to) another scenario's screenshots.
+        var id = ScenarioId;
         _loading = true;
-        try { _results = await _provider.GetAsync(ScenarioId); }
-        finally { _loading = false; }
+        try
+        {
+            var results = await _provider.GetAsync(id);
+            if (id == ScenarioId)
+                _results = results;
+        }
+        finally
+        {
+            if (id == ScenarioId)
+                _loading = false;
+        }
     }
 
     private static RenderFragment Image(string? url, string alt) => __builder =>

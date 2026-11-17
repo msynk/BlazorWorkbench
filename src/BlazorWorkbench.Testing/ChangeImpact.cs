@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using BlazorWorkbench.Catalog;
 using BlazorWorkbench.Contracts;
@@ -192,23 +191,20 @@ public static partial class ChangeImpact
     [GeneratedRegex(@"\b(?:class|record)\s+([A-Za-z_]\w*)", RegexOptions.CultureInvariant)]
     private static partial Regex ClassRegex();
 
-    /// <summary>Files changed since <paramref name="reference"/> (committed, staged, unstaged and untracked), as absolute paths.</summary>
-    public static IReadOnlyList<string> GitChangedFiles(string workingDirectory, string reference)
-    {
-        var top = Git(workingDirectory, "rev-parse", "--show-toplevel").Trim();
-        var files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var output in new[]
-                 {
-                     Git(top, "diff", "--name-only", reference),
-                     Git(top, "diff", "--name-only", "--cached"),
-                     Git(top, "ls-files", "--others", "--exclude-standard"),
-                 })
-        {
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                files.Add(Path.GetFullPath(Path.Combine(top, line)));
-        }
+    /// <summary>
+    /// Files changed since <paramref name="reference"/>, as absolute paths: files changed by commits since the merge base of
+    /// the ref and <c>HEAD</c> (like a pull request), plus staged, unstaged and untracked files, including deleted ones.
+    /// Same source as the explorer's change marks (<see cref="GitWorkingCopy"/>).
+    /// </summary>
+    /// <exception cref="WorkbenchInfrastructureException">git, the repository or the ref is not available.</exception>
+    public static IReadOnlyList<string> GitChangedFiles(string workingDirectory, string reference) =>
+        GitChangedFilesAsync(workingDirectory, reference).GetAwaiter().GetResult();
 
-        return files.Order(StringComparer.Ordinal).ToList();
+    /// <inheritdoc cref="GitChangedFiles"/>
+    public static async Task<IReadOnlyList<string>> GitChangedFilesAsync(string workingDirectory, string reference, CancellationToken cancellationToken = default)
+    {
+        var (paths, error) = await GitWorkingCopy.ReadChangedPathsAsync(workingDirectory, reference, cancellationToken).ConfigureAwait(false);
+        return paths ?? throw new WorkbenchInfrastructureException($"--changed-since {reference}: {error}");
     }
 
     // Button.razor.cs / Button.razor.css / Button.razor.js belong to Button.razor.
@@ -222,30 +218,5 @@ public static partial class ChangeImpact
         }
 
         return path;
-    }
-
-    private static string Git(string workingDirectory, params string[] args)
-    {
-        var start = new ProcessStartInfo("git") { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add("core.safecrlf=false");
-        foreach (var arg in args)
-            start.ArgumentList.Add(arg);
-        try
-        {
-            using var process = Process.Start(start)!;
-            // Read both streams concurrently: git can write enough warnings to stderr to block on a full pipe.
-            var errorTask = process.StandardError.ReadToEndAsync();
-            var output = process.StandardOutput.ReadToEnd();
-            var error = errorTask.GetAwaiter().GetResult();
-            process.WaitForExit();
-            if (process.ExitCode != 0)
-                throw new WorkbenchInfrastructureException($"git {string.Join(' ', args)} failed: {error.Trim()}");
-            return output;
-        }
-        catch (System.ComponentModel.Win32Exception ex)
-        {
-            throw new WorkbenchInfrastructureException("git is not available on PATH; --changed-since needs it.", ex);
-        }
     }
 }

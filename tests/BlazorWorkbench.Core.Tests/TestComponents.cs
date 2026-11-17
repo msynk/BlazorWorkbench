@@ -76,3 +76,25 @@ public class GenericScenarios : ScenarioSet<Generic<int>>
     protected override void Configure(ScenarioSetBuilder<Generic<int>> set) =>
         set.Add("Numbers", s => s.Parameter(g => g.Items, (IReadOnlyList<int>)[1, 2, 3]));
 }
+
+/// <summary>Uses the standard attributes that shape the inspector's editors.</summary>
+public class AnnotatedSlider : ComponentBase
+{
+    [Parameter, System.ComponentModel.DataAnnotations.Range(0, 100)]
+    [System.ComponentModel.DataAnnotations.Display(Name = "Volume level", GroupName = "Sound", Order = 2)]
+    public int Volume { get; set; }
+
+    [Parameter, System.ComponentModel.DataAnnotations.Range(0.0, 1.0), System.ComponentModel.Category("Sound")]
+    public double Balance { get; set; }
+
+    [Parameter, System.ComponentModel.DataAnnotations.DataType(System.ComponentModel.DataAnnotations.DataType.MultilineText)]
+    [System.ComponentModel.Description("Shown under the slider.")]
+    [System.ComponentModel.DataAnnotations.StringLength(140)]
+    public string? Caption { get; set; }
+
+    [Parameter, System.ComponentModel.DataAnnotations.DataType("Color")]
+    public string? Accent { get; set; }
+
+    [Parameter, System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    public string? InternalId { get; set; }
+}

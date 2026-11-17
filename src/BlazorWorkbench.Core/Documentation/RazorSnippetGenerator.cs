@@ -80,6 +80,8 @@ public static class RazorSnippetGenerator
 
         var tag = metadata.Type.IsGenericType ? metadata.Type.Name[..metadata.Type.Name.IndexOf('`', StringComparison.Ordinal)] : metadata.Type.Name;
         var sb = new StringBuilder();
+        if (scenario.Decorators.Count > 0)
+            sb.AppendLine($"@* The scenario renders the component inside: {string.Join(" > ", scenario.Decorators.Select(d => d.Name))} *@");
         foreach (var comment in comments)
             sb.AppendLine(comment);
 

@@ -177,26 +177,32 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
         }
     }
 
-    private sealed record Variant(ViewportPreset Viewport, ThemeDto Theme)
+    internal sealed record Variant(ViewportPreset Viewport, ThemeDto Theme)
     {
         public string Name => $"{Viewport.Name}-{Theme.Name}";
     }
 
-    private List<Variant> Variants(CatalogDto catalog, ScenarioDto scenario)
+    /// <summary>
+    /// The viewport and theme combinations to check a scenario in. A host that clears its viewport or theme list gets the
+    /// Workbench defaults (<see cref="CatalogVariants"/>) instead of an index error.
+    /// </summary>
+    internal static List<Variant> Variants(CatalogDto catalog, ScenarioDto scenario, TestRunOptions runOptions)
     {
-        ViewportPreset FindViewport(string name) => catalog.Viewports.FirstOrDefault(v => string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase))
+        var allViewports = CatalogVariants.Viewports(catalog);
+        var allThemes = CatalogVariants.Themes(catalog);
+        ViewportPreset FindViewport(string name) => allViewports.FirstOrDefault(v => string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase))
                                                     ?? throw new WorkbenchInfrastructureException($"Viewport '{name}' is not defined by the host.");
-        ThemeDto FindTheme(string name) => catalog.Themes.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
+        ThemeDto FindTheme(string name) => allThemes.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
                                            ?? throw new WorkbenchInfrastructureException($"Theme '{name}' is not defined by the host.");
 
         var viewports = scenario.Visual.Viewports.Count > 0 ? scenario.Visual.Viewports
             : scenario.Environment.Viewport is { } v ? [v]
-            : options.Viewports.Count > 0 ? options.Viewports
-            : [catalog.Viewports.FirstOrDefault(x => x.Name == "laptop")?.Name ?? catalog.Viewports[0].Name];
+            : runOptions.Viewports.Count > 0 ? runOptions.Viewports
+            : [CatalogVariants.DefaultViewport(catalog).Name];
         var themes = scenario.Visual.Themes.Count > 0 ? scenario.Visual.Themes
             : scenario.Environment.Theme is { } t ? [t]
-            : options.Themes.Count > 0 ? options.Themes
-            : [catalog.Themes[0].Name];
+            : runOptions.Themes.Count > 0 ? runOptions.Themes
+            : [CatalogVariants.DefaultTheme(catalog).Name];
         return viewports.SelectMany(vp => themes.Select(th => new Variant(FindViewport(vp), FindTheme(th)))).ToList();
     }
 
@@ -227,7 +233,7 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         try
         {
-            var variants = Variants(catalog, scenario);
+            var variants = Variants(catalog, scenario, options);
             var primary = variants[0];
 
             // 1. Render health, performance, accessibility and the primary visual variant.

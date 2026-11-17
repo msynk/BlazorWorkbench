@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Components;
@@ -80,6 +83,12 @@ public sealed class ComponentMetadataReader
         var obsolete = property.GetCustomAttribute<ObsoleteAttribute>(true);
         var kind = ClassifyKind(property, type, parameterAttribute, cascading);
         var (editor, unsupported) = ClassifyEditor(kind, type);
+        var hints = ReadEditorHints(property);
+        if (hints.DataType is { } dataType && kind == ParameterKind.Value && (Nullable.GetUnderlyingType(type) ?? type) == typeof(string))
+        {
+            if (dataType == DataType.MultilineText) editor = EditorKind.MultilineText;
+            else if (hints.IsColor) editor = EditorKind.Color;
+        }
 
         var isNullable = Nullable.GetUnderlyingType(type) is not null;
         if (!type.IsValueType)
@@ -122,8 +131,16 @@ public sealed class ComponentMetadataReader
             IsNullable = isNullable,
             IsObsolete = obsolete is not null,
             ObsoleteMessage = obsolete?.Message,
-            Summary = declaring is null ? null : docs?.GetSummary($"P:{XmlDocumentation.TypeId(declaring)}.{property.Name}")
-                      ?? XmlDocumentation.For(declaring.Assembly)?.GetSummary($"P:{XmlDocumentation.TypeId(declaring)}.{property.Name}"),
+            Summary = (declaring is null ? null : docs?.GetSummary($"P:{XmlDocumentation.TypeId(declaring)}.{property.Name}")
+                      ?? XmlDocumentation.For(declaring.Assembly)?.GetSummary($"P:{XmlDocumentation.TypeId(declaring)}.{property.Name}"))
+                      ?? hints.Description,
+            DisplayName = hints.DisplayName,
+            Group = hints.Group,
+            Order = hints.Order,
+            IsHidden = hints.IsHidden,
+            Minimum = hints.Minimum,
+            Maximum = hints.Maximum,
+            MaxLength = hints.MaxLength,
             DefaultValue = defaultValue,
             HasDefaultValue = hasDefault,
             DefaultValueDisplay = hasDefault ? FormatDefault(defaultValue) : null,
@@ -134,6 +151,55 @@ public sealed class ComponentMetadataReader
             BoundTo = boundTo,
             CascadingName = cascading?.Name,
             DeclaredBy = property.DeclaringType is { } dt && dt != property.ReflectedType ? Naming.FormatTypeName(dt) : null,
+        };
+    }
+
+    private sealed record EditorHints(
+        string? DisplayName, string? Description, string? Group, int? Order, bool IsHidden,
+        double? Minimum, double? Maximum, int? MaxLength, DataType? DataType, bool IsColor);
+
+    /// <summary>
+    /// Reads the standard .NET attributes that describe how a value is edited, so parameters get a label, a section, an order,
+    /// a slider or a text area without Workbench-specific code: <c>[Display]</c>, <c>[DisplayName]</c>, <c>[Description]</c>,
+    /// <c>[Category]</c>, <c>[EditorBrowsable]</c>, <c>[Browsable]</c>, <c>[Range]</c>, <c>[StringLength]</c>,
+    /// <c>[MaxLength]</c> and <c>[DataType]</c>. Attributes that cannot be read are ignored.
+    /// </summary>
+    private static EditorHints ReadEditorHints(PropertyInfo property)
+    {
+        try
+        {
+            var display = property.GetCustomAttribute<DisplayAttribute>(true);
+            var range = property.GetCustomAttribute<RangeAttribute>(true);
+            var dataType = property.GetCustomAttribute<DataTypeAttribute>(true);
+            var browsable = property.GetCustomAttribute<EditorBrowsableAttribute>(true);
+            var hidden = browsable?.State == EditorBrowsableState.Never || property.GetCustomAttribute<BrowsableAttribute>(true)?.Browsable == false;
+            var maxLength = property.GetCustomAttribute<StringLengthAttribute>(true)?.MaximumLength
+                            ?? property.GetCustomAttribute<MaxLengthAttribute>(true)?.Length;
+            return new EditorHints(
+                DisplayName: NullIfEmpty(display?.GetName()) ?? NullIfEmpty(property.GetCustomAttribute<DisplayNameAttribute>(true)?.DisplayName),
+                Description: NullIfEmpty(display?.GetDescription()) ?? NullIfEmpty(property.GetCustomAttribute<DescriptionAttribute>(true)?.Description),
+                Group: NullIfEmpty(display?.GetGroupName()) ?? NullIfEmpty(property.GetCustomAttribute<CategoryAttribute>(true)?.Category),
+                Order: display?.GetOrder(),
+                IsHidden: hidden,
+                Minimum: ToDouble(range?.Minimum),
+                Maximum: ToDouble(range?.Maximum),
+                MaxLength: maxLength is > 0 ? maxLength : null,
+                DataType: dataType?.DataType,
+                IsColor: dataType is { DataType: DataType.Custom, CustomDataType: { } custom } && string.Equals(custom, "Color", StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or TypeLoadException or CustomAttributeFormatException)
+        {
+            return new EditorHints(null, null, null, null, false, null, null, null, null, false);
+        }
+
+        static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+        static double? ToDouble(object? value) => value switch
+        {
+            null => null,
+            IConvertible c when value is not string => c.ToDouble(CultureInfo.InvariantCulture) is var d && double.IsFinite(d) ? d : null,
+            string s when double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) && double.IsFinite(parsed) => parsed,
+            _ => null,
         };
     }
 

@@ -270,6 +270,76 @@ public class HttpSimulationTests
         Assert.DoesNotContain("abc123", session.Http.Exchanges.Single().Url);
         Assert.All(session.Diagnostics.Snapshot(), d => Assert.DoesNotContain("abc123", d.Message));
     }
+
+    [Fact]
+    public async Task Custom_handler_responses_stay_pending_until_the_body_is_read()
+    {
+        var (client, session) = await CreateAsync(h => h.Get("/x").Handle((request, _) =>
+        {
+            var response = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.Accepted) { Content = new StringContent("{\"a\":1}", System.Text.Encoding.UTF8, "application/json") };
+            response.Headers.Add("X-Custom", "1");
+            return Task.FromResult(response);
+        }));
+        using var response = await client.GetAsync("x", HttpCompletionOption.ResponseHeadersRead, Xunit.TestContext.Current.CancellationToken);
+        Assert.Equal(1, session.Activity.Pending); // readiness waits for the render the body causes
+        Assert.Equal(202, (int)response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+        Assert.Equal(7, response.Content.Headers.ContentLength);
+        Assert.Equal("1", response.Headers.GetValues("X-Custom").Single());
+        Assert.Equal("{\"a\":1}", await response.Content.ReadAsStringAsync(Xunit.TestContext.Current.CancellationToken));
+        Assert.Equal(0, session.Activity.Pending);
+    }
+
+    [Fact]
+    public async Task Custom_handler_stream_ends_activity_when_read_to_the_end()
+    {
+        var (client, session) = await CreateAsync(h => h.Get("/x").Handle((_, _, _) =>
+            Task.FromResult(new System.Net.Http.HttpResponseMessage { Content = new StringContent("streamed") })));
+        using var response = await client.GetAsync("x", HttpCompletionOption.ResponseHeadersRead, Xunit.TestContext.Current.CancellationToken);
+        Assert.Equal(1, session.Activity.Pending);
+        await using (var stream = await response.Content.ReadAsStreamAsync(Xunit.TestContext.Current.CancellationToken))
+        using (var reader = new StreamReader(stream))
+            Assert.Equal("streamed", await reader.ReadToEndAsync(Xunit.TestContext.Current.CancellationToken));
+        Assert.Equal(0, session.Activity.Pending);
+    }
+
+    [Fact]
+    public async Task Cancellable_handler_receives_the_request_token()
+    {
+        var observed = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (client, session) = await CreateAsync(h => h.Get("/slow").Handle(async (_, _, token) =>
+        {
+            observed.TrySetResult(token);
+            await Task.Delay(Timeout.Infinite, token);
+            return new System.Net.Http.HttpResponseMessage();
+        }));
+        using var cts = new CancellationTokenSource();
+        var request = client.GetAsync("slow", cts.Token);
+        var token = await observed.Task.WaitAsync(TimeSpan.FromSeconds(10), Xunit.TestContext.Current.CancellationToken);
+        Assert.True(token.CanBeCanceled);
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+        Assert.True(token.IsCancellationRequested);
+        Assert.Equal(0, session.Activity.Pending);
+    }
+
+    [Fact]
+    public void Builder_records_which_handler_was_set_last()
+    {
+        var options = new WorkbenchOptions();
+        options.AddScenarios(new HttpSet(h =>
+        {
+            h.Get("/a").Handle((_, _) => Task.FromResult(new System.Net.Http.HttpResponseMessage()));
+            h.Get("/b").Handle((_, _) => Task.FromResult(new System.Net.Http.HttpResponseMessage()))
+                .Handle((_, _, _) => Task.FromResult(new System.Net.Http.HttpResponseMessage()));
+        }, offline: false));
+        var rules = CatalogBuilder.Build(options).Scenarios[0].Environment.Http!.Rules;
+        Assert.NotNull(rules[0].Handler);
+        Assert.Null(rules[0].CancellableHandler);
+        Assert.Null(rules[1].Handler);
+        Assert.NotNull(rules[1].CancellableHandler);
+        Assert.All(rules, r => Assert.True(r.HasCustomHandler));
+    }
 }
 
 public class InspectorTests : BunitContext

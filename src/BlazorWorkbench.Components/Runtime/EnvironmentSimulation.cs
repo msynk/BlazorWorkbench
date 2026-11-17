@@ -108,15 +108,21 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
                         new TimeoutException("Simulated timeout."));
             }
 
+            // The request stays pending until the component has consumed the body, so the preview cannot report
+            // "ready" between the response and the render it causes (see TrackedContent).
             HttpResponseMessage response;
-            if (rule.Handler is { } handler)
+            if (rule.HasCustomHandler)
             {
-                response = await handler(request, _session.Context!).ConfigureAwait(false);
+                response = rule.CancellableHandler is { } cancellable
+                    ? await cancellable(request, _session.Context!, token).ConfigureAwait(false)
+                    : await rule.Handler!(request, _session.Context!).ConfigureAwait(false);
+                if (response is null)
+                    throw new InvalidOperationException($"The custom handler of HTTP rule '{rule}' returned no response.");
+                response.Content = new TrackedContent(response.Content, activity);
+                activity = TrackedContent.Transferred;
             }
             else
             {
-                // The request stays pending until the component has consumed the body, so the preview cannot report
-                // "ready" between the response and the render it causes (see TrackedContent).
                 var content = new TrackedContent(Encoding.UTF8.GetBytes(rule.Body ?? ""), activity);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(rule.ContentType ?? (rule.Body is null ? "text/plain" : "application/json")) { CharSet = "utf-8" };
                 activity = TrackedContent.Transferred;
@@ -209,31 +215,60 @@ public sealed class WorkbenchHttpMessageHandler : HttpMessageHandler
 /// Response content that ends its pending activity when the body has been read, disposed, or after a short grace
 /// period (for callers that never read the body).
 /// </summary>
-internal sealed class TrackedContent : ByteArrayContent
+internal sealed class TrackedContent : HttpContent
 {
     /// <summary>A no-op handle used after ownership of the activity moved to the content.</summary>
     public static IDisposable Transferred { get; } = new NoOp();
 
+    private readonly HttpContent _inner;
     private readonly IDisposable _activity;
 
-    public TrackedContent(byte[] body, IDisposable activity) : base(body)
+    public TrackedContent(byte[] body, IDisposable activity) : this(new ByteArrayContent(body), activity)
     {
+    }
+
+    /// <summary>Wraps <paramref name="inner"/> (for example the response of a custom handler); its headers are copied.</summary>
+    public TrackedContent(HttpContent inner, IDisposable activity)
+    {
+        _inner = inner;
         _activity = activity;
+        foreach (var (name, values) in inner.Headers)
+            Headers.TryAddWithoutValidation(name, values);
         _ = Task.Delay(TimeSpan.FromSeconds(2)).ContinueWith(_ => _activity.Dispose(), TaskScheduler.Default);
     }
 
-    protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+    protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+        SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+    protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context, CancellationToken cancellationToken)
     {
-        await base.SerializeToStreamAsync(stream, context).ConfigureAwait(false);
+        await _inner.CopyToAsync(stream, context, cancellationToken).ConfigureAwait(false);
         _activity.Dispose();
     }
 
     protected override async Task<Stream> CreateContentReadStreamAsync() =>
-        new EndTrackingStream(await base.CreateContentReadStreamAsync().ConfigureAwait(false), _activity);
+        new EndTrackingStream(await _inner.ReadAsStreamAsync().ConfigureAwait(false), _activity);
+
+    protected override async Task<Stream> CreateContentReadStreamAsync(CancellationToken cancellationToken) =>
+        new EndTrackingStream(await _inner.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), _activity);
+
+    protected override bool TryComputeLength(out long length)
+    {
+        if (_inner.Headers.ContentLength is { } known)
+        {
+            length = known;
+            return true;
+        }
+
+        length = 0;
+        return false;
+    }
 
     protected override void Dispose(bool disposing)
     {
         _activity.Dispose();
+        if (disposing)
+            _inner.Dispose();
         base.Dispose(disposing);
     }
 

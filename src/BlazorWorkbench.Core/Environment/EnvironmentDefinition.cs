@@ -197,8 +197,17 @@ public sealed class HttpRule
     /// <summary>When set, the rule matches only this many requests and then falls through to later rules.</summary>
     public int? Times { get; init; }
 
-    /// <summary>Custom response factory (not serializable; shown as "custom" in reports).</summary>
+    /// <summary>Custom response factory (not serializable; shown as "custom" in reports). See also <see cref="CancellableHandler"/>.</summary>
     public Func<HttpRequestMessage, ScenarioContext, Task<HttpResponseMessage>>? Handler { get; init; }
+
+    /// <summary>
+    /// Custom response factory that receives the request's cancellation token, which is also canceled when the preview
+    /// session ends. Takes precedence over <see cref="Handler"/> when both are set.
+    /// </summary>
+    public Func<HttpRequestMessage, ScenarioContext, CancellationToken, Task<HttpResponseMessage>>? CancellableHandler { get; init; }
+
+    /// <summary>True when the response comes from custom code (<see cref="Handler"/> or <see cref="CancellableHandler"/>).</summary>
+    public bool HasCustomHandler => Handler is not null || CancellableHandler is not null;
 
     public override string ToString() => $"{Method} {Pattern}";
 }

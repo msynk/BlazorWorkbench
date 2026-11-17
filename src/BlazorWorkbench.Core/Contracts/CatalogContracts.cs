@@ -273,7 +273,7 @@ public static class CatalogMapper
                 Authenticated = env.User?.IsAuthenticated,
                 Http = (env.Http?.Rules ?? []).Select(r => new HttpRuleDto(r.Method, r.Pattern, (int)r.Status,
                     r.Fault == HttpFault.None ? null : r.Fault.ToString(), r.Gate, r.Times, (r.Latency ?? env.Http!.Latency).TotalMilliseconds is var l && l > 0 ? l : null,
-                    r.Handler is not null)).ToArray(),
+                    r.HasCustomHandler)).ToArray(),
                 JSInterop = (env.JSInterop?.Rules ?? []).Select(r => new JSInteropRuleDto(r.Identifier, r.Module, r.Describe(), r.Gate, r.Times)).ToArray(),
                 JSInteropStrict = env.JSInterop?.Strict == true,
                 Clock = env.Clock,

@@ -17,6 +17,25 @@ The **Controls** panel generates an editor for each component parameter.
 | Types with a custom editor | Your component. |
 | Everything else | Shown as unsupported, with the reason and the scenario value. |
 
+### Shaping the editors with standard attributes
+
+The standard .NET attributes on a parameter change its editor, so no Workbench-specific code is needed:
+
+| Attribute | Effect in the Controls panel |
+| --- | --- |
+| `[Range(0, 100)]` | A slider next to the number box (values outside the range can still be typed, to preview them) |
+| `[Display(Name = "Volume level")]`, `[DisplayName]` | The label (the parameter name is shown next to it) |
+| `[Display(GroupName = "Sound")]`, `[Category("Sound")]` | A section; sections appear in the order of their first parameter |
+| `[Display(Order = 2)]` | The position within the panel or section |
+| `[Display(Description = "...")]`, `[Description]` | The help text, when the parameter has no XML documentation |
+| `[DataType(DataType.MultilineText)]` | A text area for a `string` |
+| `[DataType("Color")]` | A color picker next to the text box for a `string` |
+| `[StringLength(140)]`, `[MaxLength(140)]` | A length limit on the text box |
+| `[EditorBrowsable(EditorBrowsableState.Never)]`, `[Browsable(false)]` | Hidden behind *Show hidden parameters*, unless the scenario or the URL sets it |
+
+For `DateTimeOffset` parameters the date and time picker keeps the value's UTC offset, shown next to it, so editing never
+moves the value to the server's time zone.
+
 Every row shows the **source** of its value: *Scenario*, *Default* (component default), *Override*, *Fixture* or *Logged*. The *null* and *unset* buttons keep three cases apart: an explicit `null`, a parameter that is not supplied (component default), and a value. Invalid input is rejected with a message and is never applied. Unsetting a parameter remounts the component, because Blazor does not reset parameters that are removed.
 
 Edits are transient. They live in the URL (`?args=`), so you can share a link, until you export them from **Code → Save as scenario**.

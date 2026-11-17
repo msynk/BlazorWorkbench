@@ -155,6 +155,47 @@ public class ChangeImpactTests : IDisposable
         Assert.Equal(["a.txt", "b.txt", "lib/C.razor"], changed);
     }
 
+    private static void RunGit(string dir, params string[] args)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("git") { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var arg in args) start.ArgumentList.Add(arg);
+        using var p = System.Diagnostics.Process.Start(start)!;
+        p.StandardOutput.ReadToEnd();
+        var error = p.StandardError.ReadToEnd();
+        p.WaitForExit();
+        Assert.True(p.ExitCode == 0, error);
+    }
+
+    [Fact]
+    public async Task Git_changes_cover_commits_since_the_merge_base_deletions_and_non_ascii_paths()
+    {
+        RunGit(_root, "init", "-q");
+        RunGit(_root, "config", "user.email", "test@example.com");
+        RunGit(_root, "config", "user.name", "Test");
+        RunGit(_root, "config", "core.quotePath", "true"); // the reader must not depend on the user's setting
+        File.WriteAllText(Path.Combine(_root, "keep.txt"), "1");
+        File.WriteAllText(Path.Combine(_root, "gone.txt"), "1");
+        File.WriteAllText(Path.Combine(_root, "old.txt"), "1");
+        RunGit(_root, "add", ".");
+        RunGit(_root, "commit", "-qm", "initial");
+        RunGit(_root, "tag", "base");
+
+        File.WriteAllText(Path.Combine(_root, "Bütton.razor"), "<p />");      // committed after base, non-ASCII
+        RunGit(_root, "add", ".");
+        RunGit(_root, "commit", "-qm", "feature");
+        RunGit(_root, "mv", "old.txt", "new.txt");                          // staged rename: both paths
+        File.Delete(Path.Combine(_root, "gone.txt"));                        // unstaged deletion
+
+        var changed = (await ChangeImpact.GitChangedFilesAsync(_root, "base", Xunit.TestContext.Current.CancellationToken))
+            .Select(f => Path.GetRelativePath(_root, f).Replace('\\', '/')).ToList();
+        Assert.Equal(["Bütton.razor", "gone.txt", "new.txt", "old.txt"], changed);
+
+        var rejected = await Assert.ThrowsAsync<WorkbenchInfrastructureException>(() => ChangeImpact.GitChangedFilesAsync(_root, "--output=x", Xunit.TestContext.Current.CancellationToken));
+        Assert.Contains("not a valid git revision", rejected.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_root, "x")));
+        await Assert.ThrowsAsync<WorkbenchInfrastructureException>(() => ChangeImpact.GitChangedFilesAsync(_root, "no-such-ref", Xunit.TestContext.Current.CancellationToken));
+    }
+
     private void Write(string relative, string content)
     {
         var path = Path.Combine(_root, relative);

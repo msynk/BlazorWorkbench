@@ -7,7 +7,6 @@ namespace BlazorWorkbench;
 /// <summary>Naming helpers used to produce stable identifiers and readable type names.</summary>
 public static class Naming
 {
-    /// <summary>Converts text such as <c>DataGrid&lt;Person&gt;</c> or <c>Primary Button</c> to <c>data-grid-person</c> / <c>primary-button</c>.</summary>
     /// <summary>
     /// Lower-case slug for display names of presets (users, network profiles, backgrounds): letters and digits are kept, every
     /// other run of characters becomes one hyphen. "Slow 3G" becomes <c>slow-3g</c>, "Owner on Pro" <c>owner-on-pro</c>.
@@ -28,6 +27,7 @@ public static class Naming
         return sb.ToString().Trim('-');
     }
 
+    /// <summary>Converts text such as <c>DataGrid&lt;Person&gt;</c> or <c>Primary Button</c> to <c>data-grid-person</c> / <c>primary-button</c>.</summary>
     public static string ToKebabCase(string value)
     {
         var sb = new StringBuilder(value.Length + 8);
