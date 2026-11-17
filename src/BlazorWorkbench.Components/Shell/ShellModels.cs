@@ -9,6 +9,22 @@ public sealed record A11yRule(string Id, string? Impact, string Help, string? De
 
 public sealed record A11yOutcome(string? Engine, A11yRule[]? Violations, A11yRule[]? Incomplete, int Passes, string? Error);
 
+/// <summary>A heading of the preview, as assistive technology lists it.</summary>
+/// <param name="Level">1 to 6 (<c>aria-level</c> wins over the tag).</param>
+/// <param name="Text">The accessible name.</param>
+/// <param name="Issue">A structural problem (skipped level, empty heading), or null.</param>
+/// <param name="Index">Identifies the element for highlighting.</param>
+public sealed record OutlineHeading(int Level, string Text, string? Issue, int Index);
+
+/// <summary>A landmark of the preview (banner, navigation, main, region and so on).</summary>
+public sealed record OutlineLandmark(string Role, string Name, int Depth, string? Issue, int Index);
+
+/// <summary>The preview's headings and landmarks, in document order (the Accessibility panel's Outline).</summary>
+public sealed record OutlineReport(OutlineHeading[] Headings, OutlineLandmark[] Landmarks)
+{
+    public int IssueCount => Headings.Count(h => h.Issue is not null) + Landmarks.Count(l => l.Issue is not null);
+}
+
 public sealed record StepResult(int Index, string Description, string Status, string? Error, double? DurationMs);
 
 public sealed record InteractionOutcome(string Name, bool Passed, StepResult[] Results);

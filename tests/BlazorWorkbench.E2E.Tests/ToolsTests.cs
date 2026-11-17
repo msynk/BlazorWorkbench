@@ -300,4 +300,79 @@ public class ToolsTests(WorkbenchFixture fixture)
         await page.Locator(".wb-a11y").GetByRole(AriaRole.Button).First.ClickAsync();
         await Expect(page.Locator(".wb-a11y")).Not.ToContainTextAsync("Scanning", new() { Timeout = 20_000 });
     }
+
+    [Fact]
+    public async Task The_accessibility_outline_lists_headings_and_landmarks()
+    {
+        var page = await OpenAsync("scenario/layout-app-header--desktop?panel=accessibility");
+        await WaitReadyAsync(page);
+        var outline = page.Locator(".wb-outline");
+        await Expect(outline.Locator(".wb-outline-list .wb-badge", new() { HasText = "banner" })).ToHaveCountAsync(1);
+        await Expect(outline.GetByRole(AriaRole.Button, new() { Name = "navigation Main" })).ToBeVisibleAsync();
+
+        // Clicking an entry outlines the element in the preview.
+        await outline.GetByRole(AriaRole.Button, new() { Name = "navigation Main" }).ClickAsync();
+        await Expect(Preview(page).Locator("[data-wb-part=highlight] div").First).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task Toolbar_globals_reach_the_preview_and_the_url()
+    {
+        var page = await OpenAsync("scenario/inputs-button--primary?g.corners=square");
+        await WaitReadyAsync(page);
+        await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-corners", "square");
+        await Expect(page.Locator("#wb-global-corners")).ToHaveValueAsync("square");
+
+        await page.Locator("#wb-global-corners").SelectOptionAsync("rounded");
+        await WaitReadyAsync(page);
+        await Expect(Preview(page).Locator("html")).ToHaveAttributeAsync("data-corners", "rounded");
+        await Expect(page).ToHaveURLAsync(new Regex(@"g\.corners=rounded"));
+    }
+
+    [Fact]
+    public async Task A_panel_of_your_own_reads_from_the_live_preview()
+    {
+        // The demo's Styles panel (options.AddPanel) evaluates script in the preview; the Corners global squares the button.
+        var page = await OpenAsync("scenario/inputs-button--primary?panel=x-styles&g.corners=square");
+        await WaitReadyAsync(page);
+        await Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Styles" })).ToHaveAttributeAsync("aria-selected", "true");
+        var radius = page.Locator(".wb-tabpanel tr", new() { HasText = "border-radius" });
+        await Expect(radius).ToContainTextAsync("0px", new() { Timeout = 20_000 });
+
+        await page.Locator("#wb-global-corners").SelectOptionAsync("rounded");
+        await WaitReadyAsync(page);
+        await Expect(radius).Not.ToContainTextAsync("0px", new() { Timeout = 20_000 });
+    }
+
+    [Fact]
+    public async Task Complex_parameters_can_be_edited_as_json()
+    {
+        var page = await OpenAsync("scenario/data-data-table--few-rows");
+        await WaitReadyAsync(page);
+        var row = page.Locator("tr", new() { Has = page.Locator("#wb-param-Items") });
+        await row.GetByText("Edit as JSON").ClickAsync();
+        await row.Locator("textarea.wb-json-editor").FillAsync("[{\"name\":\"Grace Hopper\",\"email\":\"grace@example.com\",\"age\":85,\"country\":\"US\"}]");
+        await row.Locator("textarea.wb-json-editor").BlurAsync();
+        await Expect(Preview(page).Locator("tbody tr")).ToHaveCountAsync(1);
+        await Expect(Preview(page).Locator("tbody")).ToContainTextAsync("Grace Hopper");
+        await Expect(page).ToHaveURLAsync(new Regex("args="));
+    }
+
+    [Fact]
+    public async Task Synchronized_compare_frames_repeat_interactions()
+    {
+        var page = await OpenAsync("scenario/inputs-counter--default?mode=compare");
+        var frames = page.Locator(".wb-compare-cell iframe");
+        await Expect(frames.Nth(1)).ToBeAttachedAsync(); // one frame per theme: at least two
+        var first = page.FrameLocator(".wb-compare-cell:nth-child(1) iframe");
+        var second = page.FrameLocator(".wb-compare-cell:nth-child(2) iframe");
+        await Expect(first.Locator("html[data-workbench-state=ready]")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(second.Locator("html[data-workbench-state=ready]")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        var before = await second.Locator(".counter").InnerTextAsync();
+
+        await page.GetByRole(AriaRole.Checkbox, new() { Name = "Sync interactions" }).CheckAsync();
+        await first.GetByRole(AriaRole.Button, new() { Name = "Increase" }).ClickAsync();
+        await Expect(second.Locator(".counter")).Not.ToHaveTextAsync(before, new() { Timeout = 10_000 });
+        Assert.Equal(await first.Locator(".counter").InnerTextAsync(), await second.Locator(".counter").InnerTextAsync());
+    }
 }

@@ -95,7 +95,7 @@ public sealed class BaselineStore(string directory, string? platform = null)
         return removed;
     }
 
-    private static string Sanitize(string value)
+    internal static string Sanitize(string value)
     {
         var invalid = Path.GetInvalidFileNameChars();
         return new string(value.Select(c => invalid.Contains(c) || c is '/' or '\\' ? '_' : c).ToArray());

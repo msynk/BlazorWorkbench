@@ -18,5 +18,12 @@ builder.AddBlazorWorkbench(options =>
 });
 
 var app = builder.Build();
+// Hosting behind a reverse proxy under a path, for example Workbench__PathBase=/workbench (used by the end-to-end tests).
+// UseRouting must follow UsePathBase, or endpoints are matched against the full path.
+if (app.Configuration["Workbench:PathBase"] is { Length: > 1 } pathBase)
+{
+    app.UsePathBase(pathBase);
+    app.UseRouting();
+}
 app.MapBlazorWorkbench();
 app.Run();

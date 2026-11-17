@@ -28,6 +28,65 @@
         @RenderRules("Violations", Result.Violations)
         @RenderRules("Needs manual review", Result.Incomplete)
     }
+
+    <section class="wb-outline" aria-labelledby="wb-outline-title">
+        <header class="wb-code-header">
+            <h2 class="wb-h3" id="wb-outline-title">Outline</h2>
+            <button type="button" class="wb-button wb-button-small" @onclick="() => OnRefreshOutline.InvokeAsync()">Refresh</button>
+        </header>
+        <p class="wb-muted wb-small">The headings and landmarks a screen reader lists, in document order. Headings should not skip levels; landmarks of the same kind need distinct names.</p>
+        @if (Outline is null)
+        {
+            <p class="wb-muted">Reading the outline…</p>
+        }
+        else
+        {
+            <div class="wb-outline-columns">
+                <div>
+                    <h3 class="wb-h4">Headings <span class="wb-muted wb-small">@Outline.Headings.Length</span></h3>
+                    @if (Outline.Headings.Length == 0)
+                    {
+                        <p class="wb-muted wb-small">No headings. Fine for small components; pages and dialogs usually need one.</p>
+                    }
+                    else
+                    {
+                        <ul class="wb-outline-list">
+                            @foreach (var h in Outline.Headings)
+                            {
+                                <li style="@Indent(h.Level - 1)" class="@(h.Issue is null ? "" : "wb-outline-issue")">
+                                    <button type="button" class="wb-link-button" @onclick='() => OnHighlightOutline.InvokeAsync((h.Index, "h" + h.Level))' title="Outline the heading in the preview">
+                                        <span class="wb-badge">h@(h.Level)</span> @(h.Text.Length > 0 ? h.Text : "(empty)")
+                                    </button>
+                                    @if (h.Issue is { } issue) { <span class="wb-outline-note" role="note">@issue</span> }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+                <div>
+                    <h3 class="wb-h4">Landmarks <span class="wb-muted wb-small">@Outline.Landmarks.Length</span></h3>
+                    @if (Outline.Landmarks.Length == 0)
+                    {
+                        <p class="wb-muted wb-small">No landmarks. Expected for most components; page layouts need banner, main and contentinfo.</p>
+                    }
+                    else
+                    {
+                        <ul class="wb-outline-list">
+                            @foreach (var l in Outline.Landmarks)
+                            {
+                                <li style="@Indent(l.Depth)" class="@(l.Issue is null ? "" : "wb-outline-issue")">
+                                    <button type="button" class="wb-link-button" @onclick="() => OnHighlightOutline.InvokeAsync((l.Index, l.Role))" title="Outline the landmark in the preview">
+                                        <span class="wb-badge">@l.Role</span> @(l.Name.Length > 0 ? l.Name : "(no name)")
+                                    </button>
+                                    @if (l.Issue is { } issue) { <span class="wb-outline-note" role="note">@issue</span> }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        }
+    </section>
 </div>
 
 @code {
@@ -38,6 +97,16 @@
 
     /// <summary>Outlines an element in the preview: the axe-core selector and a label.</summary>
     [Parameter] public EventCallback<(string Selector, string Label)> OnHighlight { get; set; }
+
+    /// <summary>The preview's headings and landmarks; null until the preview has reported them.</summary>
+    [Parameter] public OutlineReport? Outline { get; set; }
+
+    [Parameter] public EventCallback OnRefreshOutline { get; set; }
+
+    /// <summary>Outlines a heading or landmark of <see cref="Outline"/> in the preview: its index and a label.</summary>
+    [Parameter] public EventCallback<(int Index, string Label)> OnHighlightOutline { get; set; }
+
+    private static string Indent(int steps) => string.Create(CultureInfo.InvariantCulture, $"padding-inline-start: {steps * 0.9:0.#}rem");
 
     private static int ImpactOrder(string? impact) => impact switch { "critical" => 0, "serious" => 1, "moderate" => 2, "minor" => 3, _ => 4 };
 

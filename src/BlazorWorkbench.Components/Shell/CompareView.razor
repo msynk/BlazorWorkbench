@@ -17,6 +17,9 @@
                 <label class="wb-check"><input type="checkbox" checked="@(!_hidden.Contains(value.Key))" @onchange="() => Flip(value.Key)" /> @value.Label</label>
             }
         </fieldset>
+        <label class="wb-check" title="Clicks, typing, keys and scrolling in one frame are repeated in the others">
+            <input type="checkbox" checked="@Sync" @onchange="e => SyncChanged.InvokeAsync(e.Value is true)" /> Sync interactions
+        </label>
         <label class="wb-field"><span>Frame zoom</span>
             <select @bind="_zoom">
                 <option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option><option value="1">100%</option>
@@ -65,6 +68,11 @@
 
     /// <summary>The initial axis (for deep links: <c>?compare=viewport</c>).</summary>
     [Parameter] public string? InitialAxis { get; set; }
+
+    /// <summary>Whether interactions in one frame are repeated in the others.</summary>
+    [Parameter] public bool Sync { get; set; }
+
+    [Parameter] public EventCallback<bool> SyncChanged { get; set; }
 
     protected override void OnInitialized()
     {

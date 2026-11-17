@@ -51,6 +51,15 @@ public sealed class ScenarioContext
 
     public CultureInfo Culture { get; }
 
+    /// <summary>
+    /// The values of the toolbar globals (<see cref="WorkbenchOptions.Globals"/>) in this activation, by id: the toolbar's
+    /// choice, else the scenario's <c>.Global(...)</c>, else the global's default. Service factories can branch on them.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Globals { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>The value of the toolbar global <paramref name="id"/>, or null when it has none.</summary>
+    public string? Global(string id) => Globals.TryGetValue(id, out var value) ? value : null;
+
     /// <summary>The service provider of the preview (available while rendering; null during static validation).</summary>
     public IServiceProvider? Services { get; internal set; }
 

@@ -30,18 +30,18 @@ public static partial class ChangeImpact
         var mapped = 0;
 
         var componentsBySource = catalog.Components.Where(c => c.SourcePath is not null)
-            .GroupBy(c => Normalize(c.SourcePath!), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(c => Normalize(c.SourcePath!), PathSafety.Comparer)
+            .ToDictionary(g => g.Key, g => g.ToList(), PathSafety.Comparer);
         var changedComponents = new HashSet<string>(StringComparer.Ordinal);
         var scenariosBySource = catalog.Scenarios.Where(s => s.SourcePath is not null)
-            .GroupBy(s => Normalize(s.SourcePath!), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.Select(s => s.Id).ToList(), StringComparer.OrdinalIgnoreCase);
+            .GroupBy(s => Normalize(s.SourcePath!), PathSafety.Comparer)
+            .ToDictionary(g => g.Key, g => g.Select(s => s.Id).ToList(), PathSafety.Comparer);
         var scenarioIds = catalog.Scenarios.Select(s => s.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in changedFiles.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var file in changedFiles.Select(Path.GetFullPath).Distinct(PathSafety.Comparer))
         {
             // Baselines: {baselines}/{platform}/{scenarioId}/{variant}.png
-            if (baselines is not null && file.StartsWith(baselines + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            if (baselines is not null && file.StartsWith(baselines + Path.DirectorySeparatorChar, PathSafety.Comparison))
             {
                 var parts = Path.GetRelativePath(baselines, file).Replace('\\', '/').Split('/');
                 if (parts.Length >= 3 && scenarioIds.Contains(parts[1]))
@@ -169,7 +169,7 @@ public static partial class ChangeImpact
                 foreach (var sub in Directory.EnumerateDirectories(directory))
                 {
                     var name = Path.GetFileName(sub);
-                    if (!name.StartsWith('.') && !SkippedDirectories.Contains(name) && !string.Equals(sub, baselines, StringComparison.OrdinalIgnoreCase))
+                    if (!name.StartsWith('.') && !SkippedDirectories.Contains(name) && !string.Equals(sub, baselines, PathSafety.Comparison))
                         pending.Push(sub);
                 }
 

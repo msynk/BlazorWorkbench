@@ -49,7 +49,7 @@
                 <h2 class="wb-h3">
                     <span class="wb-badge wb-visual-@r.Status.ToLowerInvariant()">@r.Status</span> @r.Variant
                     @if (r.DiffRatio is { } ratio) { <span class="wb-muted"> · @((ratio * 100).ToString("0.###", CultureInfo.InvariantCulture))% pixels differ</span> }
-                    @if (r.RunAt is { } at) { <span class="wb-muted"> · @at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</span> }
+                    @if (r.RunAt is { } at) { <span class="wb-muted"> · @ViewerTimeZone.Convert(Services, at).ToString("g", CultureInfo.CurrentCulture)</span> }
                     @if (_canApprove && IsApprovable(r))
                     {
                         <button type="button" class="wb-button wb-button-small wb-visual-approve" disabled="@_approving" @onclick="() => ApproveAsync(r.Variant)"

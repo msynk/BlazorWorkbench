@@ -7,6 +7,7 @@
 @inject WorkbenchCatalogAccessor Catalogs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject IServiceProvider Services
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -81,6 +82,27 @@
                         }
                     </select>
                 </label>
+                @foreach (var global in Options.Globals)
+                {
+                    var declared = _scenario.Environment.Globals.GetValueOrDefault(global.Id) ?? global.DefaultValue;
+                    <label class="wb-field" title="A toolbar global: cascaded as '@global.Id' and set as data-@global.Id on the preview">
+                        <span>@global.Label</span>
+                        <select id="@($"wb-global-{global.Id}")" value="@(_globals.GetValueOrDefault(global.Id) ?? "")" @onchange="e => OnGlobalChanged(global.Id, e.Value as string)">
+                            <option value="">Scenario default@(declared is null ? "" : $" ({declared})")</option>
+                            @foreach (var value in global.Values)
+                            {
+                                <option value="@value">@value</option>
+                            }
+                        </select>
+                    </label>
+                }
+                @foreach (var item in Options.ToolbarItems)
+                {
+                    <ErrorBoundary>
+                        <ChildContent><DynamicComponent Type="item" Parameters="ExtensionParameters" /></ChildContent>
+                        <ErrorContent><span class="wb-error wb-small" title="@context.Message">@item.Name failed</span></ErrorContent>
+                    </ErrorBoundary>
+                }
                 <span class="wb-toolbar-spacer"></span>
                 <button type="button" class="wb-button" title="Reload the preview, keeping changes (R)" @onclick="Reload">Reload</button>
                 <button type="button" class="wb-button" title="Reset to the scenario's declared state (Shift+R)" @onclick="Reset">Reset</button>
@@ -211,7 +233,8 @@
                     case "compare":
                         <ViewportBar Options="Options" ViewportName="@ViewportName" Width="CurrentWidth" Height="CurrentHeight" Rotate="_tools.Rotate" Touch="EffectiveTouch"
                                      Canvas="false" OnViewport="OnViewportPreset" OnSize="OnViewportSize" OnSetWidth="SetWidth" OnRotate="RotateViewport" OnTouch="SetTouch" />
-                        <CompareView Scenario="_scenario" Options="Options" BuildUrl="CompareUrl" Viewport="EffectiveViewport" InitialAxis="@CompareQuery" Breakpoints="_marks" />
+                        <CompareView Scenario="_scenario" Options="Options" BuildUrl="CompareUrl" Viewport="EffectiveViewport" InitialAxis="@CompareQuery" Breakpoints="_marks"
+                                     Sync="_compareSync" SyncChanged="SetCompareSync" />
                         break;
                     case "gallery":
                         <GalleryView Component="_component!" SelectedScenarioId="@_scenario.Id" PreviewTheme="@ShellMatchedTheme" />
@@ -284,7 +307,8 @@
                                                Recording="_recording" AssertMode="_assertMode" Recorded="_recorded" OnRecord="Record" OnClearRecording="() => _recorded.Clear()" />
                             break;
                         case "accessibility":
-                            <AccessibilityPanel Result="_a11y" Running="_a11yRunning" Scenario="_scenario" OnRun="RunAccessibility" OnHighlight="Highlight" />
+                            <AccessibilityPanel Result="_a11y" Running="_a11yRunning" Scenario="_scenario" OnRun="RunAccessibility" OnHighlight="Highlight"
+                                                Outline="_outline" OnRefreshOutline="RequestOutline" OnHighlightOutline="HighlightOutline" />
                             break;
                         case "visual":
                             <VisualPanel ScenarioId="@_scenario.Id" />
@@ -300,6 +324,12 @@
                             break;
                         case "code":
                             <CodePanel Scenario="_scenario" Component="_component!" Overrides="_overrides" />
+                            break;
+                        default:
+                            @if (Options.Panels.FirstOrDefault(p => p.Id == _tab) is { } extension)
+                            {
+                                <DynamicComponent Type="extension.ComponentType" Parameters="ExtensionParameters" />
+                            }
                             break;
                     }
                         </ChildContent>
@@ -352,6 +382,7 @@
     private bool _assertMode;
     private readonly List<InteractionStep> _recorded = [];
     private A11yOutcome? _a11y;
+    private OutlineReport? _outline;
     private bool _a11yRunning;
     private bool _pendingA11y;
     private string? _html;
@@ -408,10 +439,80 @@
     private string Direction { get; set; } = "";
     private string UserName { get; set; } = "";
     private string NetworkName { get; set; } = "";
+
+    // Toolbar globals chosen in the toolbar or the URL (?g.density=compact), by id; absent ones use the scenario's value.
+    private Dictionary<string, string> _globals = new(StringComparer.Ordinal);
     private bool HasErrors => _diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
     private bool IsTokensPage => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0].TrimEnd('/') == "tokens";
 
-    private IEnumerable<(string Key, string Label)> Tabs => AllTabs.Where(t => t.Key != "design" || _scenario?.Designs.Count > 0);
+    private IEnumerable<(string Key, string Label)> Tabs =>
+        AllTabs.Where(t => t.Key != "design" || _scenario?.Designs.Count > 0).Concat(Options.Panels.Select(p => (p.Id, p.Title)));
+
+    // ---- Extensions: panels and toolbar items of your own (options.AddPanel, options.AddToolbarItem) ----
+
+    private readonly WorkbenchExtensionContext _extension = new();
+    private readonly Dictionary<int, TaskCompletionSource<JsonElement>> _evaluations = [];
+    private int _evaluationId;
+    private int _previewVersion;
+
+    /// <summary>The context handed to extensions, refreshed on every render (the same instance).</summary>
+    private Dictionary<string, object?> ExtensionParameters
+    {
+        get
+        {
+            _extension.Scenario = _scenario!;
+            _extension.Component = _component!;
+            _extension.Options = Options;
+            _extension.Args = _overrides;
+            _extension.Diagnostics = _diagnostics;
+            _extension.PreviewState = _previewState;
+            _extension.HasPreview = _mode == "canvas";
+            _extension.PreviewVersion = _previewVersion;
+            _extension.SetArgsHandler = args => InvokeAsync(() => OnOverridesChanged(new Dictionary<string, ArgOverride>(args, StringComparer.Ordinal)));
+            _extension.ReloadHandler = () => InvokeAsync(Reload);
+            _extension.HighlightHandler = (selector, label) => InvokeAsync(() => Highlight((selector, label ?? selector)));
+            _extension.EvaluateHandler = EvaluateInPreviewAsync;
+            return new Dictionary<string, object?> { ["Context"] = _extension };
+        }
+    }
+
+    private async Task<JsonElement> EvaluateInPreviewAsync(string script, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var id = Interlocked.Increment(ref _evaluationId);
+        var completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await InvokeAsync(async () =>
+        {
+            _evaluations[id] = completion;
+            if (_mode != "canvas" || !await Post("evaluate", new { id, script }))
+            {
+                _evaluations.Remove(id);
+                completion.TrySetException(new InvalidOperationException("The preview is not open: switch to Canvas mode."));
+            }
+        });
+
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposed.Token);
+        timeoutSource.CancelAfter(timeout);
+        try
+        {
+            return await completion.Task.WaitAsync(timeoutSource.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The preview did not answer within {timeout.TotalSeconds:0.#} s.");
+        }
+        finally
+        {
+            await InvokeAsync(() => _evaluations.Remove(id));
+        }
+    }
+
+    /// <summary>A new preview never answers what the old one was asked.</summary>
+    private void FailPendingEvaluations()
+    {
+        foreach (var completion in _evaluations.Values)
+            completion.TrySetException(new InvalidOperationException("The preview reloaded before it answered."));
+        _evaluations.Clear();
+    }
 
     private string PageTitleText => ComponentId is not null
         ? $"{Catalog.FindComponent(ComponentId)?.DisplayName ?? "Docs"} · {Options.Title}"
@@ -542,6 +643,12 @@
         Direction = DirQuery is "ltr" or "rtl" ? DirQuery : "";
         UserName = UserQuery is { } uq && (uq == "anonymous" || Options.FindUser(uq) is not null) ? Options.FindUser(uq)?.Id ?? "anonymous" : "";
         NetworkName = Options.FindNetworkProfile(NetworkQuery)?.Id ?? "";
+        _globals = new(StringComparer.Ordinal);
+        foreach (var global in Options.Globals)
+        {
+            if (query.GetValueOrDefault("g." + global.Id) is { } chosen && global.Values.Contains(chosen, StringComparer.Ordinal))
+                _globals[global.Id] = chosen;
+        }
         if (PanelQuery is { } panel && Tabs.Any(t => t.Key == panel))
             _tab = panel;
         else if (!Tabs.Any(t => t.Key == _tab))
@@ -575,6 +682,9 @@
             _self = DotNetObjectReference.Create(this);
             await _module.InvokeVoidAsync("init", _self);
             _singleKeyShortcuts = await _module.InvokeAsync<bool>("getSingleKeyShortcuts");
+            // Timestamps in panels follow the viewer's time zone, not the server's (Interactive Server).
+            if (Services.GetService(typeof(ViewerTimeZone)) is ViewerTimeZone viewer)
+                viewer.TrySet(await _module.InvokeAsync<string?>("getTimeZone"));
             // A theme the user chose earlier, otherwise the operating system's color scheme.
             var theme = await _module.InvokeAsync<string?>("getPreference", "shell-theme");
             if (theme is not ("dark" or "light"))
@@ -624,6 +734,7 @@
 
     private void ResetLiveState()
     {
+        FailPendingEvaluations();
         _diagnostics.Clear();
         _callbacks.Clear();
         _callbackCounts.Clear();
@@ -639,6 +750,7 @@
         _a11y = null;
         _a11yRunning = false;
         _pendingA11y = false;
+        _outline = null;
         _html = null;
         _storage = null;
         _argErrors = new(StringComparer.Ordinal);
@@ -693,6 +805,8 @@
         if (dir.Length > 0) query.Add("dir=" + dir);
         if (user.Length > 0) query.Add("user=" + Uri.EscapeDataString(user));
         if (network.Length > 0) query.Add("network=" + Uri.EscapeDataString(network));
+        foreach (var (id, value) in _globals)
+            query.Add($"g.{Uri.EscapeDataString(id)}={Uri.EscapeDataString(value)}");
         var touch = cell?.Axis == "viewport" ? _touch ?? Options.FindViewport(cell.Value)?.IsMobile == true : EffectiveTouch;
         if (touch) query.Add("touch=1");
         var tools = cell is null ? _tools : cell.Axis == "state" ? _tools with { Pseudo = cell.Value.Length > 0 ? [cell.Value] : [] } : _tools;
@@ -717,6 +831,8 @@
         if (Direction.Length > 0) query.Add("dir=" + Direction);
         if (UserName.Length > 0) query.Add("user=" + Uri.EscapeDataString(UserName));
         if (NetworkName.Length > 0) query.Add("network=" + Uri.EscapeDataString(NetworkName));
+        foreach (var (id, value) in _globals)
+            query.Add($"g.{Uri.EscapeDataString(id)}={Uri.EscapeDataString(value)}");
         query.AddRange(_tools.ToQuery());
         if (_mode != "canvas") query.Add("mode=" + _mode);
         if (_tab != "controls") query.Add("panel=" + _tab);
@@ -744,6 +860,7 @@
 
     private async Task ReloadFrame(bool keepArgs)
     {
+        FailPendingEvaluations();
         _previewState = "loading";
         _metrics = null;
         _diagnostics.Clear();
@@ -780,6 +897,7 @@
         Direction = "";
         UserName = "";
         NetworkName = "";
+        _globals = new(StringComparer.Ordinal);
         _touch = null;
         _tools = PreviewTools.None;
         ApplyDeclaredTheme(useQuery: false);
@@ -1039,6 +1157,17 @@
         UpdateAddress();
     }
 
+    /// <summary>A toolbar global changed: it is part of the session (a cascading value), so the preview reloads.</summary>
+    private async Task OnGlobalChanged(string id, string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            _globals.Remove(id);
+        else
+            _globals[id] = value;
+        await ReloadFrame(keepArgs: true);
+        UpdateAddress();
+    }
+
     private async Task OnDirectionChanged()
     {
         if (Direction.Length > 0)
@@ -1057,6 +1186,8 @@
             _ = RequestHtml();
         else if (key == "storage")
             _ = SendStorage(new StorageCommand("get"));
+        else if (key == "accessibility")
+            _ = RequestOutline();
         UpdateAddress();
     }
 
@@ -1090,6 +1221,18 @@
             if (dark is not null)
                 css += $".wb-shell[data-shell-theme=\"dark\"], html[data-wb-theme=\"dark\"] .wb-shell[data-shell-theme=\"\"] {{ --wb-accent: {dark}; --wb-focus: {dark}; }}";
             return css;
+        }
+    }
+
+    private bool _compareSync;
+
+    private async Task SetCompareSync(bool on)
+    {
+        _compareSync = on;
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("setCompareSync", on); }
+            catch (JSDisconnectedException) { }
         }
     }
 
@@ -1177,6 +1320,10 @@
 
     private Task SendStorage(StorageCommand command) => Post("storage", new { op = command.Op, area = command.Area, key = command.Key, value = command.Value });
 
+    private Task RequestOutline() => Post("outline", null);
+
+    private Task HighlightOutline((int Index, string Label) target) => Post("highlight", new { outline = target.Index, label = target.Label });
+
     private Task Highlight((string Selector, string Label) target) => Post("highlight", new { selector = target.Selector, label = target.Label });
 
     private async Task RunInteraction((string Name, bool Debug) run)
@@ -1254,7 +1401,10 @@
         switch (type)
         {
             case "state":
+                var wasReady = _previewState == "ready";
                 _previewState = payload.GetProperty("state").GetString() ?? "loading";
+                if (_previewState == "ready" && !wasReady)
+                    _previewVersion++;
                 _metrics = payload.TryGetProperty("metrics", out var m) ? m.Deserialize<PreviewMetrics>(WorkbenchJson.Options) : null;
                 if (_previewState is "ready" or "error")
                 {
@@ -1265,6 +1415,8 @@
                         await RequestHtml();
                     else if (_tab == "storage")
                         await SendStorage(new StorageCommand("get"));
+                    else if (_tab == "accessibility")
+                        await RequestOutline();
 
                     if (_pendingInteraction is { } pending && _scenario.Interactions.FirstOrDefault(i => i.Name == pending) is { } test)
                     {
@@ -1344,6 +1496,20 @@
             case "storage":
                 _storage = payload.Deserialize<StorageSnapshot>(WorkbenchJson.Options);
                 break;
+            case "outline":
+                _outline = payload.Deserialize<OutlineReport>(WorkbenchJson.Options);
+                break;
+            case "evaluate-result":
+                if (payload.TryGetProperty("id", out var evaluationId) && _evaluations.Remove(evaluationId.GetInt32(), out var evaluation))
+                {
+                    if (payload.TryGetProperty("ok", out var ok) && ok.GetBoolean())
+                        evaluation.TrySetResult(payload.TryGetProperty("value", out var value) ? value.Clone() : default);
+                    else
+                        evaluation.TrySetException(new InvalidOperationException("The script failed in the preview: " +
+                            (payload.TryGetProperty("error", out var evaluationError) ? evaluationError.GetString() : "unknown error")));
+                }
+
+                return;
             case "a11y":
                 _a11y = payload.Deserialize<A11yOutcome>(WorkbenchJson.Options);
                 _a11yRunning = false;

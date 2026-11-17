@@ -565,6 +565,90 @@
     return outcome;
   }
 
+  // ---------- accessibility outline: headings and landmarks, like a screen reader's lists ----------
+  let outlineElements = [];
+  const LANDMARK_ROLES = ['banner', 'navigation', 'main', 'complementary', 'contentinfo', 'region', 'form', 'search'];
+
+  // Hidden from assistive technology: not rendered, or inside aria-hidden or inert.
+  function hiddenFromAT(el) {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.getAttribute('aria-hidden') === 'true' || e.hasAttribute('inert')) return true;
+      const style = getComputedStyle(e);
+      if (style.display === 'none' || style.visibility === 'hidden') return true;
+    }
+    return false;
+  }
+
+  function landmarkRole(el) {
+    const explicit = el.getAttribute('role');
+    if (explicit) {
+      const role = explicit.trim().split(/\s+/)[0];
+      return LANDMARK_ROLES.includes(role) ? role : null;
+    }
+    const tag = el.tagName.toLowerCase();
+    // header and footer are landmarks only outside sectioning content.
+    const scoped = () => !!el.parentElement && !!el.parentElement.closest('article, aside, main, nav, section');
+    switch (tag) {
+      case 'header': return scoped() ? null : 'banner';
+      case 'footer': return scoped() ? null : 'contentinfo';
+      case 'nav': return 'navigation';
+      case 'main': return 'main';
+      case 'aside': return 'complementary';
+      case 'section': return el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') ? 'region' : null;
+      case 'form': return el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') ? 'form' : null;
+      case 'search': return 'search';
+      default: return null;
+    }
+  }
+
+  function landmarkName(el) {
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) return normalize(labelledBy.split(/\s+/).map((id) => (document.getElementById(id) || {}).textContent || '').join(' '));
+    return normalize(el.getAttribute('aria-label') || el.getAttribute('title') || '');
+  }
+
+  function outline() {
+    outlineElements = [];
+    const remember = (el) => outlineElements.push(el) - 1;
+    const scope = document.body;
+    const headings = [];
+    let previous = 0;
+    let h1 = 0;
+    for (const el of Array.from(scope.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]'))) {
+      if (isToolNode(el) || hiddenFromAT(el)) continue;
+      const tag = el.tagName.toLowerCase();
+      const ariaLevel = parseInt(el.getAttribute('aria-level') || '', 10);
+      const level = el.getAttribute('role') === 'heading' ? (ariaLevel >= 1 ? ariaLevel : 2) : (ariaLevel >= 1 ? ariaLevel : parseInt(tag.slice(1), 10));
+      const text = accessibleName(el);
+      let issue = null;
+      if (!text) issue = 'Empty heading: screen readers announce it without a name.';
+      else if (previous && level > previous + 1) issue = `Skips from level ${previous} to level ${level}.`;
+      if (level === 1 && ++h1 === 2 && !issue) issue = 'A second level 1 heading.';
+      headings.push({ level, text, issue, index: remember(el) });
+      previous = level;
+    }
+
+    const landmarks = [];
+    const all = Array.from(scope.querySelectorAll('header, footer, nav, main, aside, section, form, search, [role]'))
+      .filter((el) => !isToolNode(el) && landmarkRole(el) && !hiddenFromAT(el));
+    const counts = {};
+    for (const el of all) {
+      const role = landmarkRole(el);
+      const name = landmarkName(el);
+      (counts[role] = counts[role] || []).push(name);
+      let depth = 0;
+      for (let p = el.parentElement; p; p = p.parentElement) if (all.includes(p)) depth++;
+      landmarks.push({ role, name, depth, issue: null, index: remember(el) });
+    }
+    for (const item of landmarks) {
+      const names = counts[item.role];
+      if (item.role === 'main' && names.length > 1) item.issue = 'More than one main landmark.';
+      else if (names.length > 1 && (!item.name || names.filter((n) => n === item.name).length > 1)) item.issue = `Several ${item.role} landmarks: give each a distinct name (aria-label).`;
+      else if (item.role === 'region' && !item.name) item.issue = 'A region needs a name.';
+    }
+    return { headings, landmarks };
+  }
+
   // ---------- accessibility ----------
   let axeLoading = null;
   function loadAxe() {
@@ -1297,6 +1381,21 @@
     seedStorage(config.storage);
   }
 
+  // The Storage panel's Clear: everything the scenario's components stored (Workbench's own keys survive in real storage).
+  function clearStorage() {
+    for (const name of ['local', 'session']) {
+      const area = storageArea(name);
+      if (!area) continue;
+      try {
+        if (storageIsolated) { area.clear(); continue; }
+        for (let i = area.length - 1; i >= 0; i--) {
+          const k = area.key(i);
+          if (k && !k.startsWith(SHELL_KEY_PREFIX)) area.removeItem(k);
+        }
+      } catch { /* storage unavailable */ }
+    }
+  }
+
   function seedStorage(entries) {
     for (const e of entries || []) {
       const id = e.area + ':' + e.key;
@@ -1397,7 +1496,54 @@
 
   const isTextField = (el) => (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'range', 'color'].includes((el.type || '').toLowerCase())) || el.tagName === 'TEXTAREA' || el.isContentEditable;
 
-  function emitRecorded(step) { post('recorded-step', step); }
+  // The recorder serves two consumers: the Interactions panel's recording, and synchronized Compare frames.
+  let recordingTest = false;
+  let syncing = false;
+
+  function emitRecorded(step) {
+    if (recordingTest) post('recorded-step', step);
+    if (syncing && step.action.indexOf('Expect') !== 0) {
+      // A CSS path survives other cultures, themes and users, where accessible names may differ; the role locator is the fallback.
+      const el = step.target ? resolveSilently(step.target) : null;
+      post('sync-step', { step, css: el ? cssPath(el) : null });
+    }
+  }
+
+  function resolveSilently(locator) { try { const m = resolve(locator); return m.length === 1 ? m[0] : null; } catch { return null; } }
+
+  function updateRecorder() {
+    if (recordingTest || syncing) startRecording(); else stopRecording();
+  }
+
+  // ---------- synchronized Compare frames: scrolling ----------
+  let scrollApplying = false;
+  let scrollQueued = false;
+  function onSyncScroll() {
+    if (!syncing || scrollApplying || scrollQueued) { scrollApplying = false; return; }
+    scrollQueued = true;
+    requestAnimationFrame(() => {
+      scrollQueued = false;
+      const el = document.scrollingElement || document.documentElement;
+      const maxX = el.scrollWidth - el.clientWidth;
+      const maxY = el.scrollHeight - el.clientHeight;
+      post('sync-scroll', { x: maxX > 0 ? el.scrollLeft / maxX : 0, y: maxY > 0 ? el.scrollTop / maxY : 0 });
+    });
+  }
+
+  function applySyncScroll(p) {
+    const el = document.scrollingElement || document.documentElement;
+    scrollApplying = true;
+    el.scrollTo((el.scrollWidth - el.clientWidth) * (p.x || 0), (el.scrollHeight - el.clientHeight) * (p.y || 0));
+  }
+
+  async function applySyncStep(p) {
+    const step = Object.assign({}, p.step);
+    if (p.css) {
+      const matches = all(p.css);
+      if (matches.length === 1) step.target = { kind: 'Css', value: p.css, exact: true };
+    }
+    try { await runStep(step); } catch (err) { addDiagnostic({ source: 'Scenario', severity: 'Warning', message: `Synchronized step could not be repeated: ${stringify(err)}` }); }
+  }
 
   function startRecording() {
     if (recorder) return;
@@ -1512,20 +1658,45 @@
           highlight(layoutState.elements, n ? `${n === 1 ? 'Overflows' : `${n} elements overflow`} the viewport` : null);
           break;
         }
-        case 'highlight': highlight(payload && payload.selector, payload && payload.label); break;
+        case 'highlight':
+          if (payload && typeof payload.outline === 'number') highlight(outlineElements[payload.outline] ? [outlineElements[payload.outline]] : null, payload.label);
+          else highlight(payload && payload.selector, payload && payload.label);
+          break;
+        case 'outline': post('outline', outline()); break;
+        case 'evaluate': {
+          // Panels of your own (WorkbenchExtensionContext.EvaluateAsync): the script is the body of an async function.
+          const id = payload && payload.id;
+          try {
+            const run = new Function('root', 'workbench', `return (async () => {\n${String(payload.script)}\n})();`);
+            const value = await run(root(), window.__workbench);
+            post('evaluate-result', { id, ok: true, value: value === undefined ? null : JSON.parse(JSON.stringify(value)) });
+          } catch (err) {
+            post('evaluate-result', { id, ok: false, error: stringify(err) });
+          }
+          break;
+        }
         case 'html': { const r = root(); post('html', { html: r ? formatHtml(r) : '' }); break; }
         case 'storage': {
           const area = payload && payload.area ? storageArea(payload.area) : null;
           try {
             if (payload && payload.op === 'set' && area) area.setItem(payload.key, payload.value);
             else if (payload && payload.op === 'remove' && area) area.removeItem(payload.key);
-            else if (payload && payload.op === 'clear') isolateAndSeed({ isolateStorage: true });
+            else if (payload && payload.op === 'clear') clearStorage();
           } catch (err) { addDiagnostic({ source: 'JsInterop', severity: 'Warning', message: 'Storage change failed: ' + stringify(err) }); }
           post('storage', storageSnapshot());
           break;
         }
+        case 'sync':
+          syncing = !!(payload && payload.on);
+          if (syncing) window.addEventListener('scroll', onSyncScroll, { passive: true }); else window.removeEventListener('scroll', onSyncScroll);
+          updateRecorder();
+          break;
+        case 'sync-apply': await applySyncStep(payload || {}); break;
+        case 'sync-scroll-apply': applySyncScroll(payload || {}); break;
         case 'record':
-          if (payload && payload.on) { startRecording(); if (recorder) recorder.assert = !!payload.assert; } else stopRecording();
+          recordingTest = !!(payload && payload.on);
+          updateRecorder();
+          if (recorder) recorder.assert = recordingTest && !!payload.assert;
           break;
         case 'tokens': post('tokens', collectTokens()); break;
         case 'session':
@@ -1552,6 +1723,10 @@
       state.pending = info.pending || 0;
       applyTheme(info);
       applyDir(info.dir);
+      // Toolbar globals as data attributes, so stylesheets can follow them: html[data-density="compact"].
+      for (const [id, value] of Object.entries(info.globals || {})) {
+        if (/^[a-z0-9-]+$/.test(id)) document.documentElement.setAttribute('data-' + id, String(value));
+      }
       if (info.lang) document.documentElement.setAttribute('lang', info.lang);
       tools.gridSize = info.gridSize || 8;
       tools.declaredPseudo = info.pseudoStates || [];
@@ -1615,6 +1790,7 @@
     serverMetrics: () => state.dotnet ? state.dotnet.invokeMethodAsync('GetMetrics').then(JSON.parse) : Promise.resolve(null),
     waitForIdle,
     callbackCount,
+    outline,
     jsCallCount,
     releaseGate: (name) => state.dotnet ? state.dotnet.invokeMethodAsync('ReleaseGate', name) : Promise.resolve(false),
     failGate: (name, message) => state.dotnet ? state.dotnet.invokeMethodAsync('FailGate', name, message || null) : Promise.resolve(false),

@@ -10,7 +10,7 @@
 | Components under test | Any Razor component library usable from Interactive Server | Includes generic, templated and `EditContext`-dependent components, components with constructor injection, and `AuthorizeView`. |
 | Browsers for automation | Chromium (default), Firefox, WebKit through Playwright | Visual baselines are captured with Chromium in CI and are specific to browser and platform. |
 | Workbench UI browsers | Current Chromium, Firefox and Safari | |
-| Path base | Hosts behind a reverse proxy under a path (`app.UsePathBase("/workbench")`) | The pages' `<base href>` follows the request's path base, and the preview loads axe-core relative to it. Not yet covered by the automated tests. |
+| Path base | Hosts behind a reverse proxy under a path (`app.UsePathBase("/workbench")`) | The pages' `<base href>` follows the request's path base, and the preview loads axe-core relative to it. Call `app.UsePathBase(...)` and then `app.UseRouting()` before `MapBlazorWorkbench()`; without the explicit `UseRouting`, endpoints are matched against the full path and the Blazor connection fails. Covered by an end-to-end test. |
 | Operating systems | Windows, Linux, macOS | Baselines are stored per platform. |
 
 ## Not supported (yet)

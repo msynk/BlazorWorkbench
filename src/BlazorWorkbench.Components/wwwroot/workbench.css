@@ -453,3 +453,14 @@ html[data-wb-theme="dark"] .wb-not-found a { color: #a5a5ff; }
 
 .wb-tree-actions { display: flex; gap: .35rem; justify-content: flex-end; padding: .35rem .5rem 0; }
 .wb-logo-image { height: 1.4rem; width: auto; display: block; }
+
+/* Accessibility panel: outline of headings and landmarks. */
+.wb-outline { margin-top: 1rem; border-top: 1px solid var(--wb-border); padding-top: .5rem; }
+.wb-outline-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+.wb-shell .wb-h4 { font-size: 13px; margin: .25rem 0 .35rem; }
+.wb-outline-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; }
+.wb-outline-list .wb-link-button { text-decoration: none; color: var(--wb-text); text-align: start; }
+.wb-outline-list .wb-link-button:hover { text-decoration: underline; }
+.wb-outline-issue .wb-link-button { color: var(--wb-warning); }
+.wb-outline-note { display: block; font-size: 12px; color: var(--wb-warning); padding-inline-start: 1.5rem; }
+.wb-shell .wb-json-editor { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; min-width: 18rem; }

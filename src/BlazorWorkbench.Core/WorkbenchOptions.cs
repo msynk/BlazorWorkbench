@@ -123,6 +123,23 @@ public class WorkbenchOptions
     /// </summary>
     public IList<UserPreset> Users { get; } = [];
 
+    /// <summary>
+    /// Your own toolbar menus (Storybook's globals): density, brand, tenant, a feature flag. The chosen value is cascaded to
+    /// components by name (<c>[CascadingParameter(Name = "density")] public string? Density { get; set; }</c>), set as a
+    /// <c>data-{id}</c> attribute on the preview's <c>&lt;html&gt;</c> for CSS, and available to service factories through
+    /// <see cref="ScenarioContext.Global"/>. Add them with <see cref="AddGlobal"/>; scenarios fix values with <c>.Global(...)</c>.
+    /// </summary>
+    public IList<ToolbarGlobal> Globals { get; } = [];
+
+    /// <summary>
+    /// Panels of your own next to Controls, Environment and the others (Storybook's addon panels): a theme editor, a data
+    /// inspector, your design system's checks. Add them with <see cref="AddPanel{TPanel}"/>.
+    /// </summary>
+    public IList<WorkbenchPanel> Panels { get; } = [];
+
+    /// <summary>Components of your own in the header toolbar while a scenario is open. Add them with <see cref="AddToolbarItem{TItem}"/>.</summary>
+    public IList<Type> ToolbarItems { get; } = [];
+
     /// <summary>Network conditions offered in the toolbar; they slow down or cut off the fake HTTP backend of any scenario.</summary>
     public IList<NetworkProfile> NetworkProfiles { get; } = [.. NetworkProfile.Defaults];
 
@@ -240,6 +257,69 @@ public class WorkbenchOptions
         return this;
     }
 
+    /// <summary>
+    /// Adds a panel. <typeparamref name="TPanel"/> receives the scenario, the preview and helpers through a parameter named
+    /// <c>Context</c> of type <c>WorkbenchExtensionContext</c> (package BlazorWorkbench.Components). The panel renders in the
+    /// Workbench shell, inside an error boundary, and its tab is in the URL (<c>?panel=x-{title}</c>).
+    /// </summary>
+    /// <param name="title">Tab label.</param>
+    public WorkbenchOptions AddPanel<TPanel>(string title) where TPanel : IComponent
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        var panel = new WorkbenchPanel(title, typeof(TPanel));
+        if (Panels.Any(p => p.Id == panel.Id))
+            throw new ArgumentException($"A panel with the id '{panel.Id}' already exists.", nameof(title));
+        Panels.Add(panel);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a component to the header toolbar while a scenario is open. Like a panel, it receives a <c>Context</c> parameter
+    /// of type <c>WorkbenchExtensionContext</c>.
+    /// </summary>
+    public WorkbenchOptions AddToolbarItem<TItem>() where TItem : IComponent
+    {
+        if (!ToolbarItems.Contains(typeof(TItem)))
+            ToolbarItems.Add(typeof(TItem));
+        return this;
+    }
+
+    /// <summary>Adds a toolbar menu (see <see cref="Globals"/>).</summary>
+    /// <param name="label">Menu label, for example <c>Density</c>; its kebab-case form is the id (<c>density</c>).</param>
+    /// <param name="values">The values offered.</param>
+    /// <param name="defaultValue">The value when neither the toolbar nor the scenario chooses one; null leaves it unset.</param>
+    public WorkbenchOptions AddGlobal(string label, IEnumerable<string> values, string? defaultValue = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(label);
+        ArgumentNullException.ThrowIfNull(values);
+        var list = values.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).ToArray();
+        if (list.Length == 0)
+            throw new ArgumentException("A toolbar global needs at least one value.", nameof(values));
+        if (defaultValue is not null && !list.Contains(defaultValue, StringComparer.Ordinal))
+            throw new ArgumentException($"The default value '{defaultValue}' is not one of the values.", nameof(defaultValue));
+        var global = new ToolbarGlobal(label, list) { DefaultValue = defaultValue };
+        if (Globals.Any(g => g.Id == global.Id))
+            throw new ArgumentException($"A toolbar global with the id '{global.Id}' already exists.", nameof(label));
+        Globals.Add(global);
+        return this;
+    }
+
+    /// <summary>The value of every toolbar global for a scenario: <paramref name="chosen"/> (the toolbar), else the scenario's, else the default.</summary>
+    public IReadOnlyDictionary<string, string> ResolveGlobals(EnvironmentDefinition environment, IReadOnlyDictionary<string, string>? chosen)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var global in Globals)
+        {
+            var value = chosen?.GetValueOrDefault(global.Id) is { } c && global.Values.Contains(c, StringComparer.Ordinal) ? c
+                : environment.Globals.GetValueOrDefault(global.Id) ?? global.DefaultValue;
+            if (value is not null)
+                result[global.Id] = value;
+        }
+
+        return result;
+    }
+
     public UserPreset? FindUser(string? name) =>
         name is null ? null : Users.FirstOrDefault(u => string.Equals(u.Name, name, StringComparison.OrdinalIgnoreCase) || string.Equals(u.Id, name, StringComparison.OrdinalIgnoreCase));
 
@@ -301,6 +381,27 @@ public sealed record BreakpointPreset(string Name, int MinWidth)
 
         return widths.Where(w => w is >= MinViewportWidth and <= MaxViewportSize).Take(MaxSweepWidths).ToArray();
     }
+}
+
+/// <summary>A panel of your own (<see cref="WorkbenchOptions.AddPanel{TPanel}"/>).</summary>
+/// <param name="Title">Tab label.</param>
+/// <param name="ComponentType">The panel component.</param>
+public sealed record WorkbenchPanel(string Title, Type ComponentType)
+{
+    /// <summary>The tab key in the URL (<c>?panel=</c>): <c>x-</c> and the kebab-case title, so it never clashes with built-in panels.</summary>
+    public string Id => "x-" + Naming.ToSlug(Title);
+}
+
+/// <summary>A toolbar menu of your own (<see cref="WorkbenchOptions.AddGlobal"/>).</summary>
+/// <param name="Label">Menu label.</param>
+/// <param name="Values">The values offered.</param>
+public sealed record ToolbarGlobal(string Label, IReadOnlyList<string> Values)
+{
+    /// <summary>Kebab-case id: the cascading value's name, the <c>data-{id}</c> attribute and the URL key (<c>?g.{id}=</c>).</summary>
+    public string Id => Naming.ToSlug(Label);
+
+    /// <summary>The value when neither the toolbar nor the scenario chooses one; null leaves it unset.</summary>
+    public string? DefaultValue { get; init; }
 }
 
 /// <summary>A simulated user offered in the toolbar (<see cref="WorkbenchOptions.AddUser"/>).</summary>

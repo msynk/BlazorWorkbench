@@ -89,8 +89,11 @@ namespace BlazorWorkbench.Cli
             var approveBaselines = new Option<string?>("--baselines") { Description = "Baseline directory (default: 'baselines' in workbench.json)." };
             var approveAll = new Option<bool>("--all") { Description = "Also re-approve screenshots that passed." };
             var prune = new Option<bool>("--prune") { Description = "Delete baselines of scenarios that no longer exist (requires an unfiltered run)." };
-            var approve = new Command("approve", "Approve screenshots from the last visual run as baselines (explicit and reviewable).") { approveFilter, approveOutput, approveBaselines, approveAll, prune };
-            approve.SetAction(r => Commands.Approve(Context(r), r.GetValue(approveOutput), r.GetValue(approveBaselines), r.GetValue(approveFilter), r.GetValue(approveAll), r.GetValue(prune)));
+            var approveA11y = new Option<bool>("--accessibility") { Description = "Approve the accessibility violations of the last run (--a11y) as known, instead of screenshots: later runs fail only on new ones." };
+            var approve = new Command("approve", "Approve screenshots (or, with --accessibility, accessibility violations) from the last run as baselines (explicit and reviewable).") { approveFilter, approveOutput, approveBaselines, approveAll, prune, approveA11y };
+            approve.SetAction(r => r.GetValue(approveA11y)
+                ? Commands.ApproveAccessibility(Context(r), r.GetValue(approveOutput), r.GetValue(approveBaselines), r.GetValue(approveFilter), r.GetValue(approveAll))
+                : Commands.Approve(Context(r), r.GetValue(approveOutput), r.GetValue(approveBaselines), r.GetValue(approveFilter), r.GetValue(approveAll), r.GetValue(prune)));
             root.Subcommands.Add(approve);
 
             // dev

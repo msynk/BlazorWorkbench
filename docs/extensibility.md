@@ -11,6 +11,9 @@
 | Visual results | `IVisualResultsProvider` | Replaces the file-based provider of the Visual panel, for example with results from a CI server. |
 | Test results | `ITestResultsProvider` | Supplies the last run's scenario statuses to the explorer (dots, failure counts, `is:failing`). The default reads `report.json`. |
 | Toolbar presets | `options.Users`/`AddUser`, `options.NetworkProfiles`, `options.Backgrounds`, `options.GridSize` | Entries of the User, Network and Background menus. |
+| Toolbar globals | `options.AddGlobal(label, values)`, `.Global(id, value)`, `ctx.Global(id)` | Your own toolbar menus; the value is cascaded by id, set as `data-{id}` on the preview and given to service factories. See [tools](tools.md#canvas-toolbar). |
+| Panels and toolbar items | `options.AddPanel<T>(title)`, `options.AddToolbarItem<T>()`, `WorkbenchExtensionContext` | Rendered in the shell inside an error boundary; see below. |
+| Decorators | `.Wrap(...)`, `options.AddDecorator(...)` | Wrap scenarios in markup or components; see [scenarios](scenarios.md#decorators). |
 | Documentation pages | `options.AddPage(title, markdown)` | Standalone pages with `{{scenario:id}}`, `{{scenarios:id}}`, `{{parameters:id}}` and `{{tokens}}` embeds. |
 | Test runners | `WorkbenchTestRunner`, `WorkbenchHost`, `PlaywrightSteps`, `ITestRunObserver` | Use them from any test framework. |
 | Report exporters | `TestRunReport` (JSON contract), `ReportWriter` | Write your own exporter from `report.json`. |
@@ -20,6 +23,37 @@
 | Hosting models | `WorkbenchHostOptions.Interactivity`, `BlazorWorkbench.WebAssembly`, `BlazorWorkbench.Maui` | See [WebAssembly](webassembly.md) and [Blazor Hybrid](hybrid.md). Other BlazorWebView hosts (WPF, Windows Forms) can use `AddBlazorWorkbenchHybrid`, `WorkbenchHybridFileProvider` and `HybridAutomation` from `BlazorWorkbench.Hybrid`. |
 | Platform services | `BlazorWorkbench.Maui.Essentials` fakes (`FakeConnectivity`, `FakeGeolocation`, ...), `.Device(...)`, `AddSimulatedDevice()` | Use the fakes directly in tests, or write your own simulation with `.Service<T>(ctx => ...)` and report calls through `ctx.Diagnostics` (source `Platform`). |
 | Project template | `dotnet new blazorworkbench` | Package `BlazorWorkbench.Templates`. |
+
+## Panels and toolbar items of your own
+
+A panel is a component with a `Context` parameter. It appears as a tab next to Controls, Environment and the others (its
+key in the URL is `x-` and its kebab-case title), and renders in the Workbench shell, inside an error boundary:
+
+```razor
+@* Register with options.AddPanel<StylesPanel>("Styles"). *@
+<button class="wb-button" @onclick="ReadAsync">Read</button> <code>@_radius</code>
+
+@code {
+    private string? _radius;
+
+    [Parameter] public WorkbenchExtensionContext Context { get; set; } = default!;
+
+    private async Task ReadAsync() =>
+        _radius = (await Context.EvaluateAsync("return getComputedStyle(root.firstElementChild).borderRadius;")).GetString();
+}
+```
+
+`WorkbenchExtensionContext` gives the open `Scenario` and `Component`, the `Options`, the Controls panel's `Args`, the
+preview's `Diagnostics` and `PreviewState`, and `PreviewVersion`, which increases every time the preview becomes ready (compare
+it in `OnParametersSetAsync` to refresh). Actions: `SetArgsAsync(...)` changes the arguments live, `ReloadAsync()` starts a new
+session, `HighlightAsync(selector)` outlines elements, and `EvaluateAsync(script)` runs JavaScript in the preview document:
+the script is the body of an async function with `root` (the preview root element) and `workbench` (the automation API), and
+its JSON-serializable result comes back as a `JsonElement`. `EvaluateAsync` needs Canvas mode (`HasPreview`) and times out
+after 10 seconds by default. A toolbar item (`options.AddToolbarItem<T>()`) receives the same context and renders in the
+header toolbar. Extension components are excluded from component discovery. The demo's
+[Styles panel](../demo/BlazorWorkbench.Demo/Extensions/StylesPanel.razor) is a complete example.
+
+Use the shell's CSS classes (`wb-button`, `wb-table`, `wb-muted`, `wb-inspector-actions`) to match its look in both themes.
 
 ## Example: forwarding diagnostics to logging
 

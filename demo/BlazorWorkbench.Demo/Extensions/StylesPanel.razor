@@ -1,0 +1,89 @@
+@namespace BlazorWorkbench.Demo.Extensions
+@using System.Text.Json
+@using BlazorWorkbench.Components.Shell
+
+@* A Workbench panel of the demo library's own (options.AddPanel<StylesPanel>("Styles")): it reads the computed styles of the
+   component's outermost element from the live preview, which shows which design tokens it actually resolves. *@
+<div class="wb-inspector">
+    <div class="wb-inspector-actions">
+        <span class="wb-muted wb-small">Computed styles of the component's outermost element, read from the live preview.</span>
+        <button type="button" class="wb-button" @onclick="ReadAsync" disabled="@(!Context.HasPreview)">Refresh</button>
+    </div>
+    @if (!Context.HasPreview)
+    {
+        <p class="wb-empty">Switch to Canvas mode to read styles from the preview.</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="wb-error" role="alert">@_error</p>
+    }
+    else if (_styles is null)
+    {
+        <p class="wb-muted" role="status">Reading…</p>
+    }
+    else
+    {
+        <table class="wb-table">
+            <caption class="wb-visually-hidden">Computed styles of &lt;@_element&gt;</caption>
+            <thead><tr><th scope="col">Property</th><th scope="col">Value</th></tr></thead>
+            <tbody>
+                <tr><th scope="row">Element</th><td><code>&lt;@_element&gt;</code></td></tr>
+                @foreach (var (name, value) in _styles)
+                {
+                    <tr><th scope="row"><code>@name</code></th><td><code>@value</code></td></tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private const string Script = """
+        const el = root.firstElementChild;
+        if (!el) return null;
+        const s = getComputedStyle(el);
+        const names = ['color', 'background-color', 'font-family', 'font-size', 'font-weight', 'line-height',
+                       'padding', 'border-radius', 'border', 'box-shadow', '--radius', '--c-primary'];
+        return { element: el.tagName.toLowerCase() + (el.classList.length ? '.' + Array.from(el.classList).join('.') : ''),
+                 styles: names.map(n => [n, s.getPropertyValue(n).trim()]).filter(([, v]) => v) };
+        """;
+
+    private int _readVersion = -1;
+    private string? _element;
+    private List<(string Name, string Value)>? _styles;
+    private string? _error;
+
+    [Parameter, EditorRequired] public WorkbenchExtensionContext Context { get; set; } = default!;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Read again whenever the preview became ready (another scenario, a reload, a new theme or user).
+        if (Context.HasPreview && Context.PreviewState == "ready" && Context.PreviewVersion != _readVersion)
+        {
+            _readVersion = Context.PreviewVersion;
+            await ReadAsync();
+        }
+    }
+
+    private async Task ReadAsync()
+    {
+        try
+        {
+            var result = await Context.EvaluateAsync(Script);
+            _error = null;
+            if (result.ValueKind != JsonValueKind.Object)
+            {
+                _element = "(nothing rendered)";
+                _styles = [];
+                return;
+            }
+
+            _element = result.GetProperty("element").GetString();
+            _styles = result.GetProperty("styles").EnumerateArray().Select(p => (p[0].GetString() ?? "", p[1].GetString() ?? "")).ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or TimeoutException)
+        {
+            _error = ex.Message;
+        }
+    }
+}

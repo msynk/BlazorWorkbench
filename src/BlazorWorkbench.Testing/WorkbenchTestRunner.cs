@@ -549,6 +549,13 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
             }
         }
 
+        // Accessibility baseline: violations approved with 'workbench approve --accessibility' are reported, not failed.
+        var baseline = options.BaselineDirectory is { } baselineDirectory ? AccessibilityBaseline.Load(baselineDirectory, scenario.Id) : null;
+        var (known, fixedCount) = AccessibilityBaseline.Apply(baseline, findings);
+        var baselineNote = baseline is null ? "" :
+            (known > 0 ? $"; {known} known violation(s) from the accessibility baseline" : "") +
+            (fixedCount > 0 ? $"; {fixedCount} baseline violation(s) fixed, run 'workbench approve --accessibility' to update the baseline" : "");
+
         check.Findings = findings;
         var blockingCount = findings.Count(f => f.Blocking);
         if (scenario.Accessibility.TodoReason is { } todo && blockingCount > 0)
@@ -561,9 +568,11 @@ public sealed class WorkbenchTestRunner(WorkbenchHost host, TestRunOptions optio
 
         check.Status = blockingCount > 0 ? CheckStatus.Failed : CheckStatus.Passed;
         var violations = findings.Count(f => !f.NeedsReview);
-        check.Message = blockingCount > 0
-            ? $"{blockingCount} blocking violation(s) (impact ≥ {options.AccessibilityFailOn}): {string.Join(", ", findings.Where(f => f.Blocking).Select(f => f.RuleId).Distinct())}"
-            : violations > 0 ? $"{violations} non-blocking violation(s)" : null;
+        check.Message = (blockingCount > 0
+            ? $"{blockingCount} {(baseline is null ? "" : "new ")}blocking violation(s) (impact ≥ {options.AccessibilityFailOn}): {string.Join(", ", findings.Where(f => f.Blocking).Select(f => f.RuleId).Distinct())}"
+            : violations > 0 ? $"{violations} non-blocking violation(s)" : null) is { } summary
+            ? summary + baselineNote
+            : baselineNote.Length > 0 ? baselineNote[2..] : null;
         if (outcome.TryGetProperty("engine", out var engine))
             check.Metrics = new Dictionary<string, double> { ["passes"] = outcome.TryGetProperty("passes", out var p) ? p.GetDouble() : 0 };
         _ = engine;

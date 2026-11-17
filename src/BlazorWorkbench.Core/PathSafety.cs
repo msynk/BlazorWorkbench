@@ -10,6 +10,9 @@ internal static class PathSafety
     /// </summary>
     public static StringComparison Comparison { get; } = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
+    /// <summary>The matching comparer, for sets and dictionaries keyed by paths.</summary>
+    public static StringComparer Comparer { get; } = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     /// <summary>
     /// True when <paramref name="path"/> resolves to a location strictly inside <paramref name="directory"/> (both are made
     /// absolute and normalized first, so <c>..</c> segments cannot escape).

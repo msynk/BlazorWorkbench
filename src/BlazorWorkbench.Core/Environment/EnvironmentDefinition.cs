@@ -58,6 +58,12 @@ public sealed class EnvironmentDefinition
 
     /// <summary>Emulates the <c>print</c> media type in automated runs (screenshots of the printed layout).</summary>
     public bool PrintMedia { get; init; }
+
+    /// <summary>
+    /// Values of toolbar globals (<see cref="WorkbenchOptions.Globals"/>) the scenario fixes, by global id, for example
+    /// <c>density = compact</c>. The toolbar can still change them.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Globals { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>A CSS pseudo-class that the preview can force without user input.</summary>

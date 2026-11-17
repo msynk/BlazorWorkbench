@@ -37,6 +37,11 @@ The header toolbar also has two session switches. They reload the preview, becau
   signed out (`?user=admin`, `?user=anonymous`).
 - **Network** applies a network profile to the fake backend: *Fast 4G*, *Fast 3G* and *Slow 3G* add latency to every request,
   *Offline* fails them (`?network=slow-3g`). Add your own to `options.NetworkProfiles`.
+- **Your own menus** (Storybook's globals): density, brand, tenant, a feature flag. Add one with
+  `options.AddGlobal("Density", ["comfortable", "compact"], defaultValue: "comfortable")`. The chosen value is cascaded to
+  components by its id (`[CascadingParameter(Name = "density")] public string? Density { get; set; }`), set as
+  `data-density` on the preview's `<html>` for stylesheets, and available to service factories as `ctx.Global("density")`.
+  A scenario fixes a value with `.Global("density", "compact")`; links carry the toolbar's choice (`?g.density=compact`).
 
 ## Device mode and responsive design
 
@@ -126,6 +131,10 @@ The **Canvas / Compare / Gallery** switch next to the scenario title changes the
 - **Compare** renders the scenario once per value of an axis, side by side: themes, viewports, breakpoints (both sides of
   each), cultures, directions, users, forced states, vision simulations or network profiles. Untick values to hide them; **Frame zoom** sizes the frames. Every
   frame is its own preview session with the current controls. Up to 12 frames are shown (`?mode=compare`).
+  **Sync interactions** repeats what you do in one frame in the others, like Polypane's synced panes: clicks, typing,
+  selections, checkboxes, keys and scrolling (as a fraction of the page). Elements are found by their CSS path first, so
+  the same button is clicked in another culture whose label differs; a step that cannot be repeated in a frame is logged in
+  that frame's diagnostics.
 - **Gallery** shows every scenario of the component. A matrix with two axes (see [scenarios](scenarios.md#matrices)) is laid
   out as a table, rows by the first parameter and columns by the second (`?mode=gallery`).
 

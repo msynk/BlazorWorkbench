@@ -163,7 +163,8 @@
         var describedBy = _errors.ContainsKey(p.Name) || ArgErrors.ContainsKey(p.Name) ? $"{id}-error" : null;
         var scenarioValue = Scenario.FindParameter(p.Name);
         var fixtures = FixturesFor(p).ToList();
-        var editor = p.Editor == EditorKind.Unsupported && fixtures.Count > 0 ? EditorKind.Fixture : p.Editor;
+        // Named fixtures come first for complex types; JSON stays available below them.
+        var editor = p.Editor is EditorKind.Unsupported or EditorKind.Json && fixtures.Count > 0 ? EditorKind.Fixture : p.Editor;
         var nullType = Nullable.GetUnderlyingType(p.Type);
         var isNull = IsNull(p);
 
@@ -267,6 +268,20 @@
                         <option value="@fixture.Name" selected="@(current == fixture.Name)" title="@fixture.Description">@fixture.Name</option>
                     }
                 </select>
+                @if (p.Editor == EditorKind.Json)
+                {
+                    var prettyFixture = PrettyJson(text);
+                    <details class="wb-json-details" open="@(Overrides.GetValueOrDefault(p.Name)?.Kind == ArgKind.Value)">
+                        <summary>Edit as JSON</summary>
+                        <textarea class="wb-json-editor" rows="@JsonRows(prettyFixture)" spellcheck="false" aria-label="@($"{p.DisplayName ?? p.Name} as JSON")"
+                                  placeholder="@JsonPlaceholder(p)" @onchange="e => OnText(p, e.Value as string)">@prettyFixture</textarea>
+                    </details>
+                }
+                break;
+            case EditorKind.Json:
+                var pretty = PrettyJson(text);
+                <textarea id="@id" class="wb-json-editor" rows="@JsonRows(pretty)" spellcheck="false" aria-describedby="@describedBy"
+                          placeholder="@(isNull ? "null" : JsonPlaceholder(p))" @onchange="e => OnText(p, e.Value as string)">@pretty</textarea>
                 break;
             case EditorKind.Callback:
                 <span class="wb-muted">@(scenarioValue is not null ? "Handled by the scenario" : $"Logged to Actions ({CallbackCounts.GetValueOrDefault(p.Name)} call(s))")</span>
@@ -286,6 +301,28 @@
         EditorKind.TimeSpan => "d.hh:mm:ss",
         _ => "",
     };
+
+    /// <summary>Indented JSON for the text area (the value as it is when it is not valid JSON, for example a draft).</summary>
+    private static string? PrettyJson(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            return JsonSerializer.Serialize(doc.RootElement, s_indented);
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
+    private static readonly JsonSerializerOptions s_indented = new() { WriteIndented = true };
+
+    private static int JsonRows(string? text) => Math.Clamp((text ?? "").Count(c => c == '\n') + 2, 3, 12);
+
+    private static string JsonPlaceholder(ParameterDescriptor p) => "JSON for " + p.TypeName;
 
     private static string Invariant(double value) => value.ToString("0.############", CultureInfo.InvariantCulture);
 

@@ -1,3 +1,5 @@
+@inject IServiceProvider Services
+
 <div class="wb-actions">
     <div class="wb-inspector-actions">
         <span class="wb-muted wb-small">Event callbacks the scenario does not handle are recorded here, with redacted arguments.</span>
@@ -13,7 +15,7 @@
             @foreach (var c in Callbacks.AsEnumerable().Reverse())
             {
                 <li>
-                    <time class="wb-muted">@c.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)</time>
+                    <time class="wb-muted">@ViewerTimeZone.Convert(Services, c.Timestamp).ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)</time>
                     <strong>@c.Name</strong> <span class="wb-muted">#@c.Invocation</span>
                     @if (!string.IsNullOrEmpty(c.Arguments))
                     {

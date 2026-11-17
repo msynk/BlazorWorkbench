@@ -25,9 +25,12 @@ export function init(dotnetRef) {
     if (e.origin !== location.origin || !e.data || e.data.source !== PREVIEW) return;
     const frame = document.getElementById('wb-preview-frame');
     const fromCanvas = frame && e.source === frame.contentWindow;
+    const compareFrames = fromCanvas ? [] : Array.from(document.querySelectorAll('.wb-compare iframe'));
+    const compareSource = compareFrames.find((f) => f.contentWindow === e.source);
+    // Synchronized Compare frames: what the user does in one frame is repeated in the others, without .NET.
+    if (compareSource && relayCompareSync(e.data, compareSource, compareFrames)) return;
     // Compare frames load the same stylesheets: their breakpoints fill the Breakpoints axis. Nothing else is taken from them.
-    const fromCompare = !fromCanvas && e.data.type === 'breakpoints' &&
-      Array.from(document.querySelectorAll('.wb-compare iframe')).some((f) => f.contentWindow === e.source);
+    const fromCompare = !!compareSource && e.data.type === 'breakpoints';
     if (!fromCanvas && !fromCompare) return;
     dotnet.invokeMethodAsync('OnPreviewMessage', JSON.stringify(e.data)).catch(() => { /* circuit closing */ });
   };
@@ -212,6 +215,30 @@ function resizeByKey(e) {
   return true;
 }
 
+// ---------- synchronized Compare frames ----------
+let compareSync = false;
+
+function postTo(frame, type, payload) {
+  try { frame.contentWindow.postMessage({ source: SHELL, type, payload }, location.origin); } catch { /* frame gone */ }
+}
+
+function relayCompareSync(data, source, frames) {
+  if (data.type === 'attached') {
+    if (compareSync) postTo(source, 'sync', { on: true });
+    return false;
+  }
+  if (!compareSync || (data.type !== 'sync-step' && data.type !== 'sync-scroll')) return false;
+  const type = data.type === 'sync-step' ? 'sync-apply' : 'sync-scroll-apply';
+  for (const f of frames) if (f !== source) postTo(f, type, data.payload);
+  return true;
+}
+
+// Turns synchronization of the Compare view's frames on or off; frames that load later follow when they attach.
+export function setCompareSync(on) {
+  compareSync = !!on;
+  for (const f of document.querySelectorAll('.wb-compare iframe')) postTo(f, 'sync', { on: compareSync });
+}
+
 // The zoom at which a viewport of the given size fits the canvas (never above 100%).
 export function fitZoom(width, height) {
   const area = document.querySelector('.wb-frame-area');
@@ -346,6 +373,11 @@ export function getPreference(key) {
 // The Workbench theme when the user has not chosen one: the operating system's color scheme.
 export function getSystemTheme() {
   try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; } catch { return 'light'; }
+}
+
+// The viewer's IANA time zone (Europe/Berlin), so a server-side shell shows times as the viewer reads them.
+export function getTimeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
 }
 
 export function setPreference(key, value) {

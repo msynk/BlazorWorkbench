@@ -84,6 +84,9 @@ public static class ScenarioFacts
         if (replaced.Count > 0)
             Simulates("Services", string.Join(", ", replaced.Take(MaxServices)) + (replaced.Count > MaxServices ? $" +{replaced.Count - MaxServices}" : ""));
 
+        foreach (var (id, value) in env.Globals)
+            Simulates("Global", $"{options.Globals.FirstOrDefault(g => g.Id == id)?.Label ?? id}: {value}", panel: null);
+
         foreach (var decorator in options.Decorators.Concat(scenario.Decorators))
             Simulates("Wrapper", decorator.Name, panel: null);
 

@@ -302,6 +302,12 @@ public static class CatalogBuilder
         return false;
     }
 
+    // Panels and toolbar items of your own are Workbench tooling too: registered ones, and any component that takes a
+    // WorkbenchExtensionContext parameter.
+    private static bool IsExtension(Type t, WorkbenchOptions options) =>
+        options.Panels.Any(p => p.ComponentType == t) || options.ToolbarItems.Contains(t) ||
+        t.GetProperties().Any(p => p.PropertyType.FullName == "BlazorWorkbench.Components.Shell.WorkbenchExtensionContext" && p.IsDefined(typeof(ParameterAttribute), true));
+
     private static readonly HashSet<string> s_workbenchAssemblies = new(StringComparer.Ordinal)
     {
         "BlazorWorkbench.Components", "BlazorWorkbench.Hosting", "BlazorWorkbench.Testing.Bunit",
@@ -313,7 +319,7 @@ public static class CatalogBuilder
             return false;
         if (!(t.IsPublic || t.IsNestedPublic) || t.IsDefined(typeof(CompilerGeneratedAttribute)) || t.Name.StartsWith('<') || t.Name == "_Imports")
             return false;
-        if (t.IsDefined(typeof(WorkbenchIgnoreAttribute), false) || typeof(LayoutComponentBase).IsAssignableFrom(t) || IsParameterEditor(t))
+        if (t.IsDefined(typeof(WorkbenchIgnoreAttribute), false) || typeof(LayoutComponentBase).IsAssignableFrom(t) || IsParameterEditor(t) || IsExtension(t, options))
             return false;
         var ns = t.Namespace ?? "";
         if (ns.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal) || s_workbenchAssemblies.Contains(t.Assembly.GetName().Name ?? ""))

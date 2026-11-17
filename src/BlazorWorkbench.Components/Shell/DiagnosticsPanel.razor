@@ -1,3 +1,5 @@
+@inject IServiceProvider Services
+
 <div class="wb-diagnostics">
     <div class="wb-inspector-actions">
         <label class="wb-field"><span>Minimum severity</span>
@@ -62,8 +64,8 @@
         .Reverse()
         .ToList();
 
-    private static string Time(string iso) =>
+    private string Time(string iso) =>
         DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)
-            ? t.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)
+            ? ViewerTimeZone.Convert(Services, t).ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture)
             : iso;
 }

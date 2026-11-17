@@ -100,8 +100,31 @@ public static class ScenarioExporter
         TimeSpan ts => $"TimeSpan.Parse(\"{ts:c}\", CultureInfo.InvariantCulture)",
         Guid g => $"Guid.Parse(\"{g}\")",
         Uri u => $"new Uri({Literal(u.OriginalString)}, UriKind.RelativeOrAbsolute)",
+        _ when JsonValue(value, type) is { } json => json,
         _ => $"/* {Naming.FormatTypeName(type)} */ default",
     };
+
+    private static readonly System.Text.Json.JsonSerializerOptions s_export = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// A record, class or collection edited as JSON in the inspector, as an expression that recreates it exactly:
+    /// <c>JsonSerializer.Deserialize&lt;T&gt;("""...""", JsonSerializerOptions.Web)!</c>. Rewrite it as an object initializer if you prefer.
+    /// </summary>
+    private static string? JsonValue(object value, Type type)
+    {
+        if (!Values.ParameterValueConverter.IsJsonEditable(type))
+            return null;
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(value, value.GetType(), s_export);
+            var quotes = json.Contains("\"\"\"", StringComparison.Ordinal) ? "\"\"\"\"" : "\"\"\"";
+            return $"System.Text.Json.JsonSerializer.Deserialize<{Naming.FormatTypeName(type)}>({quotes}{json}{quotes}, System.Text.Json.JsonSerializerOptions.Web)!";
+        }
+        catch (Exception ex) when (ex is NotSupportedException or System.Text.Json.JsonException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
     public static string Literal(string s)
     {

@@ -13,7 +13,8 @@ The **Controls** panel generates an editor for each component parameter.
 | `TimeSpan`, `Guid` | Text input with format validation. |
 | `RenderFragment` (incl. `ChildContent`) | Multi-line text, rendered as text content. |
 | `EventCallback` | Read-only: *Logged to Actions (n calls)*. |
-| Types with fixtures | Select of the matching fixtures. |
+| Records, classes and structs of plain data; arrays, lists, sets and string-keyed dictionaries of them | A JSON text area, checked against the type. |
+| Types with fixtures | Select of the matching fixtures (plus **Edit as JSON** for types that can be edited as JSON). |
 | Types with a custom editor | Your component. |
 | Everything else | Shown as unsupported, with the reason and the scenario value. |
 
@@ -40,7 +41,13 @@ Every row shows the **source** of its value: *Scenario*, *Default* (component de
 
 Edits are transient. They live in the URL (`?args=`), so you can share a link, until you export them from **Code → Save as scenario**.
 
-Workbench does not serialize arbitrary live .NET objects. Complex values come from fixtures or factories.
+Complex values are edited as JSON when every public property is itself editable (a few levels deep): records such as
+`Customer(string Name, Address Home, IReadOnlyList<string> Tags)`, settings classes, `List<Person>` or
+`Dictionary<string, int>`. Only the parameter's declared type is created: System.Text.Json does not read type names from
+the JSON, so input cannot choose what gets instantiated. Delegates, components, interfaces other than collections, abstract
+types, `object`, framework types, disposable types and recursive types are not editable; they come from fixtures or
+factories. Values up to 64 KB are accepted. **Code → Save as scenario** exports a JSON-edited value as
+`JsonSerializer.Deserialize<T>("""...""", JsonSerializerOptions.Web)!`.
 
 ## Custom editors
 

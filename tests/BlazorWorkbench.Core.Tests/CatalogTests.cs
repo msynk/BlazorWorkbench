@@ -93,7 +93,7 @@ public class CatalogTests
         Assert.Equal("ValueChanged", metadata.FindParameter("Value")!.BoundTo);
         Assert.Equal("Value", metadata.FindParameter("ValueChanged")!.BoundTo);
         Assert.Equal(ParameterKind.Cascading, metadata.FindParameter("Theme")!.Kind);
-        Assert.Equal(EditorKind.Unsupported, metadata.FindParameter("Items")!.Editor);
+        Assert.Equal(EditorKind.Json, metadata.FindParameter("Items")!.Editor);
         Assert.Contains(metadata.Injections, i => i.ServiceType == typeof(IGreeter));
     }
 

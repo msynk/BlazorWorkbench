@@ -147,7 +147,7 @@ public static class ReportWriter
                 {
                     sb.Append("<ul>");
                     foreach (var f in findings)
-                        sb.Append(CultureInfo.InvariantCulture, $"<li>{(f.Blocking ? "<b>blocking</b> " : f.NeedsReview ? "needs review " : "")}{E(f.Impact)} <code>{E(f.RuleId)}</code> {E(f.Help)} <span class=\"m\">{E(string.Join(", ", f.Targets.Take(3)))}</span> {(f.HelpUrl is null ? "" : $"<a href=\"{E(f.HelpUrl)}\" rel=\"noopener noreferrer\">guidance</a>")}</li>");
+                        sb.Append(CultureInfo.InvariantCulture, $"<li>{(f.Blocking ? "<b>blocking</b> " : f.Baselined ? "known (baseline) " : f.NeedsReview ? "needs review " : "")}{E(f.Impact)} <code>{E(f.RuleId)}</code> {E(f.Help)} <span class=\"m\">{E(string.Join(", ", f.Targets.Take(3)))}</span> {(f.HelpUrl is null ? "" : $"<a href=\"{E(f.HelpUrl)}\" rel=\"noopener noreferrer\">guidance</a>")}</li>");
                     sb.Append("</ul><p class=\"m\">Automated checks cover a subset of WCAG; manual review is still required.</p>");
                 }
 

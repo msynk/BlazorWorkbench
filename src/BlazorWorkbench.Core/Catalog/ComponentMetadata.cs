@@ -37,6 +37,9 @@ public enum EditorKind
     Fixture,
     Custom,
     Callback,
+
+    /// <summary>A JSON text area for records, classes and collections (<see cref="Values.ParameterValueConverter.IsJsonEditable(Type)"/>).</summary>
+    Json,
 }
 
 /// <summary>Reflection metadata of a component parameter.</summary>

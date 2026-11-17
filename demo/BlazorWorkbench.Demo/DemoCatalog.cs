@@ -39,6 +39,13 @@ public static class DemoCatalog
         options.AddUser("Admin", u => u.Name("Margaret Hamilton").Role("Admin"));
         options.AddUser("Owner on Pro", u => u.Name("Grace Hopper").Role("Owner").Claim("plan", "pro"));
 
+        // A toolbar menu of the library's own: it sets data-corners on the preview (demo.css follows it) and is cascaded
+        // to components as [CascadingParameter(Name = "corners")]. Scenarios can fix it with .Global("corners", "square").
+        options.AddGlobal("Corners", ["rounded", "square"]);
+
+        // A panel of the library's own, next to Controls and the others: computed styles read from the live preview.
+        options.AddPanel<Extensions.StylesPanel>("Styles");
+
         // A brand background for the canvas toolbar, next to white, gray, dark and transparent.
         options.Backgrounds.Add(new BackgroundPreset("Trail sand", "#f3ede2"));
 

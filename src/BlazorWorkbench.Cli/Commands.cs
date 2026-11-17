@@ -162,6 +162,42 @@ public static class Commands
         return ExitCodes.Success;
     }
 
+    /// <summary>
+    /// Writes the accessibility violations of the last run as each scenario's accessibility baseline: scenarios whose
+    /// accessibility check failed, or every scanned scenario with <paramref name="all"/> (which also removes the baselines of
+    /// scenarios that no longer have violations).
+    /// </summary>
+    public static int ApproveAccessibility(CliContext context, string? output, string? baselines, string? filter, bool all)
+    {
+        var outputDirectory = context.OutputDirectory(output);
+        var report = TestRunReport.Load(Path.Combine(outputDirectory, "report.json"));
+        if (report is null)
+        {
+            Console.Error.WriteLine($"No report.json in {outputDirectory}. Run 'workbench test --a11y' first.");
+            return ExitCodes.Usage;
+        }
+
+        var directory = context.BaselineDirectory(baselines);
+        bool Matches(string id) => filter is null || filter.Split(',').Any(t => Glob.IsMatch(id, t.Trim()));
+        var updated = 0;
+        foreach (var scenario in report.Scenarios.Where(s => Matches(s.ScenarioId)))
+        {
+            var check = scenario.Checks.FirstOrDefault(c => c.Kind == CheckKind.Accessibility && c.Status != CheckStatus.Skipped);
+            if (check?.Findings is not { } findings || (!all && check.Status != CheckStatus.Failed && !findings.Any(f => f.Baselined)))
+                continue;
+            var count = AccessibilityBaseline.Save(directory, scenario.ScenarioId, findings);
+            updated++;
+            Console.WriteLine(count > 0
+                ? $"{Out.Green("approved")} {scenario.ScenarioId}: {count} known violation(s)"
+                : $"{Out.Green("cleared")} {scenario.ScenarioId}: no violations left");
+        }
+
+        Console.WriteLine(updated == 0
+            ? "Nothing to approve: no scanned scenario with failed or known accessibility violations matched. Run 'workbench test --a11y' first."
+            : $"{updated} accessibility baseline(s) updated in {Path.Combine(directory, AccessibilityBaseline.FolderName)}. Review and commit them; fix the violations over time.");
+        return ExitCodes.Success;
+    }
+
     public static async Task<int> PublishAsync(CliContext context, string output, bool screenshots, string[] excludeTags, string? version, CancellationToken ct)
     {
         await using var host = await context.ConnectAsync(ct);

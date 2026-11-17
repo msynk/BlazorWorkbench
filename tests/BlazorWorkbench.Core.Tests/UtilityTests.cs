@@ -91,7 +91,10 @@ public class ValueConversionTests
         Assert.True(ParameterValueConverter.TrySerialize(date, out var json));
         Assert.True(ParameterValueConverter.TryConvert(json, typeof(DateTimeOffset), out var back, out _));
         Assert.Equal(date, back);
-        Assert.False(ParameterValueConverter.TrySerialize(new List<int>(), out _));
+        // Collections of editable values are edited as JSON; delegates are not.
+        Assert.True(ParameterValueConverter.TrySerialize(new List<int> { 1, 2 }, out var list));
+        Assert.Equal("[1,2]", list.GetRawText());
+        Assert.False(ParameterValueConverter.TrySerialize(new Action(() => { }), out _));
     }
 
     [Fact]

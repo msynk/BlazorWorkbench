@@ -92,7 +92,7 @@
         @if (_run.FinishedAt is { } finished)
         {
             var failing = _run.Scenarios.Values.Count(r => r.Status is "Failed" or "Error");
-            <button type="button" class="wb-chip @(failing > 0 ? "wb-chip-failed" : "")" title="@($"Last workbench test run: {finished.ToLocalTime():g}")" @onclick='() => ToggleFilter(failing > 0 ? "is:failing" : "is:passing")'>
+            <button type="button" class="wb-chip @(failing > 0 ? "wb-chip-failed" : "")" title="@($"Last workbench test run: {ViewerTimeZone.Convert(Services, finished):g}")" @onclick='() => ToggleFilter(failing > 0 ? "is:failing" : "is:passing")'>
                 Last run: @(failing > 0 ? $"{failing} failing" : "all passed")
             </button>
         }

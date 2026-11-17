@@ -409,6 +409,13 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         foreach (var cascade in Scenario.CascadingValues)
             _cascades.Add((cascade.ValueType, cascade.Name, cascade.Factory(context)));
 
+        // Toolbar globals reach components as named cascading strings: [CascadingParameter(Name = "density")].
+        foreach (var (id, value) in Session.Globals)
+        {
+            if (!_cascades.Any(c => c.Type == typeof(string) && c.Name == id))
+                _cascades.Add((typeof(string), id, value));
+        }
+
         var metadata = Session.Component?.Metadata;
         var needsEditContext = metadata?.Parameters.Any(p => p.Kind == ParameterKind.Cascading && p.Type == typeof(EditContext)) == true;
         if (needsEditContext && !_cascades.Any(c => c.Type == typeof(EditContext)))
@@ -569,6 +576,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
                 isolateStorage = options.IsolateBrowserStorage,
                 gridSize = options.GridSize,
                 overflowAllow = Scenario.Responsive.AllowOverflow,
+                globals = Session.Globals,
             });
             _bridgeAttached = true;
 

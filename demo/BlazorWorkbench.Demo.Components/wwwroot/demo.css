@@ -9,6 +9,8 @@
   --c-primary: #8c86ff; --c-primary-text: #0b0b10; --c-danger: #ff8f84; --c-success: #75e0a7; --c-warning: #f7c35b; --c-info: #84adff;
 }
 body { background: var(--c-bg); color: var(--c-text); }
+/* The "Corners" toolbar global of the demo Workbench sets data-corners on <html>. */
+[data-corners="square"] { --radius: 0; }
 
 .btn { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid transparent; border-radius: var(--radius); font: inherit; cursor: pointer; }
 .btn-medium { padding: .45rem .9rem; font-size: 14px; }

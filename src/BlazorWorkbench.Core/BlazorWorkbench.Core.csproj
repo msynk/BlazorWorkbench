@@ -11,5 +11,6 @@
     <InternalsVisibleTo Include="BlazorWorkbench.Core.Tests" />
     <InternalsVisibleTo Include="BlazorWorkbench.Components" />
     <InternalsVisibleTo Include="BlazorWorkbench.Hosting" />
+    <InternalsVisibleTo Include="BlazorWorkbench.Testing" />
   </ItemGroup>
 </Project>

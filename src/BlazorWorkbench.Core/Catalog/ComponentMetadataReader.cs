@@ -255,6 +255,8 @@ public sealed class ComponentMetadataReader
         if (t == typeof(Guid)) return (EditorKind.Guid, null);
         if (typeof(Delegate).IsAssignableFrom(t))
             return (EditorKind.Unsupported, "Delegates are supplied by scenarios.");
+        if (Values.ParameterValueConverter.IsJsonEditable(t))
+            return (EditorKind.Json, null);
         return (EditorKind.Unsupported, $"No editor for {Naming.FormatTypeName(type)}. Declare fixtures with set.Fixture<{Naming.FormatTypeName(type)}>(...) or register a custom editor.");
     }
 

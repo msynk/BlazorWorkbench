@@ -136,17 +136,19 @@ Features added:
 | Shell branding (Storybook manager theming) | Done: logo, accent colors, shell stylesheets |
 | Tag exclusion in search (Storybook `!tag`), expand/collapse all | Done: `-tag:x`, `-is:x` |
 | Configurable single-key shortcuts, ARIA tabs, skip link, error boundaries in the shell (Storybook 10.3 accessibility work) | Done |
+| Toolbar globals: your own menus such as density, brand or a feature flag (Storybook `globalTypes`) | Done: `options.AddGlobal(...)`, `.Global(...)`; cascaded by id, `data-{id}` on the preview, `ctx.Global(id)`, `?g.{id}=` |
+| Accessibility outline: headings and landmarks with structural warnings (Polypane outline panel) | Done: **Outline** in the Accessibility panel |
+| Hosting under a path base (reverse proxies) | Done and covered by an end-to-end test |
+| Timestamps in the viewer's time zone with Interactive Server | Done |
+| Accessibility baselines: fail only on new violations (Chromatic accessibility tests) | Done: `workbench approve --accessibility`, `baselines/accessibility/{scenario}.json` |
+| Panels and toolbar items of your own (Storybook addon API, Lookbook panels) | Done: `options.AddPanel<T>(title)`, `options.AddToolbarItem<T>()`, `WorkbenchExtensionContext` with `EvaluateAsync` in the preview ([extensibility](extensibility.md#panels-and-toolbar-items-of-your-own)) |
+| JSON editor for complex parameters (Storybook object control) | Done: records, classes and collections of plain data, deserialized into the declared type only |
+| Synchronized interaction across Compare frames (Polypane synced panes) | Done: **Sync interactions** in the Compare view |
 
 Still open, with the reason:
 
 | Gap | Why |
 | --- | --- |
-| Extension API for custom panels and toolbar items (Storybook addons) | Needs a stable public contract for the shell's internal messages first; planned for a later version. |
-| Custom globals and toolbars, feature flags (Storybook `globalTypes`) | User and network switching cover the common cases; a general mechanism needs the extension API. |
-| JSON editor for complex parameters (Storybook object control) | Fixtures cover it safely; arbitrary deserialization into component parameters needs a type allowlist. |
-| Accessibility baselines (Chromatic) | `.Accessibility(a => a.Todo(...))` covers gradual adoption per scenario; per-violation baselines are planned. |
-| Synchronized interaction across Compare frames (Polypane) | Needs replaying recorder events across frames; planned. |
-| Accessibility outline panel (Polypane) | Planned; axe and the tab order overlay cover part of it. |
 | Live Razor playground (Playroom) | Still needs Razor compilation in the browser (now feasible on WebAssembly only). |
 | Catalog composition (Storybook refs) | Still open; composing manifests for MCP first is the cheaper step. |
 

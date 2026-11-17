@@ -154,6 +154,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private readonly List<DesignReference> _designs = [];
     private readonly List<PseudoStateRule> _pseudoStates = [];
     private readonly List<StorageEntry> _storage = [];
+    private readonly Dictionary<string, string> _globals = new(StringComparer.Ordinal);
     private string? _key, _description, _culture, _theme, _viewport, _readySelector, _skip, _visualSkip, _a11ySkip, _a11yJustification, _notes;
     private TextDirection _direction = TextDirection.Auto;
     private SimulatedUser? _user;
@@ -372,6 +373,18 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         return this;
     }
 
+    /// <summary>
+    /// Fixes the value of a toolbar global (<see cref="WorkbenchOptions.AddGlobal"/>) for this scenario, for example
+    /// <c>.Global("density", "compact")</c>. The toolbar can still change it while previewing.
+    /// </summary>
+    public ScenarioBuilder<TComponent> Global(string id, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(value);
+        _globals[id] = value;
+        return this;
+    }
+
     /// <summary>Fails every HTTP request with a connection error.</summary>
     public ScenarioBuilder<TComponent> Offline(bool offline = true) { _offline = offline; return this; }
 
@@ -518,6 +531,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
             Storage = _storage.ToArray(),
             ForcedColors = _forcedColors,
             PrintMedia = _print,
+            Globals = new Dictionary<string, string>(_globals, StringComparer.Ordinal),
             Http = _httpConfigured
                 ? new HttpSimulation { Rules = [.. _httpRules, .. _setupHttpRules], Latency = _httpLatency, UnmatchedStatus = _unmatched }
                 : null,

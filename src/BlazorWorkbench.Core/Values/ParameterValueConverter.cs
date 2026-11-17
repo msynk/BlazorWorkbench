@@ -113,6 +113,69 @@ public static class ParameterValueConverter
         Converters = { new JsonStringEnumConverter() },
     };
 
+    /// <summary>Largest JSON value, in characters, accepted for a complex parameter.</summary>
+    public const int MaxJsonLength = 64 * 1024;
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, bool> s_jsonEditable = new();
+
+    private static readonly HashSet<Type> s_jsonCollections =
+    [
+        typeof(List<>), typeof(IList<>), typeof(ICollection<>), typeof(IEnumerable<>), typeof(IReadOnlyList<>), typeof(IReadOnlyCollection<>),
+        typeof(HashSet<>), typeof(ISet<>), typeof(IReadOnlySet<>),
+    ];
+
+    private static readonly HashSet<Type> s_jsonDictionaries = [typeof(Dictionary<,>), typeof(IDictionary<,>), typeof(IReadOnlyDictionary<,>)];
+
+    /// <summary>
+    /// True when values of <paramref name="type"/> can be edited as JSON in the inspector: arrays, lists, sets and
+    /// string-keyed dictionaries of editable values, and records, classes and structs (with a public parameterless or
+    /// record constructor) whose public properties are editable, a few levels deep. Only the declared type is ever created:
+    /// System.Text.Json does not read type names from the JSON, so the input cannot choose what is instantiated. Delegates,
+    /// components, interfaces other than collections, abstract types, <see cref="object"/> and framework types are not editable.
+    /// </summary>
+    public static bool IsJsonEditable(Type type) => s_jsonEditable.GetOrAdd(type, t => IsJsonEditable(t, 0, []));
+
+    private static bool IsJsonEditable(Type type, int depth, HashSet<Type> visiting)
+    {
+        var t = Nullable.GetUnderlyingType(type) ?? type;
+        if (IsSupported(t))
+            return true;
+        if (depth > 4 || !visiting.Add(t))
+            return false;
+        try
+        {
+            if (t.IsArray)
+                return t.GetArrayRank() == 1 && IsJsonEditable(t.GetElementType()!, depth + 1, visiting);
+            if (t.IsGenericType)
+            {
+                var definition = t.GetGenericTypeDefinition();
+                var args = t.GetGenericArguments();
+                if (s_jsonCollections.Contains(definition))
+                    return IsJsonEditable(args[0], depth + 1, visiting);
+                if (s_jsonDictionaries.Contains(definition))
+                    return args[0] == typeof(string) && IsJsonEditable(args[1], depth + 1, visiting);
+            }
+
+            if (t == typeof(object) || t.IsInterface || t.IsAbstract || t.IsPointer || t.IsByRef || t.ContainsGenericParameters ||
+                typeof(Delegate).IsAssignableFrom(t) || typeof(Microsoft.AspNetCore.Components.IComponent).IsAssignableFrom(t) ||
+                typeof(IDisposable).IsAssignableFrom(t) || typeof(System.Collections.IEnumerable).IsAssignableFrom(t))
+                return false;
+            var ns = t.Namespace ?? "";
+            if (ns == "System" || ns.StartsWith("System.", StringComparison.Ordinal) || ns.StartsWith("Microsoft.", StringComparison.Ordinal))
+                return false;
+            if (!t.IsValueType && t.GetConstructor(Type.EmptyTypes) is null && t.GetConstructors().Length != 1)
+                return false;
+            var properties = t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.GetIndexParameters().Length == 0 && p.GetMethod is { IsPublic: true })
+                .ToArray();
+            return properties.Length > 0 && properties.All(p => IsJsonEditable(p.PropertyType, depth + 1, visiting));
+        }
+        finally
+        {
+            visiting.Remove(t);
+        }
+    }
+
     /// <summary>True when values of <paramref name="type"/> can be edited and serialized by the inspector.</summary>
     public static bool IsSupported(Type type)
     {
@@ -184,6 +247,9 @@ public static class ParameterValueConverter
                 value = Convert.ChangeType(text, t, CultureInfo.InvariantCulture);
                 return true;
             }
+
+            if (IsJsonEditable(t))
+                return TryConvertJson(element, t, out value, out error);
         }
         catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
         {
@@ -207,7 +273,7 @@ public static class ParameterValueConverter
             return true;
         }
 
-        if (!IsSupported(value.GetType()))
+        if (!IsSupported(value.GetType()) && !IsJsonEditable(value.GetType()))
             return false;
 
         try
@@ -223,12 +289,50 @@ public static class ParameterValueConverter
                 char c => JsonSerializer.SerializeToElement(c.ToString()),
                 _ => JsonSerializer.SerializeToElement(value, value.GetType(), s_json),
             };
+            // Large complex values (a long list) stay out of the inspector, URLs and the catalog.
+            if (element.ValueKind is JsonValueKind.Object or JsonValueKind.Array && element.GetRawText().Length > MaxJsonLength)
+            {
+                element = default;
+                return false;
+            }
+
             return true;
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or JsonException)
         {
             // The contract is "false for unsupported values"; callers (catalog API, two-way binding) must never throw.
             element = default;
+            return false;
+        }
+    }
+
+    // A complex value: JSON (an object or array, or a string holding JSON typed into the inspector) deserialized into the
+    // declared type only.
+    private static bool TryConvertJson(JsonElement element, Type type, out object? value, out string? error)
+    {
+        value = null;
+        error = null;
+        var json = element.ValueKind == JsonValueKind.String ? element.GetString()! : element.GetRawText();
+        if (json.Length > MaxJsonLength)
+        {
+            error = $"The JSON is longer than {MaxJsonLength / 1024} KB.";
+            return false;
+        }
+
+        try
+        {
+            value = JsonSerializer.Deserialize(json, type, s_json);
+            if (value is null && type.IsValueType && Nullable.GetUnderlyingType(type) is null)
+            {
+                error = $"{Naming.FormatTypeName(type)} does not accept null.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or ArgumentException)
+        {
+            error = $"Not valid JSON for {Naming.FormatTypeName(type)}: {ex.Message.Split('\n')[0]}";
             return false;
         }
     }

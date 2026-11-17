@@ -12,6 +12,12 @@ The canvas toolbar's **Accessibility** menu simulates color vision deficiencies 
 applies the WCAG 1.4.12 text spacing overrides and numbers the tab order. **Highlight** next to a finding outlines the
 element in the preview. See [tools](tools.md#accessibility-simulations).
 
+Under the scan results, **Outline** lists the preview's headings and landmarks the way a screen reader's lists show them,
+in document order and indented by level or nesting. It flags headings that skip a level or have no name, a second level 1
+heading, more than one `main`, unnamed regions and landmarks of the same kind without distinct names. Click an entry to
+outline the element in the preview. Elements hidden from assistive technology (`aria-hidden`, `inert`, not rendered) are
+left out.
+
 ## In the CLI
 
 ```bash
@@ -30,6 +36,20 @@ workbench test --a11y --fail-on moderate
 `.Accessibility(a => a.Todo("Fix tracked in #456"))` keeps scanning a scenario but reports its violations without failing
 the run, like Storybook's `todo` mode. Use it while you fix an existing component; `Skip` hides the scenario from scans
 entirely and should be reserved for deliberate misuse examples.
+
+For a whole library with existing findings, approve them as known instead (Chromatic's accessibility baselines):
+
+```bash
+workbench test --a11y                     # fails on the existing violations
+workbench approve --accessibility         # writes baselines/accessibility/{scenario}.json for the failing scenarios
+workbench test --a11y                     # passes; a new violation, or the same rule on a new element, fails
+```
+
+A baseline lists each known violation as a rule and the selector of its element. Later runs report known violations as
+*known (baseline)* without failing, fail on any other blocking violation, and say when baseline violations were fixed; run
+`workbench approve --accessibility --all` then to shrink the baselines (it removes the file of a scenario without violations).
+Baselines depend on the DOM, not on the platform, so one file serves every operating system and hosting model. Review and
+commit them like screenshots. The test runner in the explorer does not read them; it reports every violation.
 
 ## Disabling rules
 

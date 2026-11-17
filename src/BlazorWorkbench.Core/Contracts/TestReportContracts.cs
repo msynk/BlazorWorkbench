@@ -178,7 +178,8 @@ public sealed record AccessibilityFinding(
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Targets,
     bool Blocking,
-    bool NeedsReview = false);
+    bool NeedsReview = false,
+    bool Baselined = false);
 
 public sealed class VisualComparison
 {

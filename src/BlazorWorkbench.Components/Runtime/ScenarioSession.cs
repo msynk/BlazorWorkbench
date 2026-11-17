@@ -13,7 +13,9 @@ namespace BlazorWorkbench.Components.Runtime;
 /// <param name="Direction">Overrides the text direction (toolbar, <c>?dir=</c>).</param>
 /// <param name="User">Previews the scenario as a simulated user from <see cref="WorkbenchOptions.Users"/> (<c>?user=</c>), or <c>anonymous</c>.</param>
 /// <param name="Network">Applies a network profile from <see cref="WorkbenchOptions.NetworkProfiles"/> to the fake backend (<c>?network=</c>).</param>
-public sealed record ActivationOptions(string? Culture = null, string? Theme = null, TextDirection? Direction = null, string? User = null, string? Network = null);
+/// <param name="Globals">Values of toolbar globals (<see cref="WorkbenchOptions.Globals"/>) chosen in the toolbar (<c>?g.{id}=</c>), by id.</param>
+public sealed record ActivationOptions(string? Culture = null, string? Theme = null, TextDirection? Direction = null, string? User = null, string? Network = null,
+    IReadOnlyDictionary<string, string>? Globals = null);
 
 /// <summary>Describes where a service used by the scenario comes from.</summary>
 public sealed record ServiceSourceInfo(string ServiceType, string Source, string Implementation);
@@ -58,6 +60,9 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
     public ComponentEntry? Component { get; private set; }
     public ScenarioContext? Context { get; private set; }
     public ActivationOptions Activation { get; private set; } = new();
+
+    /// <summary>The values of the toolbar globals in this session, by id (see <see cref="WorkbenchOptions.Globals"/>).</summary>
+    public IReadOnlyDictionary<string, string> Globals { get; private set; } = new Dictionary<string, string>();
     public ScenarioGates Gates { get; } = new();
     public ScenarioActivityTracker Activity { get; } = new();
     public DiagnosticLog Diagnostics { get; }
@@ -130,7 +135,8 @@ public sealed class ScenarioSession : IAsyncDisposable, IDisposable
             }
 
             // Fixtures and factories see the culture the component renders in (including toolbar / ?culture= overrides).
-            Context = new ScenarioContext(scenario, Time, Gates, Activity, Culture) { Services = services, Diagnostics = Diagnostics };
+            Globals = workbenchOptions.ResolveGlobals(env, Activation.Globals);
+            Context = new ScenarioContext(scenario, Time, Gates, Activity, Culture) { Services = services, Diagnostics = Diagnostics, Globals = Globals };
 
             foreach (var gate in (env.Http?.Rules ?? []).Select(r => r.Gate).Concat((env.JSInterop?.Rules ?? []).Select(r => r.Gate)))
             {
