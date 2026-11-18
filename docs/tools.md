@@ -150,6 +150,29 @@ Frames load lazily. In an Interactive Server host each frame is a circuit, so la
 | **HTML** | The rendered markup of the preview root, formatted, without Blazor's comments, `_bl_` and scoped-CSS (`b-xxxxxxxxxx`) attributes. Copy it into a bug report or a snapshot. |
 | **Visual** | Baseline, current and difference images of the last `workbench test --visual` run, side by side, overlaid or as a difference; **Approve** makes a changed or new screenshot the baseline. |
 | **Storage** | `localStorage`, `sessionStorage` and script-visible cookies of the preview. Remove items, add or change one, or clear everything; reload to see how the component starts with it. |
+| **Profiler** | What Blazor rendered while you recorded: parameter updates per component type, event handlers, render batches, diff size and DOM updates. See below. |
+
+## Profiling renders
+
+**Profiler → Record** records the preview until **Stop**; **Profile interaction** reloads the preview and records while
+an interaction test runs, so the numbers are repeatable. It reads Blazor's own component metrics (.NET 10, the
+`Microsoft.AspNetCore.Components` and `Microsoft.AspNetCore.Components.Lifecycle` meters):
+
+- **Components**: how often each component type received parameters, which is its first render plus every re-render
+  caused by its parent, with the time spent. A component listed far more often than you expect is the usual cause of a
+  slow Blazor UI; the panel points at the first one above 20 updates. Parameters of non-primitive types (lists,
+  delegates, mutable classes) make Blazor re-render a child every time its parent renders, even when nothing changed.
+  Re-renders a component causes itself (`StateHasChanged`) are not listed per component; they appear in the batches.
+- **Event handlers**: calls and time per handler (`Counter.Increment`; lambdas show the method they are written in).
+- **Render batches**, the time spent diffing them, the number of render tree edits, and the DOM updates the preview saw.
+
+Workbench's own components are left out. Times come from the renderer (the server for Interactive Server, the browser
+for WebAssembly) and include child components rendered in the same call; Debug builds are slower than Release, so
+compare counts more than milliseconds. Interactive Server hosts publish the metrics by default; Workbench registers them
+for WebAssembly and Blazor Hybrid hosts (`AddMetrics()` and `AddComponentsMetrics()`). A trimmed WebAssembly app needs
+`<MetricsSupport>true</MetricsSupport>`. Metrics are process-wide: in an Interactive Server host, measurements taken on
+another circuit (the shell, another preview) are left out, but asynchronous completions that run off the circuit
+cannot be told apart, so profile one preview at a time.
 
 ## Recording and debugging interactions
 

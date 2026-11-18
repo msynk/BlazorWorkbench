@@ -1,0 +1,153 @@
+@* Render profiler: Blazor's component metrics for the preview while recording, alone or around an interaction test. *@
+<div class="wb-profiler">
+    <div class="wb-inspector-actions">
+        @if (Recording)
+        {
+            <button type="button" class="wb-button wb-button-primary" id="wb-profile-stop" @onclick="() => OnStop.InvokeAsync()">Stop</button>
+            <span role="status" class="wb-muted">Recording@(Interaction is { } running ? $" while '{running}' runs" : ": use the preview, then stop")…</span>
+        }
+        else
+        {
+            <button type="button" class="wb-button wb-button-primary" id="wb-profile-start" disabled="@(!CanRecord)" @onclick="() => OnStart.InvokeAsync(null)">Record</button>
+            @if (Scenario.Interactions.Count > 0)
+            {
+                <label class="wb-field"><span>Interaction</span>
+                    <select id="wb-profile-interaction" @bind="_interaction">
+                        @foreach (var test in Scenario.Interactions)
+                        {
+                            <option value="@test.Name">@test.Name</option>
+                        }
+                    </select>
+                </label>
+                <button type="button" class="wb-button" id="wb-profile-interaction-run" disabled="@(!CanRecord)" @onclick="ProfileInteraction"
+                        title="Reload the preview, then record while the interaction test runs">Profile interaction</button>
+            }
+        }
+    </div>
+    <p class="wb-muted wb-small">
+        Counts what Blazor reports for this preview: how often each component received parameters (its first render and every
+        re-render caused by its parent), the event handlers that ran, and the render batches sent to the browser.
+        Workbench's own components are left out.
+    </p>
+
+    @if (Profile is { } profile)
+    {
+        @if (!profile.Available)
+        {
+            <p class="wb-empty" role="status">@profile.Note</p>
+        }
+        else
+        {
+            <div class="wb-stats wb-profile-stats">
+                <div class="wb-stat"><span class="wb-stat-value">@Ms(profile.DurationMs, 0)</span><span>recorded</span></div>
+                <div class="wb-stat"><span class="wb-stat-value" id="wb-profile-batches">@profile.Batches</span><span>render batches</span></div>
+                <div class="wb-stat"><span class="wb-stat-value">@Ms(profile.BatchMs, 2)</span><span>diffing</span></div>
+                <div class="wb-stat"><span class="wb-stat-value">@profile.BatchEdits</span><span>render tree edits</span></div>
+                <div class="wb-stat"><span class="wb-stat-value">@profile.DomUpdates</span><span>DOM updates</span></div>
+            </div>
+            @if (profile.Components.FirstOrDefault(c => c.ParameterUpdates >= HotThreshold) is { } hot)
+            {
+                <p class="wb-callout wb-callout-tip" role="note">
+                    <b>@ShortName(hot.Component)</b> received parameters @hot.ParameterUpdates times. If its parent re-renders it with
+                    unchanged values, pass immutable values (records, strings, numbers) so Blazor can skip it, give list items a
+                    <code>@@key</code>, or override <code>ShouldRender</code>.
+                </p>
+            }
+
+            <h2 class="wb-h3">Components</h2>
+            @if (profile.Components.Count == 0)
+            {
+                <p class="wb-empty">No component received parameters while recording.</p>
+            }
+            else
+            {
+                <table class="wb-table" id="wb-profile-components">
+                    <thead><tr><th scope="col">Component</th><th scope="col" class="wb-num">Parameter updates</th><th scope="col" class="wb-num">Total</th><th scope="col" class="wb-num">Slowest</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in profile.Components)
+                        {
+                            <tr class="@(c.ParameterUpdates >= HotThreshold ? "wb-profile-hot" : "")">
+                                <td><code title="@c.Component">@ShortName(c.Component)</code></td>
+                                <td class="wb-num">@c.ParameterUpdates</td>
+                                <td class="wb-num">@Ms(c.ParameterMs, 2)</td>
+                                <td class="wb-num">@Ms(c.MaxParameterMs, 2)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (profile.Events.Count > 0)
+            {
+                <h2 class="wb-h3">Event handlers</h2>
+                <table class="wb-table" id="wb-profile-events">
+                    <thead><tr><th scope="col">Handler</th><th scope="col" class="wb-num">Calls</th><th scope="col" class="wb-num">Total</th><th scope="col" class="wb-num">Slowest</th></tr></thead>
+                    <tbody>
+                        @foreach (var e in profile.Events)
+                        {
+                            <tr>
+                                <td><code title="@($"{e.Component}.{e.Method}")">@HandlerName(e)</code>@if (e.Attribute is { } eventName) { <span class="wb-muted"> (@eventName)</span> }</td>
+                                <td class="wb-num">@e.Count</td>
+                                <td class="wb-num">@Ms(e.TotalMs, 2)</td>
+                                <td class="wb-num">@Ms(e.MaxMs, 2)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <p class="wb-muted wb-small">
+                Times are measured by the renderer@(OperatingSystem.IsBrowser() ? " in the browser" : " on the server") and include the work of child components
+                rendered in the same call. Debug builds are slower than Release builds; compare counts more than milliseconds.
+            </p>
+        }
+    }
+</div>
+
+@code {
+    private const int HotThreshold = 20;
+    private string? _interaction;
+
+    [Parameter, EditorRequired] public ScenarioDefinition Scenario { get; set; } = default!;
+    [Parameter] public RenderProfileView? Profile { get; set; }
+    [Parameter] public bool Recording { get; set; }
+
+    /// <summary>The interaction test being profiled, when one is.</summary>
+    [Parameter] public string? Interaction { get; set; }
+
+    /// <summary>False while the preview is not open (another mode) or not ready.</summary>
+    [Parameter] public bool CanRecord { get; set; } = true;
+
+    /// <summary>Start recording: null records until Stop, an interaction name records while that test runs.</summary>
+    [Parameter] public EventCallback<string?> OnStart { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (_interaction is null || Scenario.Interactions.All(i => i.Name != _interaction))
+            _interaction = Scenario.Interactions.FirstOrDefault()?.Name;
+    }
+
+    private Task ProfileInteraction() => _interaction is null ? Task.CompletedTask : OnStart.InvokeAsync(_interaction);
+
+    private static string Ms(double value, int decimals) => value.ToString(decimals == 0 ? "0" : "0.##", CultureInfo.CurrentCulture) + " ms";
+
+    /// <summary><c>Counter.Increment</c>; compiler-generated lambda names (<c>&lt;BuildRenderTree&gt;b__29_1</c>) become <c>Counter, lambda in BuildRenderTree</c>.</summary>
+    private static string HandlerName(EventHandlerStats e)
+    {
+        var component = ShortName(e.Component);
+        if (e.Method is not { } method)
+            return component;
+        if (method.StartsWith('<') && method.IndexOf('>', StringComparison.Ordinal) is > 1 and var end)
+            return $"{component}, lambda in {method[1..end]}";
+        return $"{component}.{method}";
+    }
+
+    /// <summary>The type name without its namespace, keeping generic arguments readable.</summary>
+    private static string ShortName(string fullName)
+    {
+        var generic = fullName.IndexOf('`', StringComparison.Ordinal);
+        var name = generic < 0 ? fullName : fullName[..generic];
+        var dot = name.LastIndexOf('.');
+        return (dot < 0 ? name : name[(dot + 1)..]).Replace('+', '.');
+    }
+}

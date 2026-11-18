@@ -400,4 +400,26 @@ public class ToolsTests(WorkbenchFixture fixture)
         await Expect(page.Locator(".wb-callout-do")).ToContainTextAsync("Write the label as a verb");
         await Expect(page.Locator(".wb-callout-dont .wb-callout-title")).ToHaveTextAsync("Don't");
     }
+
+    [Fact]
+    public async Task Profiler_records_renders_and_event_handlers_of_the_preview()
+    {
+        var page = await OpenAsync("scenario/inputs-counter--default?panel=profiler");
+        await page.Locator("#wb-profile-start:not([disabled])").ClickAsync();
+        await Expect(page.Locator("#wb-profile-stop")).ToBeVisibleAsync();
+        for (var i = 0; i < 3; i++)
+            await Preview(page).GetByRole(AriaRole.Button, new() { Name = "Increase" }).ClickAsync();
+        await Expect(Preview(page).GetByText("3", new() { Exact = true })).ToBeVisibleAsync();
+        await page.Locator("#wb-profile-stop").ClickAsync();
+
+        await Expect(page.Locator("#wb-profile-batches")).ToHaveTextAsync("3");
+        await Expect(page.Locator("#wb-profile-components")).ToContainTextAsync("Counter");
+        await Expect(page.Locator("#wb-profile-events")).ToContainTextAsync("lambda in BuildRenderTree");
+        await Expect(page.Locator("#wb-profile-components")).Not.ToContainTextAsync("ScenarioHost");
+
+        // Profiling an interaction test reloads the preview and records until the test ends.
+        await page.Locator("#wb-profile-interaction-run").ClickAsync();
+        await Expect(page.Locator("#wb-profile-start")).ToBeVisibleAsync(new() { Timeout = 30000 });
+        await Expect(page.Locator("#wb-profile-batches")).ToHaveTextAsync("3");
+    }
 }

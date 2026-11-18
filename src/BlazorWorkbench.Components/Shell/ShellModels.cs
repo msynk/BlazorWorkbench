@@ -1,5 +1,6 @@
 using BlazorWorkbench.Catalog;
 using BlazorWorkbench.Contracts;
+using BlazorWorkbench.Components.Runtime;
 using Microsoft.AspNetCore.Components;
 
 namespace BlazorWorkbench.Components.Shell;
@@ -31,6 +32,18 @@ public sealed record StepResult(int Index, string Description, string Status, st
 public sealed record InteractionOutcome(string Name, bool Passed, StepResult[] Results);
 
 public sealed record PreviewMetrics(double? ReadyMs, int DomUpdates, int Pending);
+
+/// <summary>A render profile of the preview (the Profiler panel): <see cref="RenderProfileResult"/> plus the DOM updates the preview saw.</summary>
+public sealed record RenderProfileView(
+    bool Available,
+    double DurationMs,
+    int Batches,
+    double BatchMs,
+    long BatchEdits,
+    IReadOnlyList<ComponentRenderStats> Components,
+    IReadOnlyList<EventHandlerStats> Events,
+    string? Note,
+    int DomUpdates);
 
 public sealed record GateInfo(string Name, GateStatus Status, int Waiters, string? FailureMessage);
 

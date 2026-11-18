@@ -502,3 +502,7 @@ html[data-wb-theme="dark"] .wb-not-found a { color: #a5a5ff; }
   .wb-review-layout { grid-template-columns: 1fr; }
   .wb-review-queue { max-height: 14rem; }
 }
+/* Profiler panel */
+.wb-num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wb-profile-stats { margin: .5rem 0 .75rem; }
+.wb-profile-hot td:first-child code { color: var(--wb-warning); font-weight: 600; }

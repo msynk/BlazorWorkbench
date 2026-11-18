@@ -40,6 +40,8 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     private int _componentKey;
     private bool _bridgeAttached;
     private bool _disposed;
+    private SynchronizationContext? _rendererContext;
+    private RenderProfiler? _profiler;
     private bool _loading;
     private IDisposable? _loaderActivity;
     private readonly CancellationTokenSource _loaderCancellation = new();
@@ -66,6 +68,9 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
 
     protected override void OnInitialized()
     {
+        // The renderer's context: measurements taken on it belong to this preview (RenderProfiler).
+        _rendererContext = SynchronizationContext.Current;
+        RenderProfiler.EnsureListening();
         try
         {
             if (!Session.IsActive)
@@ -549,6 +554,24 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         return true;
     }
 
+    /// <summary>Starts a render profile of this preview (the Profiler panel), replacing one that is recording.</summary>
+    [JSInvokable]
+    public bool StartProfile()
+    {
+        _profiler?.Dispose();
+        _profiler = new RenderProfiler(_rendererContext);
+        return true;
+    }
+
+    /// <summary>Stops the render profile and returns it as JSON (an empty result when none was recording).</summary>
+    [JSInvokable]
+    public string StopProfile()
+    {
+        var result = _profiler?.Stop() ?? new RenderProfileResult(RenderProfiler.MetricsPublished, 0, 0, 0, 0, [], [], "No profile was recording.");
+        _profiler = null;
+        return JsonSerializer.Serialize(result, WorkbenchJson.Options);
+    }
+
     [JSInvokable]
     public int GetCallbackCount(string name) => Session.Callbacks.Count(name);
 
@@ -740,6 +763,7 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     public void Dispose()
     {
         _disposed = true;
+        _profiler?.Dispose();
         _loaderCancellation.Cancel();
         _loaderActivity?.Dispose();
         Session.Diagnostics.Added -= OnDiagnostic;

@@ -110,6 +110,10 @@ public static class WorkbenchRuntimeServiceCollectionExtensions
                                     ?? throw new InvalidOperationException("ScenarioContext is available only while a scenario is active."));
         services.AddAuthorizationCore();
         services.AddCascadingAuthenticationState();
+        // Blazor's component metrics feed the Profiler panel. Server hosts register them already; WebAssembly and
+        // Blazor Hybrid hosts do not (AddComponentsMetrics needs a meter factory and adds nothing twice).
+        services.AddMetrics();
+        Microsoft.AspNetCore.Components.Infrastructure.ComponentsMetricsServiceCollectionExtensions.AddComponentsMetrics(services);
         return services;
     }
 }

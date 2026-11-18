@@ -163,6 +163,21 @@
     if (value !== 'loading') announceResponsive();
   }
 
+  // Render profile (Profiler panel): Blazor's component metrics from .NET plus the DOM updates seen here.
+  let profileDom = null; // DOM update batches while recording; null when not recording
+  async function startProfile() {
+    if (!state.dotnet) return false;
+    profileDom = 0;
+    return await state.dotnet.invokeMethodAsync('StartProfile');
+  }
+  async function stopProfile() {
+    if (!state.dotnet) return null;
+    const result = JSON.parse(await state.dotnet.invokeMethodAsync('StopProfile'));
+    result.domUpdates = profileDom || 0;
+    profileDom = null;
+    return result;
+  }
+
   function metrics() {
     return { readyMs: state.readyAt ? Math.round(state.readyAt) : null, domUpdates: state.domUpdates, pending: state.pending };
   }
@@ -196,6 +211,7 @@
     // Overlays drawn by the preview tools are not part of the scenario.
     if (records.every((r) => isToolNode(r.target))) return;
     state.lastMutation = performance.now();
+    if (profileDom !== null) profileDom++;
     if (state.state !== 'loading') scheduleLayout(250);
     if (state.state === 'loading') {
       state.domUpdates++;
@@ -1710,6 +1726,10 @@
           if (recorder) recorder.assert = recordingTest && !!payload.assert;
           break;
         case 'tokens': post('tokens', collectTokens()); break;
+        case 'profile':
+          if (payload && payload.on) { await startProfile(); post('profile', { recording: true }); }
+          else post('profile', await stopProfile());
+          break;
         case 'session':
           if (state.dotnet) post('session', JSON.parse(await state.dotnet.invokeMethodAsync('GetSessionInfo')));
           break;
@@ -1799,6 +1819,8 @@
     get gates() { return state.gates.slice(); },
     get sessionId() { return state.sessionId; },
     metrics,
+    startProfile,
+    stopProfile,
     serverMetrics: () => state.dotnet ? state.dotnet.invokeMethodAsync('GetMetrics').then(JSON.parse) : Promise.resolve(null),
     waitForIdle,
     callbackCount,
