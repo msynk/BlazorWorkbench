@@ -122,6 +122,13 @@ public sealed class ScenarioDefinition
     public IReadOnlyList<ParameterAssignment> Parameters { get; init; } = [];
     public IReadOnlyList<CascadingValueDefinition> CascadingValues { get; init; } = [];
 
+    /// <summary>
+    /// Asynchronous work awaited before the component renders (<c>.Load(...)</c>), in declaration order: reading a JSON file
+    /// of sample data, computing a large fixture. Loaders store results with <see cref="ScenarioContext.Set"/>; parameter,
+    /// cascading value and service factories read them with <see cref="ScenarioContext.Get{T}"/>.
+    /// </summary>
+    public IReadOnlyList<Func<ScenarioContext, CancellationToken, Task>> Loaders { get; init; } = [];
+
     /// <summary>Wrappers around the component, outermost first (<c>.Wrap(...)</c>). Catalog-wide decorators come from the options.</summary>
     public IReadOnlyList<ScenarioDecorator> Decorators { get; init; } = [];
 

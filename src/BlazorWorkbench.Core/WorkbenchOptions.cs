@@ -249,7 +249,9 @@ public class WorkbenchOptions
     /// Adds a documentation page. <paramref name="title"/> is a catalog path such as <c>Guides/Theming</c>. The Markdown is
     /// rendered safely (raw HTML is escaped) and may contain directives on their own line:
     /// <c>{{scenario:inputs-button--primary}}</c> (live preview), <c>{{scenarios:inputs-button}}</c> (every scenario of a
-    /// component), <c>{{parameters:inputs-button}}</c> (parameter table) and <c>{{tokens}}</c> (design tokens).
+    /// component), <c>{{parameters:inputs-button}}</c> (parameter table), <c>{{tokens}}</c> (design tokens),
+    /// <c>{{source:inputs-button--primary}}</c> (Razor markup) and <c>{{facts:inputs-button--primary}}</c> (what it simulates).
+    /// Quotes starting with <c>[!NOTE]</c>, <c>[!TIP]</c>, <c>[!WARNING]</c>, <c>[!DO]</c> or <c>[!DONT]</c> become callouts.
     /// </summary>
     public WorkbenchOptions AddPage(string title, string markdown)
     {

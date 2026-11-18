@@ -84,6 +84,9 @@ public static class ScenarioFacts
         if (replaced.Count > 0)
             Simulates("Services", string.Join(", ", replaced.Take(MaxServices)) + (replaced.Count > MaxServices ? $" +{replaced.Count - MaxServices}" : ""));
 
+        if (scenario.Loaders.Count > 0)
+            Simulates("Loader", scenario.Loaders.Count == 1 ? "loads data before rendering" : $"{scenario.Loaders.Count} loaders run before rendering", panel: null);
+
         foreach (var (id, value) in env.Globals)
             Simulates("Global", $"{options.Globals.FirstOrDefault(g => g.Id == id)?.Label ?? id}: {value}", panel: null);
 

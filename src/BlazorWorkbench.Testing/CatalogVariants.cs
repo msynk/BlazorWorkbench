@@ -6,7 +6,7 @@ namespace BlazorWorkbench.Testing;
 /// The viewports and themes of a catalog, falling back to the Workbench defaults when a host clears its lists, so runs and
 /// publishing never index into an empty list.
 /// </summary>
-internal static class CatalogVariants
+public static class CatalogVariants
 {
     public static IReadOnlyList<ViewportPreset> Viewports(CatalogDto catalog) =>
         catalog.Viewports.Count > 0 ? catalog.Viewports : ViewportPreset.Defaults;

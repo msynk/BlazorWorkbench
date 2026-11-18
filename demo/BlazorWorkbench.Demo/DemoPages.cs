@@ -16,6 +16,18 @@ public static class DemoPages
 
         {{scenario:inputs-button--primary}}
 
+        The markup that renders it, and what the scenario simulates and checks:
+
+        {{source:inputs-button--primary}}
+
+        {{facts:inputs-button--primary}}
+
+        > [!DO]
+        > Write the label as a verb that says what happens: *Save changes*, not *OK*.
+
+        > [!DONT]
+        > Put two primary buttons side by side; the customer cannot tell which one moves them forward.
+
         ## Destructive actions
 
         Pair the danger variant with a confirmation (see the dialog) and a verb that says what is lost.

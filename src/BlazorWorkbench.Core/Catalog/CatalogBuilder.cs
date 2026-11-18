@@ -222,13 +222,13 @@ public static class CatalogBuilder
             var argument = segment.Argument;
             var missing = segment.Directive switch
             {
-                "scenario" => argument is null || catalog.FindScenario(argument) is null,
+                "scenario" or "source" or "facts" => argument is null || catalog.FindScenario(argument) is null,
                 "scenarios" or "parameters" => argument is null || catalog.FindComponent(argument) is null,
                 _ => false,
             };
             if (missing)
                 yield return new CatalogIssue(IssueSeverity.Warning, "WB1025",
-                    $"{where} embeds {{{{{segment.Directive}:{argument}}}}}, but no {(segment.Directive == "scenario" ? "scenario" : "component")} has the id '{argument}'.",
+                    $"{where} embeds {{{{{segment.Directive}:{argument}}}}}, but no {(segment.Directive is "scenario" or "source" or "facts" ? "scenario" : "component")} has the id '{argument}'.",
                     componentId, Remedy: "Use an id from the explorer's URL: scenario/{id} or docs/{id}.");
         }
     }

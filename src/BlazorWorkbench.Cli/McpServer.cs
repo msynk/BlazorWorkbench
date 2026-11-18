@@ -7,6 +7,8 @@ using BlazorWorkbench.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Playwright;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace BlazorWorkbench.Cli;
@@ -100,6 +102,75 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         var catalog = await (await connection.GetAsync(ct)).GetCatalogAsync(ct);
         var component = catalog.Components.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
         return component is null ? $"Component '{id}' was not found. Use list_components." : Json(component);
+    }
+
+    [McpServerTool(Name = "get_scenario_url", ReadOnly = true), Description("Returns the Workbench URL of a scenario (shell, with optional panel and arguments) and its bare preview URL, for a human to open or a browser tool to load.")]
+    public async Task<string> GetScenarioUrl(
+        [Description("Scenario id, for example 'inputs-button--primary'")] string id,
+        [Description("Optional panel to open: controls, environment, actions, diagnostics, interactions, accessibility, visual, html, storage, code")] string? panel = null,
+        [Description("Optional inspector arguments as a JSON object, for example {\"Disabled\":true}")] string? args = null,
+        CancellationToken ct = default)
+    {
+        connection.Audit("get_scenario_url", new { id, panel, args });
+        var host = await connection.GetAsync(ct);
+        var catalog = await host.GetCatalogAsync(ct);
+        var scenario = catalog.Components.SelectMany(c => c.Scenarios).FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (scenario is null)
+            return $"Scenario '{id}' was not found. Use list_components.";
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(panel) && panel.All(c => char.IsAsciiLetterLower(c) || c == '-'))
+            query.Add("panel=" + panel);
+        if (!string.IsNullOrWhiteSpace(args))
+            query.Add("args=" + Uri.EscapeDataString(args));
+        var shell = host.Info.IsHybrid ? null : new Uri(host.BaseAddress, $"scenario/{Uri.EscapeDataString(scenario.Id)}" + (query.Count > 0 ? "?" + string.Join('&', query) : ""));
+        return Json(new { scenarioId = scenario.Id, shell, preview = host.PreviewUrl(scenario.Id, argsJson: string.IsNullOrWhiteSpace(args) ? null : args) });
+    }
+
+    [McpServerTool(Name = "screenshot_scenario", ReadOnly = true), Description("Renders a scenario in a headless browser and returns a PNG screenshot of it, so you can see what a component looks like after an edit. Optional viewport and theme names from the catalog, and inspector arguments as JSON.")]
+    public async Task<IEnumerable<ContentBlock>> ScreenshotScenario(
+        [Description("Scenario id, for example 'inputs-button--primary'")] string id,
+        [Description("Viewport preset name, for example 'mobile' (default: the first preset)")] string? viewport = null,
+        [Description("Theme name, for example 'dark' (default: the scenario's or the first theme)")] string? theme = null,
+        [Description("Optional inspector arguments as a JSON object")] string? args = null,
+        CancellationToken ct = default)
+    {
+        connection.Audit("screenshot_scenario", new { id, viewport, theme, args });
+        var host = await connection.GetAsync(ct);
+        if (host.Info.IsHybrid)
+            return [new TextContentBlock { Text = "Screenshots of a Blazor Hybrid app are taken by run_tests with visual=true; use get_last_report for the files." }];
+        var catalog = await host.GetCatalogAsync(ct);
+        var scenario = catalog.Components.SelectMany(c => c.Scenarios).FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (scenario is null)
+            return [new TextContentBlock { Text = $"Scenario '{id}' was not found. Use list_components." }];
+        var preset = (viewport is null ? null : catalog.Viewports.FirstOrDefault(v => string.Equals(v.Name, viewport, StringComparison.OrdinalIgnoreCase)))
+                     ?? CatalogVariants.DefaultViewport(catalog, null);
+        var themeName = theme ?? scenario.Environment.Theme ?? CatalogVariants.DefaultTheme(catalog).Name;
+
+        using var playwright = await Playwright.CreateAsync();
+        await using var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+        await using var context = await browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            ViewportSize = new ViewportSize { Width = preset.Width, Height = preset.Height },
+            DeviceScaleFactor = (float)preset.DeviceScaleFactor,
+            IsMobile = preset.IsMobile,
+            HasTouch = preset.IsMobile,
+            ReducedMotion = ReducedMotion.Reduce,
+            Locale = scenario.Environment.Culture ?? "en-US",
+            TimezoneId = "UTC",
+        });
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(host.PreviewUrl(scenario.Id, themeName, string.IsNullOrWhiteSpace(args) ? null : args).ToString());
+        await page.WaitForFunctionAsync("() => ['ready', 'error'].includes(document.documentElement.getAttribute('data-workbench-state'))", null,
+            new PageWaitForFunctionOptions { Timeout = 20_000 });
+        var state = await page.EvaluateAsync<string>("() => document.documentElement.getAttribute('data-workbench-state')");
+        var png = scenario.Layout == ScenarioLayout.Fullscreen
+            ? await page.ScreenshotAsync(new PageScreenshotOptions { Animations = ScreenshotAnimations.Disabled })
+            : await page.Locator("#workbench-preview-root").ScreenshotAsync(new LocatorScreenshotOptions { Animations = ScreenshotAnimations.Disabled });
+        return
+        [
+            new TextContentBlock { Text = $"{scenario.Id} at {preset.Name} ({preset.Width}x{preset.Height}), theme {themeName}: preview {state}." },
+            ImageContentBlock.FromBytes(png, "image/png"),
+        ];
     }
 
     [McpServerTool(Name = "validate_scenarios", ReadOnly = true), Description("Validates every scenario without rendering and returns errors and warnings with remedies.")]

@@ -40,6 +40,9 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     private int _componentKey;
     private bool _bridgeAttached;
     private bool _disposed;
+    private bool _loading;
+    private IDisposable? _loaderActivity;
+    private readonly CancellationTokenSource _loaderCancellation = new();
 
     [Inject] private ScenarioSession Session { get; set; } = default!;
     [Inject] private IServiceProvider Services { get; set; } = default!;
@@ -67,7 +70,16 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         {
             if (!Session.IsActive)
                 Session.Activate(Scenario, Activation, Services);
-            PrepareCascades();
+            if (Scenario.Loaders.Count > 0)
+            {
+                // Loaders run in OnInitializedAsync; until they finish the preview counts as busy and renders no component.
+                _loading = true;
+                _loaderActivity = Session.Activity.Begin();
+            }
+            else
+            {
+                PrepareCascades();
+            }
         }
         catch (Exception ex)
         {
@@ -103,6 +115,35 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         Session.Activity.Changed += OnActivityChanged;
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        if (!_loading)
+            return;
+        try
+        {
+            foreach (var loader in Scenario.Loaders)
+                await loader(Session.Context!, _loaderCancellation.Token);
+            PrepareCascades();
+        }
+        catch (OperationCanceledException) when (_loaderCancellation.IsCancellationRequested)
+        {
+            return; // the preview went away
+        }
+        catch (Exception ex)
+        {
+            _activationError = ex;
+            Session.Diagnostics.Add(DiagnosticSource.Scenario, DiagnosticSeverity.Error, Scenario.Id, $"Scenario loader failed: {ex.Message}", ex.ToString());
+            if (EnableBridge && _bridgeAttached)
+                Bridge("BlazorWorkbenchPreview.setError", $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            _loaderActivity?.Dispose();
+            _loaderActivity = null;
+        }
+    }
+
     protected override void BuildRenderTree(RenderTreeBuilder builder)
     {
         // BuildRenderTree is synchronous, so these settings flow to the components rendered in the same batch
@@ -119,6 +160,10 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
         if (_activationError is not null)
         {
             RenderSetupError(builder, _activationError);
+        }
+        else if (_loading)
+        {
+            builder.AddAttribute(4, "data-workbench-loading", "true");
         }
         else
         {
@@ -695,6 +740,8 @@ public sealed class ScenarioHost : ComponentBase, IDisposable
     public void Dispose()
     {
         _disposed = true;
+        _loaderCancellation.Cancel();
+        _loaderActivity?.Dispose();
         Session.Diagnostics.Added -= OnDiagnostic;
         Session.Callbacks.Added -= OnCallback;
         Session.JSInterop.Called -= OnJSCall;

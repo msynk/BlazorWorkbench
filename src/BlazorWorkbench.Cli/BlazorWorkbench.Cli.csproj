@@ -21,4 +21,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="BlazorWorkbench.Cli.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Skills\SKILL.md" LogicalName="BlazorWorkbench.Cli.SKILL.md" />
+  </ItemGroup>
 </Project>

@@ -19,12 +19,14 @@ public sealed record MarkdownSegment(string? Markdown, string? Directive = null,
 /// <item><c>{{scenarios:component-id}}</c>: live previews of every scenario of a component.</item>
 /// <item><c>{{parameters:component-id}}</c>: the parameter table of a component.</item>
 /// <item><c>{{tokens}}</c>: the design tokens (CSS custom properties) of the preview stylesheets.</item>
+/// <item><c>{{source:scenario-id}}</c>: the Razor markup that renders a scenario, as in the Code panel.</item>
+/// <item><c>{{facts:scenario-id}}</c>: what a scenario simulates and verifies, as under its title.</item>
 /// </list>
 /// </summary>
 public static partial class MarkdownDirectives
 {
     /// <summary>The directive names Workbench renders.</summary>
-    public static IReadOnlySet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal) { "scenario", "scenarios", "parameters", "tokens" };
+    public static IReadOnlySet<string> Known { get; } = new HashSet<string>(StringComparer.Ordinal) { "scenario", "scenarios", "parameters", "tokens", "source", "facts" };
 
     public static IReadOnlyList<MarkdownSegment> Split(string? markdown)
     {

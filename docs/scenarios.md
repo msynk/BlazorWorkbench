@@ -157,7 +157,23 @@ they wrap everything else:
 builder.AddBlazorWorkbench(o => o.AddDecorator<CascadingAuthenticationState>());
 ```
 
-A decorator that throws is reported like any setup error. Cascading values from `.Cascade(...)` surround the decorators,
+A decorator that throws is reported like any setup error.
+
+## Loaders
+
+A loader runs asynchronous work before the component renders, like Storybook's loaders: reading sample data from a JSON
+file, building a large fixture. It stores results in the scenario context; parameter, cascading value and service factories
+read them:
+
+```csharp
+set.Add("Many orders", s => s
+    .Load(async (ctx, ct) => ctx.Set("orders", await SampleData.ReadOrdersAsync("orders.json", ct)))
+    .ParameterFrom(c => c.Orders, ctx => ctx.Get<List<Order>>("orders")));
+```
+
+Loaders run in declaration order (those of `set.Setup(...)` first) on every activation. While they run the preview is not
+ready and renders no component, so screenshots and tests wait; a loader that throws is reported as a setup error. Prefer
+the fake HTTP backend for data the component fetches itself: loaders are for data you hand to it. Cascading values from `.Cascade(...)` surround the decorators,
 so decorator components can use them too.
 
 ## Environment

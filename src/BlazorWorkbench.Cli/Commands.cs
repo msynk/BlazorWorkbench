@@ -242,6 +242,29 @@ public static class Commands
         return Microsoft.Playwright.Program.Main([.. args]);
     }
 
+    /// <summary>
+    /// Writes the agent skill that teaches coding agents to write and check scenarios (a SKILL.md file, as read by Claude
+    /// Code and other agents that support skills). Refuses to overwrite an edited file without <paramref name="force"/>.
+    /// </summary>
+    public static int Skill(string output, bool force)
+    {
+        using var stream = typeof(Commands).Assembly.GetManifestResourceStream("BlazorWorkbench.Cli.SKILL.md")
+                           ?? throw new InvalidOperationException("The skill is missing from the workbench tool.");
+        using var reader = new StreamReader(stream);
+        var content = reader.ReadToEnd();
+        var path = Path.GetFullPath(output);
+        if (File.Exists(path) && !force && File.ReadAllText(path) != content)
+        {
+            Console.Error.WriteLine($"{path} exists and differs. Use --force to replace it.");
+            return ExitCodes.Usage;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+        Console.WriteLine($"Wrote {path}. Commit it so coding agents working in this repository know how to write and check scenarios.");
+        return ExitCodes.Success;
+    }
+
     public static int Init(bool force)
     {
         var path = Path.Combine(Directory.GetCurrentDirectory(), WorkbenchConfig.FileName);

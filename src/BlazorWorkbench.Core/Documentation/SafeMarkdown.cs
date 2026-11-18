@@ -79,6 +79,15 @@ public static partial class SafeMarkdown
                 var quote = new List<string>();
                 while (i < lines.Length && lines[i].Trim().StartsWith('>'))
                     quote.Add(lines[i++].Trim()[1..].Trim());
+                // GitHub-style alerts (> [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]) and design guidance pairs
+                // (> [!DO], [!DONT]) become labelled callouts; anything else is a plain quote.
+                if (quote.Count > 0 && Callouts.TryGetValue(quote[0].ToUpperInvariant(), out var callout))
+                {
+                    html.Append("<div class=\"wb-callout wb-callout-").Append(callout.Css).Append("\" role=\"note\"><p class=\"wb-callout-title\">")
+                        .Append(callout.Label).Append("</p>").Append(ToHtml(string.Join('\n', quote.Skip(1)))).Append("</div>\n");
+                    continue;
+                }
+
                 html.Append("<blockquote>").Append(ToHtml(string.Join('\n', quote))).Append("</blockquote>\n");
                 continue;
             }
@@ -177,6 +186,17 @@ public static partial class SafeMarkdown
     }
 
     public static string Slug(string text) => Naming.ToKebabCase(text);
+
+    private static readonly Dictionary<string, (string Css, string Label)> Callouts = new(StringComparer.Ordinal)
+    {
+        ["[!NOTE]"] = ("note", "Note"),
+        ["[!TIP]"] = ("tip", "Tip"),
+        ["[!IMPORTANT]"] = ("important", "Important"),
+        ["[!WARNING]"] = ("warning", "Warning"),
+        ["[!CAUTION]"] = ("caution", "Caution"),
+        ["[!DO]"] = ("do", "Do"),
+        ["[!DONT]"] = ("dont", "Don't"),
+    };
 
     private static string SafeLanguage(string value) => LanguageRegex().IsMatch(value) ? value : "";
 

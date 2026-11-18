@@ -144,6 +144,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
     private readonly List<ParameterAssignment> _parameters = [];
     private readonly List<CascadingValueDefinition> _cascading = [];
     private readonly List<ScenarioDecorator> _decorators = [];
+    private readonly List<Func<ScenarioContext, CancellationToken, Task>> _loaders = [];
     private readonly List<Action<IServiceCollection, ScenarioContext>> _services = [];
     private readonly List<HttpRule> _httpRules = [], _setupHttpRules = [];
     private readonly List<JSInteropRule> _jsRules = [], _setupJsRules = [];
@@ -343,6 +344,26 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         }, $"<div style=\"{style}\">");
     }
 
+    /// <summary>
+    /// Runs asynchronous work before the component renders, for example reading sample data from a file. Store results with
+    /// <c>ctx.Set(key, value)</c> and read them in factories with <c>ctx.Get&lt;T&gt;(key)</c>:
+    /// <c>.Load(async (ctx, ct) =&gt; ctx.Set("orders", await LoadOrdersAsync(ct))).ParameterFrom(c =&gt; c.Orders, ctx =&gt; ctx.Get&lt;List&lt;Order&gt;&gt;("orders"))</c>.
+    /// The preview is not ready while loaders run; a loader that throws is reported as a setup error.
+    /// </summary>
+    public ScenarioBuilder<TComponent> Load(Func<ScenarioContext, CancellationToken, Task> loader)
+    {
+        ArgumentNullException.ThrowIfNull(loader);
+        _loaders.Add(loader);
+        return this;
+    }
+
+    /// <inheritdoc cref="Load(Func{ScenarioContext, CancellationToken, Task})"/>
+    public ScenarioBuilder<TComponent> Load(Func<ScenarioContext, Task> loader)
+    {
+        ArgumentNullException.ThrowIfNull(loader);
+        return Load((ctx, _) => loader(ctx));
+    }
+
     /// <summary>Configures the fake HTTP backend used by the injected <see cref="HttpClient"/> and <c>IHttpClientFactory</c>.</summary>
     public ScenarioBuilder<TComponent> Http(Action<HttpSimulationBuilder> configure)
     {
@@ -507,6 +528,7 @@ public sealed class ScenarioBuilder<TComponent> where TComponent : IComponent
         Parameters = _parameters.ToArray(),
         CascadingValues = _cascading.ToArray(),
         Decorators = _decorators.ToArray(),
+        Loaders = _loaders.ToArray(),
         ServiceConfigurations = _services.ToArray(),
         Fixtures = fixtures,
         Layout = _layout,

@@ -69,6 +69,12 @@ violations. See [accessibility](accessibility.md#adopting-checks-gradually).
 ### `workbench publish [-o <dir>] [--no-screenshots] [--exclude-tag <tags…>] [--version-label <v>]`
 Publishes a static catalog; see [publishing](publishing.md).
 
+### `workbench skill [-o <path>] [--force]`
+Writes an agent skill (`SKILL.md`, by default to `.claude/skills/blazor-workbench/SKILL.md`) that teaches coding agents to
+write scenarios with the simulations instead of real services, cover the states users meet, and check their work with the
+MCP tools or the CLI, without approving baselines themselves. Commit it; other agents that read skills can use the same
+file. An edited file is only replaced with `--force`.
+
 ### `workbench dev`
 Runs `dotnet watch` on the host project.
 

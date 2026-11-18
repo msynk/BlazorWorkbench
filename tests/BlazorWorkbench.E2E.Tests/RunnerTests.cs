@@ -156,6 +156,17 @@ public class McpTests(WorkbenchFixture fixture)
             var approve = await Send(5, "tools/call", new { name = "approve_baselines", arguments = new { filter = "*", confirm = true } });
             Assert.Contains("Refused", approve.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
 
+            var url = await Send(6, "tools/call", new { name = "get_scenario_url", arguments = new { id = "inputs-button--primary", panel = "accessibility" } });
+            Assert.Contains("scenario/inputs-button--primary?panel=accessibility", url.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
+
+            // Agents can look at a scenario: a text block and a PNG image block.
+            var shot = await Send(7, "tools/call", new { name = "screenshot_scenario", arguments = new { id = "inputs-button--primary", viewport = "mobile" } });
+            var content = shot.GetProperty("result").GetProperty("content");
+            Assert.Contains("preview ready", content[0].GetProperty("text").GetString());
+            Assert.Equal("image", content[1].GetProperty("type").GetString());
+            Assert.Equal("image/png", content[1].GetProperty("mimeType").GetString());
+            Assert.StartsWith("iVBORw0KGgo", content[1].GetProperty("data").GetString()); // base64 of the PNG signature
+
             var audit = await File.ReadAllLinesAsync(Path.Combine(output.FullName, "mcp-audit.log"));
             Assert.Contains(audit, l => l.Contains("approve_baselines", StringComparison.Ordinal));
         }

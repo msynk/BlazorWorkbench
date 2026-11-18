@@ -119,6 +119,16 @@ namespace BlazorWorkbench.Cli
 
             // init
             var force = new Option<bool>("--force") { Description = "Overwrite an existing workbench.json." };
+            var skillOutput = new Option<string>("--output", "-o")
+            {
+                Description = "Where to write the skill.",
+                DefaultValueFactory = _ => Path.Combine(".claude", "skills", "blazor-workbench", "SKILL.md"),
+            };
+            var skillForce = new Option<bool>("--force") { Description = "Replace an existing, edited skill file." };
+            var skill = new Command("skill", "Write the agent skill (SKILL.md) that teaches coding agents to write and check Workbench scenarios.") { skillOutput, skillForce };
+            skill.SetAction(r => Commands.Skill(r.GetValue(skillOutput)!, r.GetValue(skillForce)));
+            root.Subcommands.Add(skill);
+
             var init = new Command("init", "Create workbench.json in the current directory.") { force };
             init.SetAction(r => Commands.Init(r.GetValue(force)));
             root.Subcommands.Add(init);

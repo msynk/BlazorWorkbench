@@ -60,6 +60,28 @@ public sealed class ScenarioContext
     /// <summary>The value of the toolbar global <paramref name="id"/>, or null when it has none.</summary>
     public string? Global(string id) => Globals.TryGetValue(id, out var value) ? value : null;
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object?> _items = new(StringComparer.Ordinal);
+
+    /// <summary>Stores a value for this activation, typically from a loader (<c>.Load(...)</c>), for factories to read with <see cref="Get{T}"/>.</summary>
+    public void Set(string key, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        _items[key] = value;
+    }
+
+    /// <summary>A value stored with <see cref="Set"/> (by a loader), converted to <typeparamref name="T"/>.</summary>
+    /// <exception cref="KeyNotFoundException">Nothing was stored under <paramref name="key"/>.</exception>
+    public T Get<T>(string key)
+    {
+        if (!_items.TryGetValue(key, out var value))
+            throw new KeyNotFoundException($"No value named '{key}' was loaded for {Scenario.Id}. Store it in a loader with ctx.Set(\"{key}\", ...).");
+        return value is null ? default! : value is T typed ? typed
+            : throw new InvalidCastException($"The value '{key}' is a {Naming.FormatTypeName(value.GetType())}, not a {Naming.FormatTypeName(typeof(T))}.");
+    }
+
+    /// <summary>True when a value is stored under <paramref name="key"/>.</summary>
+    public bool Has(string key) => _items.ContainsKey(key);
+
     /// <summary>The service provider of the preview (available while rendering; null during static validation).</summary>
     public IServiceProvider? Services { get; internal set; }
 

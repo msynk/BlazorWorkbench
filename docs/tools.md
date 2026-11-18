@@ -254,8 +254,21 @@ path of its title (`Guidelines/Buttons`). Its Markdown uses the safe subset, and
 | `{{scenarios:inputs-button}}` | Live previews of every scenario of a component (up to 12) |
 | `{{parameters:inputs-button}}` | The component's parameter table, with value coverage |
 | `{{tokens}}` | The design tokens |
+| `{{source:inputs-button--primary}}` | The Razor markup that renders the scenario, as in the Code panel |
+| `{{facts:inputs-button--primary}}` | What the scenario simulates and verifies, as the chips under its title |
 
-The same directives work in a component's `set.Documentation(...)`, in scenario notes and in `options.Introduction`.
+Quotes that start with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` (GitHub's alert syntax) become
+labelled callouts, and `[!DO]` and `[!DONT]` make design guidance pairs:
+
+```markdown
+> [!DO]
+> Write the label as a verb: *Save changes*.
+
+> [!DONT]
+> Put two primary buttons side by side.
+```
+
+Published catalogs render the callouts too. The same directives work in a component's `set.Documentation(...)`, in scenario notes and in `options.Introduction`.
 Directives inside fenced code blocks are left alone. An embed that names a missing scenario or component is reported as
 `WB1025`.
 

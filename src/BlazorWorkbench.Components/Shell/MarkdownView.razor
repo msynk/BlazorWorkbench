@@ -40,6 +40,15 @@
         case "tokens":
             <iframe class="wb-tokens-frame" title="Design tokens" src="@TokensSource"></iframe>
             break;
+        case "source" when segment.Argument is { } sid && Catalog.FindScenario(sid) is { } sourceScenario && Catalog.GetComponentOf(sourceScenario) is { } sourceComponent:
+            <figure class="wb-embed wb-embed-source">
+                <figcaption><strong>@sourceScenario.Name</strong> · Razor <a class="wb-link" href="@($"scenario/{sourceScenario.Id}?panel=code")">Open</a></figcaption>
+                <pre class="wb-pre"><code class="language-razor">@RazorSnippetGenerator.Generate(sourceScenario, sourceComponent.Metadata)</code></pre>
+            </figure>
+            break;
+        case "facts" when segment.Argument is { } fid && Catalog.FindScenario(fid) is { } factsScenario:
+            <ScenarioFactList Facts="ScenarioFacts.Describe(factsScenario, Catalog.Options)" ScenarioId="@factsScenario.Id" IdPrefix="@($"wb-doc-facts-{factsScenario.Id}")" />
+            break;
         default:
             <p class="wb-callout wb-callout-warning" role="note">Unknown embed <code>{{@segment.Directive@(segment.Argument is null ? "" : ":" + segment.Argument)}}</code>: no such scenario or component.</p>
             break;

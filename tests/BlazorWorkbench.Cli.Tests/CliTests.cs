@@ -9,7 +9,7 @@ public class CliTests
     public void Defines_documented_commands()
     {
         var names = CliApp.Build().Subcommands.Select(c => c.Name).ToHashSet();
-        foreach (var expected in new[] { "list", "validate", "test", "a11y", "approve", "dev", "publish", "install-browsers", "init", "mcp" })
+        foreach (var expected in new[] { "list", "validate", "test", "a11y", "approve", "dev", "publish", "install-browsers", "init", "mcp", "skill" })
             Assert.Contains(expected, names);
     }
 
@@ -20,6 +20,30 @@ public class CliTests
     [InlineData("validate --unknown-option")]
     public async Task Usage_errors_exit_with_code_2(string args) =>
         Assert.Equal(ExitCodes.Usage, await CliApp.RunAsync(args.Split(' ')));
+
+    [Fact]
+    public void The_agent_skill_is_written_and_not_overwritten_when_edited()
+    {
+        var dir = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(dir.FullName, "skills", "SKILL.md");
+            Assert.Equal(ExitCodes.Success, Commands.Skill(path, force: false));
+            var text = File.ReadAllText(path);
+            Assert.StartsWith("---", text, StringComparison.Ordinal);
+            Assert.Contains("name: blazor-workbench", text, StringComparison.Ordinal);
+            Assert.Contains("ScenarioSet<", text, StringComparison.Ordinal);
+
+            Assert.Equal(ExitCodes.Success, Commands.Skill(path, force: false)); // unchanged: rewritten quietly
+            File.AppendAllText(path, "local edit");
+            Assert.Equal(ExitCodes.Usage, Commands.Skill(path, force: false));
+            Assert.Equal(ExitCodes.Success, Commands.Skill(path, force: true));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 
     [Fact]
     public async Task Help_succeeds() => Assert.Equal(ExitCodes.Success, await CliApp.RunAsync(["--help"]));

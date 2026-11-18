@@ -88,4 +88,16 @@ public class OptionValidationTests
     [InlineData("rgb(1,2,3)) url(x", false)]
     public void Only_color_values_are_accepted_as_accent_colors(string value, bool safe) =>
         Assert.Equal(safe, WorkbenchOptions.IsSafeCssColor(value));
+
+    [Fact]
+    public void Callouts_and_new_directives_are_understood()
+    {
+        var html = BlazorWorkbench.Documentation.SafeMarkdown.ToHtml("> [!DONT]\n> Use color alone.\n\n> just a quote");
+        Assert.Contains("wb-callout wb-callout-dont", html, StringComparison.Ordinal);
+        Assert.Contains("Use color alone.", html, StringComparison.Ordinal);
+        Assert.Contains("<blockquote>", html, StringComparison.Ordinal);
+
+        var segments = BlazorWorkbench.Documentation.MarkdownDirectives.Split("{{source:a--b}}\n{{facts:a--b}}");
+        Assert.Equal(["source", "facts"], segments.Select(s => s.Directive));
+    }
 }

@@ -17,6 +17,9 @@ All notable changes are documented here. The project follows [Semantic Versionin
 - **Edit scenario / Edit component** links (`options.EditorUrlTemplate`; VS Code by default in Development with remote access off).
 - **Markup snapshots** in bUnit: `cut.MatchMarkupSnapshot()` with `.verified.html`/`.received.html` files and `WORKBENCH_UPDATE_SNAPSHOTS=1`.
 - **Publishing**: `llms.txt` in published catalogs.
+- **Loaders**: `.Load(async (ctx, ct) => ctx.Set(key, value))` runs before the component renders; factories read the values with `ctx.Get<T>(key)`.
+- **Documentation blocks**: `{{source:id}}` (Razor markup), `{{facts:id}}` (what a scenario simulates), and callouts from `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`, `[!DO]` and `[!DONT]`, also in published catalogs.
+- **Agents**: MCP tools `get_scenario_url` and `screenshot_scenario` (returns a PNG image block), and `workbench skill`, which writes a `SKILL.md` teaching coding agents to write and check scenarios.
 - **Shell**: branding (`LogoUrl`, `AccentColor`, `AccentColorDark`, `ShellStylesheets`), error boundaries around panels, pages and custom editors, a skip link, ARIA tab keys, a focus-managed shortcuts dialog with a switch for single-key shortcuts, a not-found page, timestamps in the viewer's time zone, and hosting under a path base (`UsePathBase` followed by `UseRouting`).
 
 ### Changed (round 4)

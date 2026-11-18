@@ -391,4 +391,13 @@ public class ToolsTests(WorkbenchFixture fixture)
         await page.Locator("#wb-search").FillAsync("summit");
         await Expect(page.Locator(".wb-results a", new() { HasText = "Icons/Summit" })).ToBeVisibleAsync();
     }
+
+    [Fact]
+    public async Task Documentation_pages_render_source_facts_and_do_dont_callouts()
+    {
+        var page = await OpenAsync("pages/guidelines-buttons-and-actions");
+        await Expect(page.Locator(".wb-embed-source code")).ToContainTextAsync("<Button");
+        await Expect(page.Locator(".wb-callout-do")).ToContainTextAsync("Write the label as a verb");
+        await Expect(page.Locator(".wb-callout-dont .wb-callout-title")).ToHaveTextAsync("Don't");
+    }
 }

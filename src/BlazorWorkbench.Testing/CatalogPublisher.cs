@@ -334,5 +334,7 @@ public static class CatalogPublisher
         .cards li{border:1px solid var(--b);border-radius:8px;padding:.6rem .8rem;display:flex;flex-direction:column;gap:.2rem}
         .example{border:1px solid var(--b);border-radius:8px;padding:.25rem 1rem 1rem;margin:1rem 0}.example img{max-width:100%;border:1px solid var(--b);background:#fff}
         input[type=search]{font:inherit;padding:.35rem .5rem;min-width:min(320px,100%)}
+        .wb-callout{border:1px solid var(--b);border-left:4px solid var(--a);border-radius:4px;padding:.5rem .75rem;margin:.75rem 0}.wb-callout-title{margin:0 0 .25rem;font-weight:600}
+        .wb-callout-tip,.wb-callout-do{border-left-color:#087443}.wb-callout-warning{border-left-color:#b54708}.wb-callout-caution,.wb-callout-dont{border-left-color:#b42318}.wb-callout-important{border-left-color:#8250df}
         """;
 }
