@@ -110,6 +110,15 @@ namespace BlazorWorkbench.Cli
             publish.SetAction((r, ct) => Commands.PublishAsync(Context(r), r.GetValue(publishOutput)!, !r.GetValue(noScreenshots), r.GetValue(exclude) ?? [], r.GetValue(version), ct));
             root.Subcommands.Add(publish);
 
+            // usage
+            var usagePaths = new Argument<string[]>("paths") { Description = "Directories or .razor files to scan, typically the apps that consume the components (default: the workbench.json directory).", Arity = ArgumentArity.ZeroOrMore };
+            var usageExclude = new Option<string[]>("--exclude") { Description = "Globs of files or directories to leave out, relative to each path.", AllowMultipleArgumentsPerToken = true };
+            var usageFilter = new Option<string?>("--filter", "-f") { Description = "Glob filter on component ids or titles." };
+            var usageJson = new Option<bool>("--json") { Description = "Write JSON to stdout." };
+            var usage = new Command("usage", "Count where Razor files use each catalog component and which parameters they set; lists unused components and deprecated ones still in use.") { usagePaths, usageExclude, usageFilter, usageJson };
+            usage.SetAction((r, ct) => Commands.UsageAsync(Context(r), r.GetValue(usagePaths) ?? [], r.GetValue(usageExclude) ?? [], r.GetValue(usageFilter), r.GetValue(usageJson), ct));
+            root.Subcommands.Add(usage);
+
             // install-browsers
             var browserArg = new Option<string>("--browser") { Description = "chromium, firefox or webkit.", DefaultValueFactory = _ => "chromium" };
             var withDeps = new Option<bool>("--with-deps") { Description = "Also install operating system dependencies (Linux CI)." };

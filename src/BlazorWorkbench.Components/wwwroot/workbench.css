@@ -483,3 +483,22 @@ html[data-wb-theme="dark"] .wb-not-found a { color: #a5a5ff; }
 .wb-callout-caution .wb-callout-title, .wb-callout-dont .wb-callout-title { color: var(--wb-error); }
 .wb-callout-warning .wb-callout-title { color: var(--wb-warning); }
 .wb-embed-source pre { margin: 0; max-height: 20rem; overflow: auto; }
+/* Review the last run (/review) */
+.wb-review { padding: 1rem 1.5rem 3rem; }
+.wb-review-layout { display: grid; grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr); gap: 1rem; align-items: start; margin-top: .75rem; }
+.wb-review-queue { list-style: none; margin: 0; padding: 0; border: 1px solid var(--wb-border); border-radius: 6px; max-height: 75vh; overflow: auto; }
+.wb-review-queue li + li { border-top: 1px solid var(--wb-border); }
+.wb-review-entry { font: inherit; font-size: 12.5px; width: 100%; text-align: start; background: none; border: 0; color: inherit; padding: .4rem .6rem; cursor: pointer; display: grid; gap: .15rem; }
+.wb-review-entry:hover { background: var(--wb-accent-soft); }
+.wb-review-entry.active { background: var(--wb-accent-soft); box-shadow: inset 3px 0 0 var(--wb-accent); }
+.wb-review-entry-meta { display: flex; flex-wrap: wrap; gap: .25rem; }
+.wb-review-kind { border-color: var(--wb-error); color: var(--wb-error); }
+.wb-review-item-header { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.wb-review-item-header .wb-h2 { margin: 0; }
+.wb-review-message { border-left: 3px solid var(--wb-error); padding: .3rem .6rem; margin: 0 0 .75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wb-chip-link-review { text-decoration: none; border-color: var(--wb-error); color: var(--wb-error); }
+@media (max-width: 760px) {
+  .wb-review { padding: 1rem; }
+  .wb-review-layout { grid-template-columns: 1fr; }
+  .wb-review-queue { max-height: 14rem; }
+}

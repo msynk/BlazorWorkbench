@@ -9,7 +9,7 @@ public class CliTests
     public void Defines_documented_commands()
     {
         var names = CliApp.Build().Subcommands.Select(c => c.Name).ToHashSet();
-        foreach (var expected in new[] { "list", "validate", "test", "a11y", "approve", "dev", "publish", "install-browsers", "init", "mcp", "skill" })
+        foreach (var expected in new[] { "list", "validate", "test", "a11y", "approve", "dev", "publish", "install-browsers", "init", "mcp", "skill", "usage" })
             Assert.Contains(expected, names);
     }
 

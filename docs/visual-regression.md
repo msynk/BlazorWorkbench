@@ -26,6 +26,15 @@ Approving from the Workbench is on for local hosts. A host with `AllowRemoteAcce
 and `AllowApprovalFromUi = false` turns it off everywhere. In WebAssembly hosts the panel posts to
 `/_workbench/api/visual/{id}/approve`, which accepts only same-origin requests with the `X-Workbench-Request` header.
 
+### Reviewing a whole run
+
+After a run with failures, the explorer footer shows **Review** next to *Last run*. It opens `review`, a queue of
+every scenario that failed in the last run, in explorer order, filtered by *Screenshots*, *Accessibility* or *Other*. The
+selected scenario shows its Visual panel (side by side, overlay or difference, with **Approve**) or, for other
+failures, the failure message and a link to the panel that reproduces it. **Previous**, **Next**, Alt+← and Alt+→ step
+through the queue. Approving every screenshot of a scenario marks it *Approved* and moves on to the next undecided one.
+The page reads the same `report.json` as the Visual panel; scenarios renamed since the run are left out.
+
 ## Baseline layout
 
 ```

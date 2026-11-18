@@ -128,6 +128,10 @@
             <button type="button" class="wb-chip @(failing > 0 ? "wb-chip-failed" : "")" title="@($"Last workbench test run: {ViewerTimeZone.Convert(Services, finished):g}")" @onclick='() => ToggleFilter(failing > 0 ? "is:failing" : "is:passing")'>
                 Last run: @(failing > 0 ? $"{failing} failing" : "all passed")
             </button>
+            @if (failing > 0)
+            {
+                <a href="review" class="wb-chip wb-chip-link-review" id="wb-review-link" title="Step through the failed scenarios of the last run and approve screenshot changes">Review</a>
+            }
         }
         @if (_changes.Scenarios.Count > 0)
         {

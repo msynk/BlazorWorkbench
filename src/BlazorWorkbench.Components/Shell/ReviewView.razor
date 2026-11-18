@@ -1,0 +1,224 @@
+@* The review queue: every scenario that failed in the last automated run (workbench test), one at a time, with its
+   screenshots and approval (the Visual panel) and its failure. Like the review step of hosted visual testing services. *@
+@inject IServiceProvider Services
+
+<section class="wb-review" aria-labelledby="wb-review-title">
+    <h1 class="wb-title" id="wb-review-title">Review the last run</h1>
+    @if (_results is null)
+    {
+        <p class="wb-empty">Test results are not available in this host. Review a run with <code>workbench approve</code> and the report (<code>index.html</code>) instead.</p>
+    }
+    else if (_loading)
+    {
+        <p role="status">Loading the last run…</p>
+    }
+    else if (_run.FinishedAt is not { } finished)
+    {
+        <p class="wb-empty">
+            There is no test run to review yet. Run <code>workbench test --visual --a11y</code>, then reload this page to step through
+            every changed screenshot and failed check.
+        </p>
+    }
+    else if (_all.Count == 0)
+    {
+        <p class="wb-empty" role="status">Nothing to review: every scenario passed in the last run (@ViewerTimeZone.Convert(Services, finished).ToString("g", CultureInfo.CurrentCulture)).</p>
+    }
+    else
+    {
+        <p class="wb-lead">
+            @_all.Count scenario@(_all.Count == 1 ? "" : "s") failed in the last run
+            (@ViewerTimeZone.Convert(Services, finished).ToString("g", CultureInfo.CurrentCulture)).
+            Approve intended screenshot changes, and fix the rest.
+            <span class="wb-muted">Alt+← and Alt+→ step through the list.</span>
+        </p>
+        <div class="wb-inspector-actions">
+            <div role="radiogroup" aria-label="Show" class="wb-segmented">
+                @foreach (var (key, label) in Filters)
+                {
+                    var count = _all.Count(i => Matches(i, key));
+                    <label class="@(_filter == key ? "active" : "")"><input type="radio" name="wb-review-filter" value="@key" checked="@(_filter == key)" @onchange="() => SetFilter(key)" /> @label (@count)</label>
+                }
+            </div>
+            <span class="wb-toolbar-spacer"></span>
+            <span class="wb-muted" role="status" id="wb-review-progress">@_approved.Count of @_all.Count(i => i.Kinds.Contains("Visual")) visual change@(_all.Count(i => i.Kinds.Contains("Visual")) == 1 ? "" : "s") approved</span>
+        </div>
+        @if (_queue.Count == 0)
+        {
+            <p class="wb-empty">No failures of this kind.</p>
+        }
+        else
+        {
+            <div class="wb-review-layout">
+                <nav aria-label="Failed scenarios">
+                    <ol class="wb-review-queue">
+                        @for (var i = 0; i < _queue.Count; i++)
+                        {
+                            var index = i;
+                            var item = _queue[i];
+                            <li>
+                                <button type="button" class="wb-review-entry @(index == _index ? "active" : "")" aria-current="@(index == _index ? "true" : null)" @onclick="() => Select(index)">
+                                    <span class="wb-review-entry-name">@item.Name</span>
+                                    <span class="wb-review-entry-meta">
+                                        @if (_approved.Contains(item.Id))
+                                        {
+                                            <span class="wb-badge wb-visual-approved">Approved</span>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var kind in item.Kinds) { <span class="wb-badge wb-review-kind">@KindLabel(kind)</span> }
+                                        }
+                                    </span>
+                                </button>
+                            </li>
+                        }
+                    </ol>
+                </nav>
+                @if (Current is { } current)
+                {
+                    <article class="wb-review-item" aria-labelledby="wb-review-item-title">
+                        <header class="wb-review-item-header">
+                            <div>
+                                <div class="wb-crumbs">@current.Component</div>
+                                <h2 class="wb-h2" id="wb-review-item-title">@current.ScenarioName</h2>
+                            </div>
+                            <span class="wb-toolbar-spacer"></span>
+                            <span class="wb-muted">@(_index + 1) of @_queue.Count</span>
+                            <button type="button" class="wb-button" id="wb-review-previous" aria-keyshortcuts="Alt+ArrowLeft" disabled="@(_queue.Count < 2)" @onclick="() => Move(-1)">Previous</button>
+                            <button type="button" class="wb-button" id="wb-review-next" aria-keyshortcuts="Alt+ArrowRight" disabled="@(_queue.Count < 2)" @onclick="() => Move(1)">Next</button>
+                            <a class="wb-button" href="@ScenarioUrl(current)">Open scenario</a>
+                        </header>
+                        @* For screenshot-only failures the Visual panel shows each variant's message itself. *@
+                        @if (current.Message is { } message && current.Kinds.Any(k => k != "Visual"))
+                        {
+                            <p class="wb-review-message">@message</p>
+                        }
+                        @if (current.Kinds.Contains("Visual"))
+                        {
+                            <VisualPanel @key="current.Id" ScenarioId="@current.Id" OnApproved="remaining => OnApproved(current, remaining)" />
+                        }
+                        else
+                        {
+                            <p class="wb-muted">
+                                No screenshot changed. Open the scenario to reproduce the failure: its
+                                @(current.Kinds.Contains("Accessibility") ? "Accessibility" : current.Kinds.Contains("Interaction") ? "Interactions" : "Diagnostics")
+                                panel shows the details, and the report (<code>index.html</code>) has the full output.
+                            </p>
+                        }
+                    </article>
+                }
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private static readonly (string Key, string Label)[] Filters = [("all", "All failures"), ("visual", "Screenshots"), ("accessibility", "Accessibility"), ("other", "Other")];
+
+    private sealed record ReviewItem(string Id, string Name, string Component, string ScenarioName, string? Message, IReadOnlyList<string> Kinds);
+
+    private ITestResultsProvider? _results;
+    private TestRunSummary _run = TestRunSummary.Empty;
+    private bool _loading = true;
+    private List<ReviewItem> _all = [];
+    private List<ReviewItem> _queue = [];
+    private readonly HashSet<string> _approved = new(StringComparer.OrdinalIgnoreCase);
+    private string _filter = "all";
+    private int _index;
+
+    [Parameter, EditorRequired] public WorkbenchCatalog Catalog { get; set; } = default!;
+
+    private ReviewItem? Current => _index >= 0 && _index < _queue.Count ? _queue[_index] : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _results = Services.GetService(typeof(ITestResultsProvider)) as ITestResultsProvider;
+        if (_results is null)
+            return;
+        try
+        {
+            _run = await _results.GetSummaryAsync();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or HttpRequestException)
+        {
+            _run = TestRunSummary.Empty;
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        // In the explorer's order, so stepping through the queue follows the tree. Scenarios the catalog no longer has
+        // (renamed since the run) cannot be shown, so they are left out.
+        _all = ExplorerOrder.Components(Catalog)
+            .SelectMany(c => c.Scenarios.Select(s => (Component: c, Scenario: s)))
+            .Where(x => _run.Scenarios.TryGetValue(x.Scenario.Id, out var status) && status.Status is "Failed" or "Error")
+            .Select(x =>
+            {
+                var status = _run.Scenarios[x.Scenario.Id];
+                var kinds = status.FailedChecks is { Count: > 0 } failed ? failed : [status.Status == "Error" ? "Render" : "Failed"];
+                return new ReviewItem(x.Scenario.Id, $"{x.Component.DisplayName} / {x.Scenario.Name}", x.Component.Title.Replace("/", " / "), x.Scenario.Name, status.Message, kinds);
+            })
+            .ToList();
+        ApplyFilter();
+    }
+
+    private static bool Matches(ReviewItem item, string filter) => filter switch
+    {
+        "visual" => item.Kinds.Contains("Visual"),
+        "accessibility" => item.Kinds.Contains("Accessibility"),
+        "other" => !item.Kinds.Contains("Visual") && !item.Kinds.Contains("Accessibility"),
+        _ => true,
+    };
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "Visual" => "screenshot",
+        "Accessibility" => "accessibility",
+        "Interaction" => "interaction",
+        "Performance" => "budget",
+        "Responsive" => "reflow",
+        "Render" => "render",
+        _ => kind.ToLowerInvariant(),
+    };
+
+    private void SetFilter(string filter)
+    {
+        _filter = filter;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var current = Current?.Id;
+        _queue = _all.Where(i => Matches(i, _filter)).ToList();
+        _index = current is null ? 0 : Math.Max(0, _queue.FindIndex(i => i.Id == current));
+    }
+
+    private void Select(int index) => _index = index;
+
+    /// <summary>Steps through the queue, wrapping around (Alt+← and Alt+→ call this through the shell).</summary>
+    public void Move(int delta)
+    {
+        if (_queue.Count == 0)
+            return;
+        _index = ((_index + delta) % _queue.Count + _queue.Count) % _queue.Count;
+        StateHasChanged();
+    }
+
+    private void OnApproved(ReviewItem item, int remaining)
+    {
+        if (remaining > 0)
+            return;
+        _approved.Add(item.Id);
+        // Every screenshot of this scenario is approved: go on to the next scenario that still needs a decision.
+        var next = Enumerable.Range(1, _queue.Count).Select(d => (_index + d) % _queue.Count).FirstOrDefault(i => !_approved.Contains(_queue[i].Id), -1);
+        if (next >= 0)
+            _index = next;
+    }
+
+    private static string ScenarioUrl(ReviewItem item)
+    {
+        var panel = item.Kinds.Contains("Visual") ? "visual" : item.Kinds.Contains("Accessibility") ? "accessibility" : item.Kinds.Contains("Interaction") ? "interactions" : "diagnostics";
+        return $"scenario/{Uri.EscapeDataString(item.Id)}?panel={panel}";
+    }
+}

@@ -68,7 +68,8 @@ Prefer the MCP tools when they are available (server `workbench mcp`), otherwise
 2. `run_tests(filter: "component-id-*", accessibility: true)` / `workbench test -f "component-id-*" --a11y`.
 3. `screenshot_scenario(id)` to look at the result; `get_scenario_url(id)` to give a person a link.
 4. `list_changed_scenarios` after editing a shared component, and run those scenarios too.
-5. Never approve visual baselines or accessibility baselines yourself (`workbench approve`): a person reviews them.
+5. `find_component_usage(id)` / `workbench usage -f id` before renaming, removing or changing the meaning of a parameter: it lists the files that set it.
+6. Never approve visual baselines or accessibility baselines yourself (`workbench approve`): a person reviews them.
 
 Accessibility findings at `serious` or `critical` impact fail the run; fix the component rather than disabling rules.
 If a rule must be disabled, use `.Accessibility(a => a.DisableRule("id", "justification"))` with a real reason.

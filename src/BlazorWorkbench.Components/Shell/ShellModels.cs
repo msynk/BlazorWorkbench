@@ -86,7 +86,8 @@ public abstract class ParameterEditorBase<TValue> : ComponentBase
 /// <param name="Status"><c>Passed</c>, <c>Failed</c>, <c>Skipped</c> or <c>Error</c>.</param>
 /// <param name="Message">The first failure, if any.</param>
 /// <param name="Flaky">True when the scenario passed only after a retry.</param>
-public sealed record ScenarioRunStatus(string Status, string? Message, bool Flaky);
+/// <param name="FailedChecks">The kinds of the checks that failed (<c>Visual</c>, <c>Accessibility</c>, <c>Interaction</c> and so on), when known.</param>
+public sealed record ScenarioRunStatus(string Status, string? Message, bool Flaky, IReadOnlyList<string>? FailedChecks = null);
 
 /// <summary>The last automated run as the explorer shows it: when it ran and the status of every scenario.</summary>
 public sealed record TestRunSummary(DateTimeOffset? FinishedAt, IReadOnlyDictionary<string, ScenarioRunStatus> Scenarios)

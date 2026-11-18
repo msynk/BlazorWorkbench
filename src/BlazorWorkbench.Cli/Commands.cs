@@ -44,6 +44,55 @@ public static class Commands
         return ExitCodes.Success;
     }
 
+    /// <summary>Scans Razor files for tags of catalog components (<c>workbench usage</c>).</summary>
+    public static async Task<int> UsageAsync(CliContext context, string[] paths, string[] exclude, string? filter, bool json, CancellationToken ct)
+    {
+        await using var host = await context.ConnectAsync(ct);
+        var catalog = await host.GetCatalogAsync(ct);
+        var roots = paths.Length > 0 ? paths : [context.Config.RootDirectory];
+        var missing = roots.Where(p => !Directory.Exists(p) && !File.Exists(p)).ToList();
+        if (missing.Count > 0)
+        {
+            Console.Error.WriteLine(Out.Red($"Not found: {string.Join(", ", missing)}"));
+            return ExitCodes.Usage;
+        }
+
+        var report = ComponentUsage.Scan(catalog, roots, exclude);
+        var entries = report.Components
+            .Where(c => filter is null || filter.Split(',').Any(t => Glob.IsMatch(c.Id, t.Trim()) || Glob.IsMatch(c.Title, t.Trim())))
+            .ToList();
+
+        if (json)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { report.Roots, report.ScannedFiles, components = entries }, WorkbenchJson.Indented));
+            return ExitCodes.Success;
+        }
+
+        Console.WriteLine(Out.Dim($"Scanned {report.ScannedFiles} .razor file(s) in {string.Join(", ", report.Roots)}"));
+        foreach (var entry in entries.Where(e => e.Uses > 0))
+        {
+            var status = entry.Status is ComponentStatus.Deprecated ? Out.Yellow("  [deprecated]") : "";
+            Console.WriteLine($"{Out.Bold(entry.Title)}{status}  {entry.Uses} use(s) in {entry.Files} file(s){(entry.Ambiguous ? Out.Dim("  (tag name shared with another component)") : "")}");
+            var set = entry.Parameters.Where(p => p.Value > 0).OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value}").ToList();
+            if (set.Count > 0)
+                Console.WriteLine($"    set: {string.Join(", ", set)}");
+            var never = entry.Parameters.Where(p => p.Value == 0).Select(p => p.Key).ToList();
+            if (never.Count > 0)
+                Console.WriteLine(Out.Dim($"    never set: {string.Join(", ", never)}"));
+            if (entry.OtherAttributes.Count > 0)
+                Console.WriteLine(Out.Dim($"    other attributes: {string.Join(", ", entry.OtherAttributes.OrderByDescending(a => a.Value).Select(a => $"{a.Key} {a.Value}"))}"));
+        }
+
+        var unused = entries.Where(e => e.Uses == 0).Select(e => e.Title).ToList();
+        if (unused.Count > 0)
+            Console.WriteLine($"{Out.Yellow($"Unused ({unused.Count})")}: {string.Join(", ", unused)}");
+        var deprecated = entries.Where(e => e.Uses > 0 && e.Status is ComponentStatus.Deprecated).ToList();
+        if (deprecated.Count > 0)
+            Console.WriteLine(Out.Yellow($"Deprecated but still used: {string.Join(", ", deprecated.Select(d => $"{d.Title} ({d.Uses})"))}"));
+        Console.WriteLine(Out.Dim("Markup tags only: components created in C# (OpenComponent, DynamicComponent) are not counted."));
+        return ExitCodes.Success;
+    }
+
     public static async Task<int> ValidateAsync(CliContext context, bool json, bool warningsAsErrors, CancellationToken ct)
     {
         await using var host = await context.ConnectAsync(ct);

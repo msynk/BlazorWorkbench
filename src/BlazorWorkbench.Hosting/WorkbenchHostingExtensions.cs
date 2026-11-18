@@ -356,7 +356,8 @@ internal sealed class FileTestResultsProvider(WorkbenchHostOptions options) : IT
                 return Task.FromResult(TestRunSummary.Empty);
             var statuses = report.Scenarios
                 .GroupBy(s => s.ScenarioId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => new ScenarioRunStatus(g.Last().Status.ToString(), g.Last().Message, g.Last().Attempts > 1 && g.Last().Status == CheckStatus.Passed),
+                .ToDictionary(g => g.Key, g => new ScenarioRunStatus(g.Last().Status.ToString(), g.Last().Message, g.Last().Attempts > 1 && g.Last().Status == CheckStatus.Passed,
+                        g.Last().Checks.Where(c => c.Status is CheckStatus.Failed or CheckStatus.Missing or CheckStatus.Error).Select(c => c.Kind.ToString()).Distinct().ToArray()),
                     StringComparer.OrdinalIgnoreCase);
             return Task.FromResult(new TestRunSummary(report.FinishedAt, statuses));
         }
@@ -417,8 +418,11 @@ internal sealed class FileVisualResultsProvider(WorkbenchHostOptions options) : 
             {
                 var v = check.Visual!;
                 var status = check.Status is CheckStatus.Failed or CheckStatus.Missing && IsApproved(report!, scenario!.ScenarioId, v) ? "Approved" : check.Status.ToString();
+                // A missing baseline gets no image URL (the panel says so) rather than a link that answers 404.
+                var baselineExists = options.BaselineDirectory is { } root && v.BaselinePath is { } relative &&
+                    PathSafety.IsInside(Path.Combine(root, relative), root) && File.Exists(Path.Combine(root, relative));
                 results.Add(new VisualComparisonView(v.Variant, status,
-                    Url("baselines", v.BaselinePath), Url("results", v.ActualPath), Url("results", v.DiffPath),
+                    baselineExists ? Url("baselines", v.BaselinePath) : null, Url("results", v.ActualPath), Url("results", v.DiffPath),
                     v.DiffRatio, check.Message, report!.FinishedAt));
             }
 

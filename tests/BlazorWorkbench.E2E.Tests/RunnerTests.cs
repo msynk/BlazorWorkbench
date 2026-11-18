@@ -167,6 +167,13 @@ public class McpTests(WorkbenchFixture fixture)
             Assert.Equal("image/png", content[1].GetProperty("mimeType").GetString());
             Assert.StartsWith("iVBORw0KGgo", content[1].GetProperty("data").GetString()); // base64 of the PNG signature
 
+            var usage = await Send(8, "tools/call", new { name = "find_component_usage", arguments = new { id = "analytics-kpi-card", paths = new[] { "demo" } } });
+            var usageText = usage.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
+            Assert.Contains("SalesDashboard.razor", usageText);
+            Assert.Contains("\"uses\": 2", usageText);
+            var outside = await Send(9, "tools/call", new { name = "find_component_usage", arguments = new { paths = new[] { ".." } } });
+            Assert.Contains("outside the Workbench root", outside.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString());
+
             var audit = await File.ReadAllLinesAsync(Path.Combine(output.FullName, "mcp-audit.log"));
             Assert.Contains(audit, l => l.Contains("approve_baselines", StringComparison.Ordinal));
         }

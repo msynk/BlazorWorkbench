@@ -3,6 +3,7 @@
 @page "/docs/{ComponentId}"
 @page "/pages/{PageId}"
 @page "/tokens"
+@page "/review"
 @page "/refs/{RefId}/{RefComponentId}"
 @implements IAsyncDisposable
 @inject WorkbenchCatalogAccessor Catalogs
@@ -125,7 +126,7 @@
     </aside>
 
     <main class="wb-main" id="wb-main" tabindex="-1">
-        <ErrorBoundary @key="@($"{ScenarioId}|{ComponentId}|{PageId}|{IsTokensPage}|{RefId}|{RefComponentId}")" @ref="_mainBoundary">
+        <ErrorBoundary @key="@($"{ScenarioId}|{ComponentId}|{PageId}|{IsTokensPage}|{IsReviewPage}|{RefId}|{RefComponentId}")" @ref="_mainBoundary">
         <ErrorContent Context="mainError">
             <ShellError Error="mainError" What="This page" OnRecover="() => _mainBoundary?.Recover()" />
         </ErrorContent>
@@ -159,6 +160,10 @@
             {
                 <div class="wb-empty" role="alert">Page '@PageId' was not found.</div>
             }
+        }
+        else if (IsReviewPage)
+        {
+            <ReviewView Catalog="Catalog" @ref="_review" />
         }
         else if (IsTokensPage)
         {
@@ -452,6 +457,8 @@
     private Dictionary<string, string> _globals = new(StringComparer.Ordinal);
     private bool HasErrors => _diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
     private bool IsTokensPage => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0].TrimEnd('/') == "tokens";
+    private bool IsReviewPage => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0].TrimEnd('/') == "review";
+    private ReviewView? _review;
 
     private IEnumerable<(string Key, string Label)> Tabs =>
         AllTabs.Where(t => t.Key != "design" || _scenario?.Designs.Count > 0).Concat(Options.Panels.Select(p => (p.Id, p.Title)));
@@ -529,6 +536,7 @@
         ? $"{Catalog.FindComponent(ComponentId)?.DisplayName ?? "Docs"} · {Options.Title}"
         : PageId is not null ? $"{Catalog.FindPage(PageId)?.DisplayName ?? "Page"} · {Options.Title}"
         : IsTokensPage ? $"Design tokens · {Options.Title}"
+        : IsReviewPage ? $"Review the last run · {Options.Title}"
         : _scenario is not null ? $"{_component?.DisplayName} / {_scenario.Name} · {Options.Title}" : Options.Title;
 
     private string StateText => _previewState switch
@@ -932,6 +940,7 @@
             case "shortcuts": if (_shortcutsOpen) await CloseShortcuts(); else await OpenShortcuts(); break;
             case "escape": if (_shortcutsOpen) await CloseShortcuts(); break;
             case "focus" or "panel": await OnLayout(action); break;
+            case "previous-scenario" or "next-scenario" when IsReviewPage && _review is not null: _review.Move(action == "next-scenario" ? 1 : -1); break;
             case "previous-scenario" or "next-scenario" or "previous-component" or "next-component": Step(action); break;
             case "pin": await TogglePin(); break;
         }

@@ -193,6 +193,40 @@ public sealed class WorkbenchTools(WorkbenchConnection connection, McpSettings s
         return Json(new { suggestions, code = ScenarioSkeletonGenerator.GenerateSet(component, suggestions), note = "Generated code is a starting point; run validate_scenarios after adding it." });
     }
 
+    [McpServerTool(Name = "find_component_usage", ReadOnly = true), Description("Finds where .razor files use a catalog component (file and line) and which of its parameters they set. Use it before changing or removing a parameter, or to see how a component is used in practice. Scans the workbench.json directory, or the given subdirectories of it.")]
+    public async Task<string> FindComponentUsage(
+        [Description("Component id, for example 'inputs-button'; omit for a summary of every component")] string? id = null,
+        [Description("Directories or files to scan, relative to the workbench.json directory (default: all of it)")] string[]? paths = null,
+        CancellationToken ct = default)
+    {
+        connection.Audit("find_component_usage", new { id, paths });
+        var root = Path.GetFullPath(settings.Context.Config.RootDirectory);
+        var roots = new List<string>();
+        foreach (var path in paths is { Length: > 0 } ? paths : ["."])
+        {
+            // Only inside the Workbench root: the tool reads files, so it does not wander around the machine.
+            var full = Path.GetFullPath(Path.Combine(root, path));
+            var relative = Path.GetRelativePath(root, full);
+            if (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative))
+                return $"'{path}' is outside the Workbench root ({root}).";
+            roots.Add(full);
+        }
+
+        var catalog = await (await connection.GetAsync(ct)).GetCatalogAsync(ct);
+        if (id is not null && !catalog.Components.Any(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase)))
+            return $"Component '{id}' was not found.";
+        var report = ComponentUsage.Scan(catalog, roots);
+        if (id is not null)
+            return Json(new { report.ScannedFiles, component = report.Components.First(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase)), note = "Markup tags only: components created in C# are not counted." });
+        return Json(new
+        {
+            report.ScannedFiles,
+            components = report.Components.Select(c => new { c.Id, c.Uses, c.Files, neverSet = c.Uses > 0 ? c.Parameters.Where(p => p.Value == 0).Select(p => p.Key) : [] }),
+            unused = report.Unused.Select(c => c.Id),
+            deprecatedInUse = report.Components.Where(c => c.Uses > 0 && c.Status is ComponentStatus.Deprecated).Select(c => c.Id),
+        });
+    }
+
     [McpServerTool(Name = "list_changed_scenarios", ReadOnly = true), Description("Lists the scenarios affected by uncommitted git changes (and, with baseRef, by the commits since that ref), including scenarios of components that render a changed component. Use it to decide what to review or test after editing components.")]
     public async Task<string> ListChangedScenarios([Description("Optional git ref to compare with in addition to uncommitted changes, for example 'origin/main'")] string? baseRef = null, CancellationToken ct = default)
     {

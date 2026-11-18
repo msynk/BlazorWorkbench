@@ -108,6 +108,8 @@
             var result = await _provider.ApproveAsync(ScenarioId, variant);
             _approval = result.Message;
             await LoadAsync();
+            if (result.Approved.Count > 0)
+                await OnApproved.InvokeAsync(_results.Count(IsApprovable));
         }
         finally
         {
@@ -116,6 +118,9 @@
     }
 
     [Parameter, EditorRequired] public string ScenarioId { get; set; } = "";
+
+    /// <summary>Raised after screenshots were approved, with the number of results still waiting for approval.</summary>
+    [Parameter] public EventCallback<int> OnApproved { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {

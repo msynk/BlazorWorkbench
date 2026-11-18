@@ -69,6 +69,23 @@ violations. See [accessibility](accessibility.md#adopting-checks-gradually).
 ### `workbench publish [-o <dir>] [--no-screenshots] [--exclude-tag <tags…>] [--version-label <v>]`
 Publishes a static catalog; see [publishing](publishing.md).
 
+### `workbench usage [paths…] [--exclude <globs…>] [-f <filter>] [--json]`
+Scans `.razor` files (by default under the `workbench.json` directory; usually you pass the apps that consume the
+library) for tags of catalog components. For each component it prints the number of uses and files, how often each
+parameter is set, the parameters **never set** (candidates for removal or better defaults) and attributes that match
+no parameter. It ends with the **unused** components and the **deprecated components still in use**.
+
+```bash
+workbench usage ../storefront/src ../admin/src --exclude "**/Tests/**"
+workbench usage -f inputs-button --json
+```
+
+It reads markup, not compiled code: tags are matched by name (`<Button>`) or namespace-qualified name
+(`<Lib.Inputs.Button>`); `@bind-Value` counts as setting `Value`, `TItem` and directives such as `@ref` are skipped,
+and child elements named after a `RenderFragment` parameter count for it. Components created in C#
+(`OpenComponent<T>`, `DynamicComponent`) are not counted, and two components with the same tag name both count an
+unqualified tag (marked as ambiguous). `bin`, `obj`, `node_modules`, `wwwroot` and hidden directories are skipped.
+
 ### `workbench skill [-o <path>] [--force]`
 Writes an agent skill (`SKILL.md`, by default to `.claude/skills/blazor-workbench/SKILL.md`) that teaches coding agents to
 write scenarios with the simulations instead of real services, cover the states users meet, and check their work with the
